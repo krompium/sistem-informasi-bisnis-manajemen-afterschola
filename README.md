@@ -1,4 +1,4 @@
-# After Schola Platform
+# Afterschola Platform
 
 Platform operasional internal After Schola — **satu web untuk semua tim**, dengan dashboard & fitur berbeda per role. Modul pertama: **Absensi digital** (murid & trainer) untuk menggantikan absensi kertas dan Google Form.
 
