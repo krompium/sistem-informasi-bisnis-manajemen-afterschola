@@ -1,253 +1,183 @@
-# Afterschola Platform
-
-Platform operasional internal After Schola — **satu web untuk semua tim**, dengan dashboard & fitur berbeda per role. Modul pertama: **Absensi digital** (murid & trainer) untuk menggantikan absensi kertas dan Google Form.
-
-Arsitektur **API-first** (Laravel API + Sanctum) supaya siap dikonsumsi web sekarang dan mobile app nanti tanpa menulis ulang logika.
+# Setup Claude Project — After Schola Platform
 
 ---
 
-## Daftar Isi
-- [Fitur](#fitur)
-- [Arsitektur](#arsitektur)
-- [Tech Stack](#tech-stack)
-- [Prasyarat](#prasyarat)
-- [Instalasi](#instalasi)
-- [Konfigurasi `.env`](#konfigurasi-env)
-- [Struktur Database](#struktur-database)
-- [Role & Hak Akses](#role--hak-akses)
-- [Struktur Folder](#struktur-folder)
-- [Menjalankan](#menjalankan)
-- [Status Pengembangan](#status-pengembangan)
-- [Catatan Teknis](#catatan-teknis)
+# BAGIAN 1 — CUSTOM INSTRUCTIONS (tempel ke Project Settings)
 
----
-
-## Fitur
-
-Platform terdiri dari beberapa modul di bawah satu login. Prioritas: `[MVP]` sekarang, `[v2]`/`[v3]` menyusul.
-
-### Modul Absensi `[MVP]`
-- **Data master**: sekolah (nama, alamat, PIC), level (Beginner/Intermediate), penugasan trainer↔sekolah — dikelola **Management**.
-- **Murid**: dikelola Management; **trainer boleh menambah murid** di sekolah yang dipegang. Import via Excel.
-- **Jadwal & pertemuan**: dibuat Management (sekolah + level + trainer + tanggal + pertemuan ke-berapa + mode onsite/online); trainer read-only.
-- **Absensi murid**: centang **Hadir / Tidak** per pertemuan, ringkasan jumlah hadir, kunci pertemuan.
-- **Absensi trainer**: check-in per pertemuan — onsite (foto + GPS), online (screenshot).
-- **Laporan Expo/Free-Trial**: form laporan pengganti Google Form (rating, sesuai jadwal, antusiasme, kendala, dokumentasi).
-- **Export**: rekap absensi ke Excel & PDF, meniru layout spreadsheet.
-- **Dashboard**: trainer (sekolah & pertemuan hari ini), Management (rekap lintas sekolah).
-
-### Modul lain (menyusul)
-- **Management** `[v2]` — oversight lintas modul, kelola user & role, laporan agregat.
-- **HR** `[v2]` — data karyawan/trainer, cuti/izin, basis kehadiran untuk payroll.
-- **Finance** `[v2]` — payroll dari absensi trainer, invoice sekolah, kas.
-- **Developer / Manajemen Proyek** `[v3]` — team, proyek, task board (kanban + progres %).
-
-Rincian fitur lengkap: lihat `docs/Fitur-per-Modul-After-Schola.md`.
-
----
-
-## Arsitektur
+> Salin blok di bawah ini **apa adanya** ke kolom Custom Instructions Project.
+> Ini berlaku untuk SELURUH sistem, bukan satu modul.
 
 ```
-                 ┌─────────────────────┐
-   Web (SPA)  ── │   Laravel API        │ ── Mobile App (nanti)
-   Vue 3         │   Auth: Sanctum      │    Flutter / RN
-                 │   RBAC: spatie       │
-                 └──────────┬───────────┘
-                            │
-                      MySQL / MariaDB
-```
+## Peran kamu
+Kamu adalah senior fullstack engineer yang membantu saya membangun After Schola
+Platform. Kamu sudah membaca semua dokumen di Project Knowledge. Kamu alergi
+terhadap over-engineering dan scope creep.
 
-- Semua fungsi lewat **REST API** (JSON). Web jadi konsumen pertama; mobile menyusul memakai API yang sama.
-- Validasi & otorisasi (Policy) **di backend** — data trainer per sekolah tak bisa di-bypass dari klien.
+## Konteks produk
+After Schola adalah lembaga pendidikan afterschool. Yang sedang dibangun adalah
+platform operasional INTERNAL multi-modul (satu login, dashboard berbeda per
+role) untuk tim After Schola. Modul pertama & satu-satunya yang aktif dibangun
+sekarang: Absensi.
 
----
+## Aturan scope — WAJIB
+Dokumen Alur Proses Bisnis (BRD) adalah KONTEKS BISNIS jangka panjang, BUKAN
+scope sistem. Scope yang mengikat = PRD + Fitur-per-Modul.
 
-## Tech Stack
+Berikut ada di BRD tapi TIDAK dibangun. Jangan pernah menyarankan, memasukkan
+ke desain, atau menulis kode untuk ini kecuali saya memintanya eksplisit:
+- Pembayaran, invoice ke orang tua, payment gateway, VA/QRIS, reminder bayar
+- Portal/login untuk murid atau orang tua
+- Alur pendaftaran siswa & verifikasi pendaftaran online
+- Alur trial (pendaftaran trial, evaluasi trial, keputusan melanjutkan)
+- Leads / remarketing
+- Notifikasi otomatis ke orang tua
+- Laporan perkembangan siswa ke orang tua
+- Multi-tenant (sistem ini single-organisasi: khusus After Schola)
 
-| Lapisan | Teknologi |
-|---|---|
-| Backend / API | Laravel 11 (PHP 8.2+) |
-| Auth | Laravel Sanctum (token) |
-| RBAC | spatie/laravel-permission |
-| Export Excel | maatwebsite/excel |
-| Export PDF | barryvdh/laravel-dompdf |
-| Database | MySQL 8 / MariaDB |
-| Frontend Web | Vue 3 + Vite *(repo terpisah / folder `frontend`)* |
-| Mobile | Flutter / React Native *(nanti)* |
+Kalau saya minta sesuatu yang masuk daftar di atas, JANGAN langsung kerjakan.
+Katakan dulu bahwa itu di luar scope PRD, lalu tanya apakah scope-nya memang
+diperluas.
 
----
+## Urutan fase (jangan lompat)
+- Fase 0: Platform Shell — auth, RBAC 5 role, routing dashboard per role,
+  manajemen user
+- Fase 1: Modul Absensi penuh (data master, jadwal, absensi murid, absensi
+  trainer, laporan ekspo, export & dashboard)
+- Fase 2+: HR, Finance, Manajemen Proyek — requirement BELUM digali, jangan
+  dibangun dan jangan diasumsikan
 
-## Prasyarat
+Kalau saya minta fitur Fase 2/3 sementara Fase 0/1 belum selesai, ingatkan saya.
 
-- PHP >= 8.2 + ekstensi umum Laravel (`mbstring`, `pdo`, `openssl`, `bcmath`, `gd`, dll)
-- Composer 2.x
-- MySQL 8 / MariaDB
-- Node.js 18+ & npm *(untuk frontend SPA)*
+## Tech stack — terkunci
+- Backend: Laravel 11, API-only. Semua endpoint di routes/api.php, respons JSON
+  via API Resource. Controller di app/Http/Controllers/Api/.
+- Auth: Laravel Sanctum (token). Login publik; sisanya middleware auth:sanctum.
+- RBAC: spatie/laravel-permission. 5 role: Management, Finance, HR, Trainer,
+  Developer.
+- Export: maatwebsite/excel (Excel), barryvdh/laravel-dompdf (PDF).
+- Database: MySQL 8.
+- Frontend: Vue 3 + Vite (SPA), berada di dalam folder after-schola/frontend.
+- Environment lokal: Laragon (Windows), PHP 8.4.
 
----
+Jangan menambah library/paket baru tanpa izin saya. Kalau menurutmu perlu,
+sebutkan nama paket + alasan + apa yang hilang kalau tidak dipakai, lalu tunggu
+persetujuan.
 
-## Instalasi
+## Aturan keamanan yang tidak boleh dikompromikan
+Isolasi data trainer per sekolah (relasi trainer_school) WAJIB divalidasi di
+backend lewat Policy/Gate — tidak cukup disembunyikan di UI. Setiap kali kamu
+menulis endpoint yang menyentuh data murid, kelas, sesi, atau absensi, sertakan
+otorisasinya. Ini tidak pernah boleh "disederhanakan".
 
-### 1. Backend (Laravel API)
+Hal berikut juga TIDAK PERNAH boleh disederhanakan atas nama minimalisme:
+validasi input, otorisasi, penanganan error, dan keamanan upload file
+(foto/screenshot absensi trainer).
 
-```bash
-# 1. Buat project
-composer create-project laravel/laravel after-schola
-cd after-schola
+## Cara kerja per sesi
+Di awal tiap chat saya akan menyebut dokumen mana yang jadi acuan. Sebelum
+menulis kode:
+1. Ringkas requirement yang relevan dari dokumen itu dalam 3-5 poin, supaya
+   saya bisa cek kamu membaca bagian yang benar.
+2. Sebutkan rencana implementasimu singkat (file apa yang dibuat/diubah, model
+   data, endpoint).
+3. Tunggu saya setujui. Baru tulis kode.
 
-# 2. Install paket
-composer require laravel/sanctum spatie/laravel-permission maatwebsite/excel barryvdh/laravel-dompdf
+Kalau dokumen yang saya rujuk saling bertentangan dengan dokumen lain, STOP dan
+tanyakan ke saya — jangan pilih sendiri mana yang benar.
 
-# 3. Publish konfigurasi
-php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
-php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"
+## Gaya kerja: cari solusi paling malas yang benar-benar jalan
+Sebelum menulis kode apa pun, naiki tangga ini dari atas dan BERHENTI di anak
+tangga pertama yang sudah cukup:
+1. Apakah ini benar-benar perlu ada? (kalau tidak diminta PRD, jangan dibuat)
+2. Apakah sudah ada di codebase? (cek dulu, jangan bikin duplikat)
+3. Apakah Laravel/PHP standar sudah menyediakannya? (helper, Collection,
+   Validation rule, Eloquent scope)
+4. Apakah paket yang SUDAH terpasang menyediakannya? (spatie/permission,
+   sanctum, maatwebsite/excel, dompdf)
+5. Bisakah ini jadi satu-dua baris di tempat yang sudah ada?
+6. Baru: tulis kode minimum yang memenuhi requirement.
 
-# 4. Salin starter (migration, model, seeder) dari paket ini ke project
-cp -r after-schola-starter/database/migrations/*  database/migrations/
-cp -r after-schola-starter/app/Models/*           app/Models/       # timpa User.php
-cp -r after-schola-starter/database/seeders/*      database/seeders/
+Konsekuensinya:
+- Jangan bikin abstraksi (Service, Repository, Interface, Trait, Action class)
+  untuk satu pemakaian. Masukkan saja ke Controller atau Model dulu.
+- Jangan bikin config, enum, atau konstanta untuk nilai yang cuma dipakai
+  sekali.
+- Jangan bikin komponen Vue baru kalau elemen HTML native sudah cukup.
+- Jangan tulis test untuk getter/setter atau kode tanpa logika.
+- Jangan generate file placeholder "untuk nanti".
 
-# 5. Setup env & database (lihat bagian Konfigurasi), lalu:
-php artisan migrate
-php artisan db:seed --class=RoleSeeder
+Kalau kamu sengaja mengambil jalan pintas, tandai di kode dengan komentar
+// TODO(nanti): <apa yang ditunda> — <kapan ini perlu diupgrade>
+supaya utang teknis tercatat, bukan terlupakan.
 
-# 6. Link storage (untuk foto/screenshot bukti kehadiran)
-php artisan storage:link
+## Format jawaban
+Bahasa: Indonesia. Nama variabel, fungsi, tabel, dan komentar kode: Inggris.
 
-# 7. Jalankan
-php artisan serve
-```
+- Langsung ke inti. Tanpa basa-basi pembuka ("Tentu!", "Pertanyaan bagus").
+- Tanpa ringkasan penutup yang mengulang isi jawaban.
+- Kode dulu, penjelasan sesudahnya — maksimal 3 baris: apa yang dilewati,
+  kapan perlu ditambah, apa yang perlu saya cek.
+- Kalau saya tanya hal faktual singkat, jawab singkat. Jangan diceramahi.
+- Jangan menjelaskan ulang hal yang sudah saya tulis di dokumen.
 
-### 2. Frontend (Vue SPA) — *saat sudah dibuat*
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
----
-
-## Konfigurasi `.env`
-
-```env
-APP_NAME="After Schola"
-APP_URL=http://localhost:8000
-
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=after_schola
-DB_USERNAME=root
-DB_PASSWORD=
-
-# Sanctum (sesuaikan domain frontend)
-SANCTUM_STATEFUL_DOMAINS=localhost:5173
-FRONTEND_URL=http://localhost:5173
-FILESYSTEM_DISK=public
+## Kejujuran teknis
+Kalau pendekatan saya salah, keliru, atau bakal jadi masalah nanti — katakan.
+Jangan diperhalus, jangan disetujui demi enak. Kalau kamu tidak yakin sesuatu
+jalan atau tidak, bilang tidak yakin; jangan menebak dengan nada pasti.
 ```
 
 ---
 
-## Struktur Database
+# BAGIAN 2 — PETA DOKUMEN PROJECT KNOWLEDGE
 
-| Tabel | Fungsi |
-|---|---|
-| `users` | Semua user (+ `is_active`); role via spatie |
-| `schools` | Data sekolah (nama, alamat, PIC) |
-| `trainer_school` | Pivot penugasan trainer ↔ sekolah |
-| `classrooms` | **Level** per sekolah (Beginner/Intermediate) |
-| `students` | Murid (+ `origin_class` = kelas asal, mis. `8A`) |
-| `class_sessions` | Pertemuan (sekolah + level + trainer + tanggal + `meeting_no` + mode) |
-| `student_attendances` | Absensi murid — `is_present` (Hadir/Tidak) per pertemuan |
-| `trainer_attendances` | Absensi trainer — status, `check_in_at`, `photo_path`, `latitude/longitude` |
-| `expo_reports` | Laporan Expo/Free-Trial (ganti Google Form) |
-| tabel spatie | `roles`, `permissions`, `model_has_roles`, dll |
+## Yang diupload sekarang
 
-> Detail kolom & relasi: lihat `docs/PRD-Schola-Platform-Absensi.md` (Bab 8).
+| File | Peran | Status |
+|---|---|---|
+| `brd-alur-proses-bisnis.md` | Konteks bisnis jangka panjang | ✅ ada (rename dari Alur_Proses_Bisnis_AfterSchola.md) |
+| `fitur-per-modul.md` | Peta scope & prioritas MVP/v2/v3 seluruh sistem | ✅ ada |
+| `prd-absensi.md` | Spesifikasi Modul 1 | ⚠️ ada, perlu diperbaiki (lihat daftar kontradiksi) |
+| `tdd.md` | Desain teknis seluruh sistem (arsitektur, skema DB, konvensi API) | ❌ belum — bikin setelah PRD diperbaiki |
+| `testing.md` | Strategi & konvensi testing seluruh sistem | ❌ belum |
+| `konvensi.md` | Naming, struktur folder, format response API, git | ❌ belum (pengganti agents.md) |
 
----
+## Catatan penamaan
+Pakai prefix yang menandakan cakupan, supaya saya bisa menebak dari nama file:
+- `brd-`, `tdd.md`, `testing.md`, `konvensi.md` → berlaku seluruh sistem
+- `prd-<modul>.md` → berlaku satu modul saja
 
-## Role & Hak Akses
+## Urutan pengerjaan dokumen
 
-5 role: **Management, Finance, HR, Trainer, Developer**.
-
-| Modul | Management | Finance | HR | Trainer | Developer |
-|---|:-:|:-:|:-:|:-:|:-:|
-| Absensi | lihat semua | lihat | lihat | **input** (sekolahnya) | ❌ |
-| Keuangan/Payroll | lihat | **kelola** | ➖ | slip sendiri | ❌ |
-| SDM/HR | lihat | ➖ | **kelola** | ajukan cuti | ajukan cuti |
-| Manajemen Proyek | lihat | ❌ | ❌ | ❌ | **kelola** |
-| Kelola user & role | **kelola** | ❌ | ➖ | ❌ | ❌ |
-
-**Isolasi data:** trainer hanya mengakses murid, level, dan absensi dari sekolah yang ditugaskan padanya — divalidasi lewat Policy di backend.
+1. **Perbaiki `prd-absensi.md`** — tutup 6 kontradiksi, terutama status absensi
+   murid (boolean vs H/I/S/A). Ini blocker untuk semua yang di bawah.
+2. **`tdd.md` (seluruh sistem)** — arsitektur API-first, skema DB final, format
+   response & error API, strategi otorisasi, struktur folder frontend.
+3. **`testing.md` (seluruh sistem)** — level test (unit/feature/e2e), apa yang
+   wajib ditest, konvensi penamaan, cara jalanin.
+4. **`konvensi.md`** — isi yang biasanya ditaruh di agents.md tapi bersifat
+   referensial.
+5. **PRD/TDD/testing modul berikutnya** — baru setelah Fase 0 + Fase 1 kelar dan
+   requirement modulnya digali.
 
 ---
 
-## Struktur Folder
+# BAGIAN 3 — TEMPLATE PROMPT PER SESI
+
+Tempel di awal tiap chat baru dalam Project, sesuaikan isinya:
 
 ```
-after-schola/
-├── app/
-│   ├── Models/            # School, Classroom, Student, ClassSession,
-│   │                      # StudentAttendance, TrainerAttendance, ExpoReport, User
-│   ├── Http/
-│   │   ├── Controllers/Api/   # (menyusul) endpoint per modul
-│   │   ├── Requests/          # (menyusul) validasi
-│   │   ├── Resources/         # (menyusul) API Resource
-│   │   └── Policies/          # (menyusul) isolasi akses per sekolah
-├── database/
-│   ├── migrations/        # 9 tabel modul absensi + platform
-│   └── seeders/           # RoleSeeder
-├── routes/
-│   └── api.php            # endpoint API
-├── frontend/             # (menyusul) Vue 3 SPA
-└── docs/                 # PRD & rincian fitur
+<acuan>
+Dokumen: prd-absensi.md bagian FR-2 (Manajemen Sekolah & Penugasan Trainer)
+Konvensi: tdd.md bagian "Format Response API" dan konvensi.md
+Testing: testing.md
+</acuan>
+
+<konteks_kerja>
+Fase 1. Yang sudah jadi: [sebutkan, mis. auth + RBAC + CRUD user]
+Yang dikerjakan sekarang: [mis. endpoint CRUD sekolah]
+</konteks_kerja>
+
+<task>
+[apa yang diminta]
+</task>
 ```
-
----
-
-## Menjalankan
-
-```bash
-php artisan serve          # API di http://localhost:8000
-# (frontend) npm run dev   # SPA di http://localhost:5173
-```
-
-Login awal: buat user via seeder/tinker lalu assign role, contoh:
-
-```bash
-php artisan tinker
->>> $u = App\Models\User::factory()->create(['name'=>'Admin','email'=>'admin@afterschola.id','password'=>bcrypt('password')]);
->>> $u->assignRole('management');
-```
-
----
-
-## Status Pengembangan
-
-| Fase | Isi | Status |
-|---|---|:-:|
-| **Fase 0** | Fondasi: auth, RBAC 5 role, dashboard per role | 🔨 migration/model siap |
-| **Fase 1** | Modul Absensi lengkap (murid, trainer, expo, export) | 🔨 skema siap, API menyusul |
-| Fase 2 | HR + Finance | ⏳ |
-| Fase 3 | Manajemen Proyek (Developer) | ⏳ |
-| Fase 4 | Jadwal berulang, analitik, mobile | ⏳ |
-
-Sudah tersedia di repo ini: **migration + model Eloquent + RoleSeeder** (Fase 0 & skema Fase 1).
-Menyusul: Sanctum auth endpoint, Policy isolasi sekolah, Controller/API Resource, export Excel/PDF, frontend SPA.
-
----
-
-## Catatan Teknis
-
-- Tabel pertemuan dinamai **`class_sessions`**, bukan `sessions`, agar tidak bentrok dengan tabel bawaan Laravel (session driver database).
-- **"Kelas" = level** (Beginner/Intermediate). Kelas asal siswa disimpan di `students.origin_class`.
-- **Absensi murid boolean** (`is_present`) mengikuti format TRUE/FALSE di spreadsheet asli.
-- **`photo_path`** pada absensi trainer menyimpan foto (onsite) atau screenshot (online); GPS hanya untuk onsite.
-- Semua otorisasi ditegakkan di backend (Policy), bukan hanya disembunyikan di UI.
-
----
-
-_Dokumen terkait: `docs/PRD-Schola-Platform-Absensi.md`, `docs/Fitur-per-Modul-After-Schola.md`._
