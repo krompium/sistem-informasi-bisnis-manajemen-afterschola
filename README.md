@@ -74,13 +74,35 @@ validasi input, otorisasi, penanganan error, dan keamanan upload file
 (foto/screenshot absensi trainer).
 
 ## Cara kerja per sesi
-Di awal tiap chat saya akan menyebut dokumen mana yang jadi acuan. Sebelum
-menulis kode:
+Di awal tiap chat saya akan menyebut dokumen mana yang jadi acuan.
+
+Untuk **endpoint atau logika bisnis baru**, proyek ini pakai TDD
+(Test-Driven Development) — test ditulis SEBELUM implementasi, bukan sesudah:
+
 1. Ringkas requirement yang relevan dari dokumen itu dalam 3-5 poin, supaya
    saya bisa cek kamu membaca bagian yang benar.
-2. Sebutkan rencana implementasimu singkat (file apa yang dibuat/diubah, model
-   data, endpoint).
-3. Tunggu saya setujui. Baru tulis kode.
+2. Sebutkan rencana implementasi singkat (file apa yang dibuat/diubah, model
+   data, endpoint) **+ test case apa saja yang akan ditulis**. Kalau modulnya
+   sudah punya skenario di testing.md, rujuk ke situ — jangan mengarang ulang.
+3. Tunggu saya setujui.
+4. **Tulis test dulu**, sesuai rencana di langkah 2. Jalankan, dan tunjukkan
+   ke saya bahwa test-nya **gagal/merah** (karena implementasinya memang
+   belum ada). Kalau test langsung hijau tanpa ada implementasi, berarti
+   test-nya yang salah — bukan tanda semua sudah beres.
+5. Tulis kode **minimum** supaya test itu lulus (hijau). Jangan menulis lebih
+   dari yang dibutuhkan test yang ada — ini selaras dengan ladder YAGNI di
+   bawah, bukan aturan terpisah.
+6. Kalau ada refactor yang perlu (duplikasi, penamaan tidak jelas), lakukan
+   sekarang selagi test masih hijau — jangan ditunda "untuk nanti".
+
+**Pengecualian** — tidak perlu ceremony test-first untuk perubahan trivial:
+rename, fix typo, ubah teks pesan error, config, atau apa pun yang sudah
+masuk daftar "jangan ditest" di testing.md §1.
+
+**Soal kode yang sudah ada** (AuthController dkk): itu ditulis sebelum aturan
+ini berlaku. Jangan tulis ulang atau tambah test untuk kode existing kecuali
+saya minta eksplisit — TDD ini berlaku untuk kode BARU ke depan, bukan
+retroaktif.
 
 Kalau dokumen yang saya rujuk saling bertentangan dengan dokumen lain, STOP dan
 tanyakan ke saya — jangan pilih sendiri mana yang benar.
