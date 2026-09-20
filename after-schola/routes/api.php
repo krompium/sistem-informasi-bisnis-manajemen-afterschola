@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ClassSessionController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ExpoReportController;
 use App\Http\Controllers\Api\ExportController;
+use App\Http\Controllers\Api\HotIssueController;
 use App\Http\Controllers\Api\SchoolController;
 use App\Http\Controllers\Api\StudentAttendanceController;
 use App\Http\Controllers\Api\StudentController;
@@ -95,5 +96,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users/{user}', [UserController::class, 'show']);
         Route::match(['put', 'patch'], '/users/{user}', [UserController::class, 'update']);
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
+    });
+
+    // Hot Issue — popup notifikasi yang tampil setelah login di semua role dashboard.
+    Route::get('/hot-issues/active', [HotIssueController::class, 'active']);
+    Route::post('/hot-issues/{hotIssue}/dismiss', [HotIssueController::class, 'dismiss']);
+    Route::middleware('permission:manage hot issues')->group(function () {
+        Route::get('/hot-issues', [HotIssueController::class, 'index']);
+        Route::post('/hot-issues', [HotIssueController::class, 'store']);
+        Route::match(['put', 'patch'], '/hot-issues/{hotIssue}', [HotIssueController::class, 'update']);
+        Route::delete('/hot-issues/{hotIssue}', [HotIssueController::class, 'destroy']);
     });
 });

@@ -10,6 +10,7 @@ import ManagementTrainerAssignmentView from '@/views/management/TrainerAssignmen
 import ManagementSchoolsAdminView from '@/views/management/SchoolsAdminView.vue'
 import ManagementRecapListView from '@/views/management/AttendanceRecapListView.vue'
 import ManagementRecapDetailView from '@/views/management/AttendanceRecapDetailView.vue'
+import ManagementHotIssuesView from '@/views/management/HotIssuesView.vue'
 import TrainerScheduleView from '@/views/trainer/ScheduleView.vue'
 import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
 import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
@@ -63,6 +64,7 @@ const routes = [
       },
       { path: 'management/jadwal', name: 'management.schedule', component: ManagementScheduleView },
       { path: 'management/laporan-ekspo', name: 'management.expo', component: ExpoReportsView },
+      { path: 'management/hot-issue', name: 'management.hot-issues', component: ManagementHotIssuesView },
       {
         path: 'management/manajemen-user',
         component: PlaceholderView,
