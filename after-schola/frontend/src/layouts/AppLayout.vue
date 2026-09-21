@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth'
 import api from '@/lib/api'
 import { formatDate, isOnsite, modeLabel, unwrap } from '@/lib/format'
 import { usePolling } from '@/lib/usePolling'
+import HotIssueModal from '@/components/HotIssueModal.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -21,6 +22,7 @@ const managementNav = [
   { label: 'Rekap Absensi', icon: 'summarize', to: '/management/absensi' },
   { label: 'Jadwal', icon: 'calendar_month', to: '/management/jadwal' },
   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/management/laporan-ekspo' },
+  { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue' },
   { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user' },
 ]
 
@@ -305,5 +307,9 @@ async function handleLogout() {
         <RouterView />
       </main>
     </div>
+
+    <!-- Popup Hot Issue: dicek sekali saat dashboard dimuat (baru login/refresh),
+         muncul untuk semua role bila ada isu aktif yang belum ditutup. -->
+    <HotIssueModal />
   </div>
 </template>

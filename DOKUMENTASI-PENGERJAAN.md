@@ -110,7 +110,17 @@ Login mendeteksi role otomatis → Management diarahkan ke `/management`, Traine
 - **Sekolah & Murid**: daftar sekolah (alamat, PIC, level, jumlah murid) + murid per level, tambah sekolah.
 - **Penugasan Trainer**: tentukan trainer memegang sekolah apa saja (`POST /schools/{id}/trainers`).
 
-### 3.8 Laporan Ekspo / Free-Trial (FR-7)
+### 3.8 Hot Issue (popup notifikasi setelah login)
+- **Popup otomatis**: begitu shell dashboard (`AppLayout.vue`) dimuat setelah login — di **semua
+  role** — sistem cek `GET /hot-issues/active` (hot issue aktif yang belum ditutup user tsb) dan
+  menampilkannya sebagai modal (severity info/perlu perhatian/mendesak), bisa navigasi bila lebih
+  dari satu. Tombol "Sudah dibaca" → `POST /hot-issues/{id}/dismiss`, tercatat per-user di backend
+  (bukan `localStorage`) sehingga tidak muncul ulang di device lain.
+- **Kelola Hot Issue (Management)**: menu baru di sidebar → buat/ubah/aktif-nonaktifkan/hapus
+  (`GET/POST/PUT/DELETE /hot-issues`, permission `manage hot issues`). Role lain (Finance/HR/
+  Trainer/Developer) hanya menerima & menutup popup, belum bisa membuat.
+
+### 3.9 Laporan Ekspo / Free-Trial (FR-7)
 - **Trainer membuat** laporan (tanggal, sekolah, tim, rating 1–5, sesuai jadwal, antusiasme, kendala +
   penjelasan, **upload foto dokumentasi** [banyak], link dokumentasi).
 - **Management merekap & melihat** (ringkasan: total, sekolah, rata-rata rating, kendala) — tanpa
@@ -142,6 +152,10 @@ GET/POST/PUT/DELETE /api/expo-reports
 # Export
 GET    /api/exports/attendance/{recap,excel,pdf}
 GET    /api/exports/expo/{excel,pdf}
+# Hot Issue (popup setelah login, semua role)
+GET    /api/hot-issues/active                  # aktif & belum ditutup user login
+POST   /api/hot-issues/{id}/dismiss             # tutup untuk diri sendiri
+GET/POST/PUT/DELETE /api/hot-issues             # kelola — permission "manage hot issues"
 ```
 
 ---
@@ -153,7 +167,8 @@ frontend/src/
 ├── layouts/AppLayout.vue            # shell sidebar+topbar, nav sadar-role, notifikasi
 ├── components/
 │   ├── MonthCalendar.vue            # kalender bulanan pertemuan
-│   └── SchoolRecap.vue              # panel rekap absensi 1 sekolah + export
+│   ├── SchoolRecap.vue              # panel rekap absensi 1 sekolah + export
+│   └── HotIssueModal.vue            # popup hot issue setelah login (semua role)
 ├── lib/{api,format,usePolling}.js
 ├── stores/auth.js                   # login/me/logout, permission getter, homeRoute
 ├── router/index.js                  # rute nested + guard auth & isolasi role
@@ -164,7 +179,7 @@ frontend/src/
     ├── ExpoReportsView.vue          # dipakai trainer (buat) & management (rekap)
     ├── trainer/{ScheduleView,SchoolsView}.vue
     └── management/{ScheduleView,TrainerAssignmentView,SchoolsAdminView,
-                    AttendanceRecapListView,AttendanceRecapDetailView}.vue
+                    AttendanceRecapListView,AttendanceRecapDetailView,HotIssuesView}.vue
 ```
 
 ---
@@ -181,5 +196,8 @@ frontend/src/
 
 ## 7. Belum Dikerjakan (Fase Berikutnya)
 - **Manajemen User** (Management buat/nonaktifkan user + atur role) — masih placeholder.
+- **Tambah murid dari dashboard Trainer**: backend sudah izinkan (permission `add students`),
+  UI di `trainer/SchoolsView.vue` belum ada form/tombolnya — baru ada di sisi Management
+  (`SchoolsAdminView.vue`).
 - Modul **HR**, **Finance**, **Developer/Manajemen Proyek** (`[v2]`/`[v3]` di PRD).
 - Jadwal berulang lanjutan (deteksi bentrok), notifikasi push, mode offline/PWA, mobile app.
