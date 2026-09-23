@@ -71,15 +71,4 @@ class User extends Authenticatable
 
         return in_array($schoolId, $this->assignedSchoolIds(), true);
     }
-
-    /**
-     * Hot issue yang sudah ditutup/dismiss oleh user ini — popup tidak
-     * akan menampilkannya lagi setelah ini tercatat.
-     */
-    public function dismissedHotIssues(): BelongsToMany
-    {
-        return $this->belongsToMany(HotIssue::class)
-            ->withPivot('dismissed_at')
-            ->withTimestamps();
-    }
 }

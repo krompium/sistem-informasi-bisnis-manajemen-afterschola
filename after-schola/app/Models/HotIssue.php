@@ -2,61 +2,39 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class HotIssue extends Model
 {
-    use HasFactory;
+    protected $fillable = ['title', 'message', 'severity', 'is_active', 'created_by'];
 
-    protected $fillable = [
-        'title',
-        'content',
-        'priority',
-        'is_published',
-        'published_at',
-        'expires_at',
-        'created_by',
-    ];
-
-    protected $casts = [
-        'is_published' => 'boolean',
-        'published_at' => 'datetime',
-        'expires_at' => 'datetime',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
+    }
 
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    public function dismissedBy(): BelongsToMany
+    public function dismissals(): HasMany
     {
-        return $this->belongsToMany(User::class)
-            ->withPivot('dismissed_at')
-            ->withTimestamps();
+        return $this->hasMany(HotIssueDismissal::class);
     }
 
-    /** Hanya issue yang sudah dipublish dan belum kedaluwarsa. */
-    public function scopeActive(Builder $query): Builder
+    /**
+     * Hot issue aktif yang BELUM ditutup oleh user tertentu — dasar popup setelah login.
+     */
+    public function scopeActiveAndUndismissedFor($query, int $userId)
     {
-        return $query->where('is_published', true)
-            ->where(function (Builder $q) {
-                $q->whereNull('published_at')->orWhere('published_at', '<=', now());
-            })
-            ->where(function (Builder $q) {
-                $q->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+        return $query->where('is_active', true)
+            ->whereDoesntHave('dismissals', function ($q) use ($userId) {
+                $q->where('user_id', $userId);
             });
-    }
-
-    /** Issue yang belum di-dismiss oleh user tertentu. */
-    public function scopeNotDismissedBy(Builder $query, int $userId): Builder
-    {
-        return $query->whereDoesntHave('dismissedBy', function (Builder $q) use ($userId) {
-            $q->where('user_id', $userId);
-        });
     }
 }
