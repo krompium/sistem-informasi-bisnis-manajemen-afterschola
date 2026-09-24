@@ -27,6 +27,8 @@ class RoleSeeder extends Seeder
             'submit expo reports',   // trainer mengisi laporan ekspo
             'export data',           // export Excel/PDF
             'manage users',          // kelola user & role
+            'view own school data', // role sekolah: lihat data sekolah sendiri (read-only)
+            'input student grades',   // trainer input nilai
         ];
 
         foreach ($permissions as $permission) {
@@ -34,17 +36,19 @@ class RoleSeeder extends Seeder
         }
 
         $roles = [
-            'management' => $permissions, // akses penuh
+            'management' => $permissions, // akses penuh, otomatis dapat semua
             'finance' => ['view attendance', 'export data'],
             'hr' => ['view attendance', 'export data'],
             'trainer' => [
                 'add students',
                 'input student attendance',
                 'input trainer attendance',
+                'input student grades',   // baru
                 'submit expo reports',
                 'export data',
             ],
-            'developer' => [], // modul manajemen proyek (fase 3), belum ada di absensi
+            'developer' => [],
+            'sekolah' => ['view own school data', 'export data'], // baru
         ];
 
         foreach ($roles as $roleName => $rolePermissions) {

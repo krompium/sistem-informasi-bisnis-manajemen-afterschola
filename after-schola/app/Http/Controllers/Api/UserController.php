@@ -36,6 +36,13 @@ class UserController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'school_ids' => ['sometimes', 'array'],
             'school_ids.*' => ['integer', 'exists:schools,id'],
+            'school_id' => [
+                Rule::requiredIf(fn() => $request->input('role') === 'sekolah'),
+                'nullable',
+                'integer',
+                'exists:schools,id',
+                Rule::unique('users', 'school_id'),
+            ],
         ]);
 
         $user = User::create([
@@ -43,10 +50,11 @@ class UserController extends Controller
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
             'is_active' => $data['is_active'] ?? true,
+            'school_id' => $data['role'] === 'sekolah' ? $data['school_id'] : null,
         ]);
         $user->assignRole($data['role']);
 
-        if (! empty($data['school_ids']) && $data['role'] === 'trainer') {
+        if (!empty($data['school_ids']) && $data['role'] === 'trainer') {
             $user->assignedSchools()->sync($data['school_ids']);
         }
 
@@ -68,11 +76,21 @@ class UserController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'school_ids' => ['sometimes', 'array'],
             'school_ids.*' => ['integer', 'exists:schools,id'],
+            'school_id' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                'exists:schools,id',
+                Rule::unique('users', 'school_id')->ignore($user->id),
+            ],
         ]);
 
         $user->fill(collect($data)->only(['name', 'email', 'is_active'])->all());
-        if (! empty($data['password'])) {
+        if (!empty($data['password'])) {
             $user->password = Hash::make($data['password']);
+        }
+        if (array_key_exists('school_id', $data)) {
+            $user->school_id = $data['school_id'];
         }
         $user->save();
 

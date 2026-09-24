@@ -15,6 +15,7 @@ import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
 import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
 import SessionAttendanceView from '@/views/SessionAttendanceView.vue'
 import ExpoReportsView from '@/views/ExpoReportsView.vue'
+import SchoolDashboardView from '@/views/school/SchoolDashboardView.vue'
 
 const routes = [
   {
@@ -68,6 +69,10 @@ const routes = [
         component: PlaceholderView,
         meta: { title: 'Manajemen User', icon: 'manage_accounts' },
       },
+
+      // ---- Sekolah ----
+      { path: 'sekolah', name: 'sekolah.dashboard', component: SchoolDashboardView },
+
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
@@ -106,6 +111,8 @@ router.beforeEach(async (to) => {
     if (to.path.startsWith('/management') && !auth.isManagement) return auth.homeRoute
     if (to.path.startsWith('/trainer') && !auth.isTrainer) return auth.homeRoute
   }
+
+  if (to.path.startsWith('/sekolah') && !auth.isSchool) return auth.homeRoute
 
   return true
 })

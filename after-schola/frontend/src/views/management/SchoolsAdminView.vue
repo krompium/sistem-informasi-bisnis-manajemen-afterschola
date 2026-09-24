@@ -14,7 +14,7 @@ const loadingStudents = ref(false)
 const showCreate = ref(false)
 const saving = ref(false)
 const formError = ref('')
-const form = reactive({ name: '', address: '', pic_name: '', pic_phone: '' })
+const form = reactive({ name: '', address: '', pic_name: '', pic_phone: '', pic_email: '', pic_password: '' })
 
 // ---- Kelola Mata Pelajaran ----
 const showManageSubjects = ref(false)
@@ -84,7 +84,7 @@ async function selectSchool(id) {
 }
 
 function openCreate() {
-  Object.assign(form, { name: '', address: '', pic_name: '', pic_phone: '' })
+  Object.assign(form, { name: '', address: '', pic_name: '', pic_phone: '', pic_email: '', pic_password: '' })
   formError.value = ''
   showCreate.value = true
 }
@@ -93,12 +93,14 @@ async function submitCreate() {
   saving.value = true
   formError.value = ''
   try {
-    const { data } = await api.post('/schools', {
-      name: form.name,
-      address: form.address || null,
-      pic_name: form.pic_name || null,
-      pic_phone: form.pic_phone || null,
-    })
+  const { data } = await api.post('/schools', {
+  name: form.name,
+  address: form.address || null,
+  pic_name: form.pic_name || null,
+  pic_phone: form.pic_phone || null,
+  pic_email: form.pic_email || null,
+  pic_password: form.pic_password || null,
+})
     showCreate.value = false
     await loadSchools()
     const created = data.data ?? data
@@ -443,6 +445,17 @@ onMounted(loadSchools)
               <input v-model="form.pic_phone" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
             </label>
           </div>
+          <div class="grid grid-cols-2 gap-space-md">
+  <label class="flex flex-col gap-1">
+    <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Email Akun PIC <span class="font-normal text-outline">(opsional)</span></span>
+    <input v-model="form.pic_email" type="email" placeholder="pic@sekolah.sch.id" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+  </label>
+  <label class="flex flex-col gap-1">
+    <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Password Akun <span class="font-normal text-outline">(opsional)</span></span>
+    <input v-model="form.pic_password" type="password" placeholder="Min. 8 karakter" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+  </label>
+</div>
+<p class="-mt-space-xs font-body-sm text-body-sm text-outline">Isi kalau ingin PIC sekolah bisa login melihat dashboard. Bisa ditambahkan nanti lewat Manajemen User.</p>
           <div class="flex items-center justify-end gap-space-sm pt-space-xs">
             <button type="button" class="rounded-xl px-space-md py-2.5 font-label-lg text-label-lg text-on-surface hover:bg-surface-container" @click="showCreate = false">Batal</button>
             <button type="submit" :disabled="saving" class="inline-flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60">

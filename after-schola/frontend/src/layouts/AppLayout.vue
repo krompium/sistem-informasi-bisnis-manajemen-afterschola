@@ -33,13 +33,21 @@ const trainerNav = [
   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/trainer/laporan-ekspo' },
 ]
 
-const navItems = computed(() => (auth.isManagement ? managementNav : trainerNav))
+const schoolNav = [
+  { label: 'Dashboard', icon: 'dashboard', to: '/sekolah' },
+]
 
-const roleBadge = computed(() =>
-  auth.isManagement
-    ? { text: 'Management', cls: 'bg-secondary-container text-on-secondary-container' }
-    : { text: 'Trainer', cls: 'bg-tertiary-fixed text-on-tertiary-fixed' },
-)
+const navItems = computed(() => {
+  if (auth.isManagement) return managementNav
+  if (auth.isSchool) return schoolNav
+  return trainerNav
+})
+
+const roleBadge = computed(() => {
+  if (auth.isManagement) return { text: 'Management', cls: 'bg-secondary-container text-on-secondary-container' }
+  if (auth.isSchool) return { text: 'Sekolah', cls: 'bg-primary-fixed text-primary' }
+  return { text: 'Trainer', cls: 'bg-tertiary-fixed text-on-tertiary-fixed' }
+})
 
 const userName = computed(() => auth.user?.name || 'Pengguna')
 

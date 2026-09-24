@@ -13,6 +13,9 @@ use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\TrainerAttendanceController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\SchoolDashboardController;
+use App\Http\Controllers\Api\StudentGradeController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -20,6 +23,21 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | Semua otorisasi ditegakkan di backend (Policy), bukan sekadar di UI.
 */
+
+
+// Nilai murid — trainer
+Route::middleware('permission:input student grades')->group(function () {
+    Route::post('/students/{student}/grades', [StudentGradeController::class, 'store']);
+});
+
+// Dashboard sekolah — read-only, scope otomatis ke school_id milik akun login
+Route::middleware(['auth:sanctum', 'role:sekolah,sanctum'])->prefix('my-school')->group(function () {
+    Route::get('/summary', [SchoolDashboardController::class, 'summary']);
+    Route::get('/students', [SchoolDashboardController::class, 'students']);
+    Route::get('/students/{student}', [SchoolDashboardController::class, 'showStudent']);
+    Route::get('/schedule', [SchoolDashboardController::class, 'schedule']);
+    Route::get('/export', [SchoolDashboardController::class, 'export']);
+});
 
 // --- Publik (tanpa token) ---
 Route::post('/login', [AuthController::class, 'login']);

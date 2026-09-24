@@ -13,8 +13,9 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['name', 'email', 'password', 'is_active'])]
+#[Fillable(['name', 'email', 'password', 'is_active', 'school_id'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -44,6 +45,11 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function school(): BelongsTo
+    {
+        return $this->belongsTo(School::class);
+    }
+
     public function createdStudents(): HasMany
     {
         return $this->hasMany(Student::class, 'created_by');
@@ -67,6 +73,10 @@ class User extends Authenticatable
     {
         if ($this->hasAnyRole(['management', 'finance', 'hr'])) {
             return true;
+        }
+
+        if ($this->hasRole('sekolah')) {
+            return $this->school_id === $schoolId;
         }
 
         return in_array($schoolId, $this->assignedSchoolIds(), true);
