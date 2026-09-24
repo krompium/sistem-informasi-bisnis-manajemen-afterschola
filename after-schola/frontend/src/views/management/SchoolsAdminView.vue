@@ -1,6 +1,6 @@
 <script setup>
-// Sekolah & Murid (Management) — daftar sekolah beserta mata pelajaran & murid,
-// plus tambah sekolah, kelola mata pelajaran (katalog bersama antar sekolah), dan tambah murid.
+// Sekolah & Murid (Management) — daftar sekolah beserta level & murid,
+// plus tambah sekolah. Agar management tahu ada sekolah apa saja.
 import { computed, onMounted, reactive, ref } from 'vue'
 import api from '@/lib/api'
 import { initials, unwrap } from '@/lib/format'
@@ -50,22 +50,11 @@ const studentRowBusyId = ref(null)
 
 const selectedSchool = computed(() => schools.value.find((s) => s.id === selectedSchoolId.value))
 
-// Mata pelajaran katalog yang BELUM ada di sekolah yang lagi dipilih.
-const availableCatalog = computed(() => {
-  const existing = new Set((selectedSchool.value?.classrooms ?? []).map((c) => c.name.toLowerCase()))
-  return subjectCatalog.value.filter((name) => !existing.has(name.toLowerCase()))
-})
-
-// Mata pelajaran aktif saja yang boleh dipilih saat menambah murid.
-const activeClassrooms = computed(() =>
-  (selectedSchool.value?.classrooms ?? []).filter((c) => c.is_active !== false),
-)
-
-// Murid dikelompokkan per mata pelajaran (classroom).
+// Murid dikelompokkan per level (classroom).
 const studentsByLevel = computed(() => {
   const groups = {}
   for (const st of students.value) {
-    const key = st.classroom?.name || 'Tanpa Mata Pelajaran'
+    const key = st.classroom?.name || 'Tanpa Level'
     ;(groups[key] ||= []).push(st)
   }
   return Object.entries(groups).map(([level, list]) => ({ level, list }))
@@ -394,7 +383,7 @@ onMounted(loadSchools)
           Sekolah &amp; Murid
         </h1>
         <p class="font-body-md text-body-md text-on-surface-variant">
-          Daftar sekolah mitra beserta mata pelajaran dan murid yang terdaftar.
+          Daftar sekolah mitra beserta level dan murid yang terdaftar.
         </p>
       </div>
       <button
@@ -440,12 +429,7 @@ onMounted(loadSchools)
           </div>
           <span class="font-body-sm text-body-sm text-on-surface-variant">{{ s.address || 'Alamat belum diisi' }}</span>
           <div v-if="s.classrooms?.length" class="mt-space-2xs flex flex-wrap gap-1">
-            <span
-              v-for="c in s.classrooms"
-              :key="c.id"
-              class="rounded-md px-2 py-0.5 font-label-sm text-label-sm font-semibold"
-              :class="c.is_active === false ? 'bg-surface-container text-outline line-through' : 'bg-surface-container-high text-primary'"
-            >{{ c.name }}</span>
+            <span v-for="c in s.classrooms" :key="c.id" class="rounded-md bg-surface-container-high px-2 py-0.5 font-label-sm text-label-sm font-semibold text-primary">{{ c.name }}</span>
           </div>
         </button>
       </div>
@@ -495,6 +479,12 @@ onMounted(loadSchools)
                 <span class="material-symbols-outlined text-[18px]">person_add</span>
                 <span>Tambah Murid</span>
               </button>
+          <div class="mb-space-md flex flex-col gap-space-2xs border-b border-surface-container pb-space-md">
+            <h2 class="font-headline-md text-headline-md font-bold text-on-surface">{{ selectedSchool.name }}</h2>
+            <div class="flex flex-wrap items-center gap-x-space-md gap-y-1 font-body-sm text-body-sm text-on-surface-variant">
+              <span v-if="selectedSchool.address" class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px] text-primary">location_on</span>{{ selectedSchool.address }}</span>
+              <span v-if="selectedSchool.pic_name" class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px] text-primary">person</span>PIC: {{ selectedSchool.pic_name }}</span>
+              <span v-if="selectedSchool.pic_phone" class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px] text-primary">call</span>{{ selectedSchool.pic_phone }}</span>
             </div>
           </div>
 

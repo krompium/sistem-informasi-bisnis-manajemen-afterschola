@@ -7,30 +7,34 @@ use App\Models\User;
 
 class HotIssuePolicy
 {
-    /** Semua role yang login boleh lihat hot issue aktif (buat popup). */
-    public function viewActive(User $user): bool
+    public function viewAny(User $user): bool
+    {
+        return true; // semua role login boleh melihat hot issue aktif miliknya
+    }
+
+    public function view(User $user, HotIssue $hotIssue): bool
     {
         return true;
     }
 
-    /** Kelola (create/update/delete) hanya untuk Management. */
-    public function manage(User $user): bool
-    {
-        return $user->hasRole('Management');
-    }
-
     public function create(User $user): bool
     {
-        return $this->manage($user);
+        return $user->can('manage hot issues');
     }
 
     public function update(User $user, HotIssue $hotIssue): bool
     {
-        return $this->manage($user);
+        return $user->can('manage hot issues');
     }
 
     public function delete(User $user, HotIssue $hotIssue): bool
     {
-        return $this->manage($user);
+        return $user->can('manage hot issues');
+    }
+
+    // Menutup popup untuk diri sendiri — semua role boleh.
+    public function dismiss(User $user, HotIssue $hotIssue): bool
+    {
+        return true;
     }
 }

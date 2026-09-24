@@ -14,7 +14,6 @@ class ClassroomResource extends JsonResource
             'school_id' => $this->school_id,
             'name' => $this->name,
             'level' => $this->level,
-            'is_active' => (bool) $this->is_active,
             'students_count' => $this->whenNotNull($this->students_count),
             'school' => new SchoolResource($this->whenLoaded('school')),
         ];
