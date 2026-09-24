@@ -16,6 +16,12 @@ const saving = ref(false)
 const formError = ref('')
 const form = reactive({ name: '', address: '', pic_name: '', pic_phone: '' })
 
+// ---- Edit / Hapus Sekolah ----
+const showEditSchool = ref(false)
+const savingEditSchool = ref(false)
+const editSchoolError = ref('')
+const editSchoolForm = reactive({ name: '', address: '', pic_name: '', pic_phone: '' })
+
 // ---- Kelola Mata Pelajaran ----
 const showManageSubjects = ref(false)
 const subjectCatalog = ref([]) // semua nama unik yang pernah dipakai di sekolah manapun
@@ -32,7 +38,15 @@ const rowBusyId = ref(null) // classroom.id yang lagi diproses (toggle/rename)
 const showAddStudent = ref(false)
 const savingStudent = ref(false)
 const studentFormError = ref('')
-const studentForm = reactive({ classroom_id: '', name: '', origin_class: '' })
+const studentForm = reactive({ classroom_id: '', name: '', origin_class: '', level: '' })
+
+// ---- Edit / Hapus Murid ----
+const showEditStudent = ref(false)
+const savingEditStudent = ref(false)
+const editStudentError = ref('')
+const editStudentTarget = ref(null)
+const editStudentForm = reactive({ classroom_id: '', name: '', origin_class: '', level: '' })
+const studentRowBusyId = ref(null)
 
 const selectedSchool = computed(() => schools.value.find((s) => s.id === selectedSchoolId.value))
 
@@ -112,6 +126,54 @@ async function submitCreate() {
           : 'Gagal menyimpan sekolah.'
   } finally {
     saving.value = false
+  }
+}
+
+// ---- Edit / Hapus Sekolah ----
+function openEditSchool() {
+  if (!selectedSchool.value) return
+  Object.assign(editSchoolForm, {
+    name: selectedSchool.value.name,
+    address: selectedSchool.value.address || '',
+    pic_name: selectedSchool.value.pic_name || '',
+    pic_phone: selectedSchool.value.pic_phone || '',
+  })
+  editSchoolError.value = ''
+  showEditSchool.value = true
+}
+
+async function submitEditSchool() {
+  savingEditSchool.value = true
+  editSchoolError.value = ''
+  try {
+    await api.put(`/schools/${selectedSchoolId.value}`, {
+      name: editSchoolForm.name,
+      address: editSchoolForm.address || null,
+      pic_name: editSchoolForm.pic_name || null,
+      pic_phone: editSchoolForm.pic_phone || null,
+    })
+    showEditSchool.value = false
+    await loadSchools()
+  } catch (err) {
+    const res = err?.response
+    editSchoolError.value =
+      res?.status === 422
+        ? Object.values(res.data?.errors ?? {}).flat().join(' ') || 'Data tidak valid.'
+        : 'Gagal menyimpan perubahan.'
+  } finally {
+    savingEditSchool.value = false
+  }
+}
+
+async function deleteSchool() {
+  if (!selectedSchool.value) return
+  if (!window.confirm(`Hapus sekolah "${selectedSchool.value.name}"? Cuma bisa kalau belum ada mata pelajaran/murid.`)) return
+  try {
+    await api.delete(`/schools/${selectedSchoolId.value}`)
+    selectedSchoolId.value = null
+    await loadSchools()
+  } catch (err) {
+    window.alert(err?.response?.data?.message || 'Gagal menghapus sekolah.')
   }
 }
 
@@ -235,6 +297,7 @@ function openAddStudent() {
     classroom_id: firstClassroom?.id ?? '',
     name: '',
     origin_class: '',
+    level: '',
   })
   studentFormError.value = ''
   showAddStudent.value = true
@@ -249,6 +312,7 @@ async function submitAddStudent() {
       classroom_id: studentForm.classroom_id,
       name: studentForm.name,
       origin_class: studentForm.origin_class || null,
+      level: studentForm.level || null,
     })
     showAddStudent.value = false
     await selectSchool(selectedSchoolId.value) // refresh daftar murid
@@ -262,6 +326,57 @@ async function submitAddStudent() {
           : 'Gagal menyimpan murid.'
   } finally {
     savingStudent.value = false
+  }
+}
+
+// ---- Edit / Hapus Murid ----
+function openEditStudent(student) {
+  editStudentTarget.value = student
+  Object.assign(editStudentForm, {
+    classroom_id: student.classroom_id,
+    name: student.name,
+    origin_class: student.origin_class || '',
+    level: student.level || '',
+  })
+  editStudentError.value = ''
+  showEditStudent.value = true
+}
+
+async function submitEditStudent() {
+  if (!editStudentTarget.value) return
+  savingEditStudent.value = true
+  editStudentError.value = ''
+  try {
+    await api.put(`/students/${editStudentTarget.value.id}`, {
+      classroom_id: editStudentForm.classroom_id,
+      name: editStudentForm.name,
+      origin_class: editStudentForm.origin_class || null,
+      level: editStudentForm.level || null,
+    })
+    showEditStudent.value = false
+    await selectSchool(selectedSchoolId.value)
+  } catch (err) {
+    const res = err?.response
+    editStudentError.value =
+      res?.status === 422
+        ? Object.values(res.data?.errors ?? {}).flat().join(' ') || 'Data tidak valid.'
+        : 'Gagal menyimpan perubahan.'
+  } finally {
+    savingEditStudent.value = false
+  }
+}
+
+async function deleteStudent(student) {
+  if (!window.confirm(`Hapus murid "${student.name}"? Cuma bisa kalau belum ada riwayat absensi.`)) return
+  studentRowBusyId.value = student.id
+  try {
+    await api.delete(`/students/${student.id}`)
+    await selectSchool(selectedSchoolId.value)
+  } catch (err) {
+    const res = err?.response
+    window.alert(res?.data?.message || 'Gagal menghapus murid.')
+  } finally {
+    studentRowBusyId.value = null
   }
 }
 
@@ -340,7 +455,15 @@ onMounted(loadSchools)
         <template v-if="selectedSchool">
           <div class="mb-space-md flex flex-col gap-space-sm border-b border-surface-container pb-space-md sm:flex-row sm:items-start sm:justify-between">
             <div class="flex flex-col gap-space-2xs">
-              <h2 class="font-headline-md text-headline-md font-bold text-on-surface">{{ selectedSchool.name }}</h2>
+              <span class="flex items-center gap-space-xs">
+                <h2 class="font-headline-md text-headline-md font-bold text-on-surface">{{ selectedSchool.name }}</h2>
+                <button class="rounded-lg p-1 text-secondary hover:bg-surface-container" title="Ubah sekolah" @click="openEditSchool">
+                  <span class="material-symbols-outlined text-[18px]">edit</span>
+                </button>
+                <button class="rounded-lg p-1 text-error hover:bg-error-container" title="Hapus sekolah" @click="deleteSchool">
+                  <span class="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+              </span>
               <div class="flex flex-wrap items-center gap-x-space-md gap-y-1 font-body-sm text-body-sm text-on-surface-variant">
                 <span v-if="selectedSchool.address" class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px] text-primary">location_on</span>{{ selectedSchool.address }}</span>
                 <span v-if="selectedSchool.pic_name" class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px] text-primary">person</span>PIC: {{ selectedSchool.pic_name }}</span>
@@ -396,7 +519,21 @@ onMounted(loadSchools)
                   <span class="w-6 text-center font-label-sm text-label-sm text-outline">{{ i + 1 }}</span>
                   <span class="flex h-7 w-7 items-center justify-center rounded-full bg-surface-container-high text-[10px] font-bold text-primary">{{ initials(st.name) }}</span>
                   <span class="font-body-md text-body-md text-on-surface">{{ st.name }}</span>
-                  <span v-if="st.origin_class" class="ml-auto rounded bg-surface-container px-2 py-0.5 font-label-sm text-label-sm text-on-surface-variant">{{ st.origin_class }}</span>
+                  <span v-if="st.level" class="rounded bg-secondary-fixed px-2 py-0.5 font-label-sm text-label-sm capitalize text-on-secondary-container">{{ st.level }}</span>
+                  <span v-if="st.origin_class" class="rounded bg-surface-container px-2 py-0.5 font-label-sm text-label-sm text-on-surface-variant">{{ st.origin_class }}</span>
+                  <div class="ml-auto flex items-center gap-1">
+                    <button class="rounded-lg p-1.5 text-secondary hover:bg-surface-container" title="Ubah murid" @click="openEditStudent(st)">
+                      <span class="material-symbols-outlined text-[18px]">edit</span>
+                    </button>
+                    <button
+                      class="rounded-lg p-1.5 text-error hover:bg-error-container"
+                      title="Hapus murid"
+                      :disabled="studentRowBusyId === st.id"
+                      @click="deleteStudent(st)"
+                    >
+                      <span class="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -448,6 +585,52 @@ onMounted(loadSchools)
             <button type="submit" :disabled="saving" class="inline-flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60">
               <span v-if="saving" class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
               Simpan
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal edit sekolah -->
+    <div
+      v-if="showEditSchool"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-[#0B2A5B]/40 p-4 backdrop-blur-sm"
+      @click.self="showEditSchool = false"
+    >
+      <div class="w-full max-w-md rounded-2xl bg-surface-container-lowest shadow-xl animate-fade-in">
+        <div class="flex items-center justify-between border-b border-surface-container p-space-lg">
+          <h2 class="font-headline-md text-headline-md font-bold text-on-surface">Ubah Sekolah</h2>
+          <button class="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low" @click="showEditSchool = false">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form class="flex flex-col gap-space-md p-space-lg" @submit.prevent="submitEditSchool">
+          <div v-if="editSchoolError" class="flex items-center gap-space-xs rounded-lg bg-error-container px-space-sm py-space-xs font-body-sm text-body-sm text-on-error-container">
+            <span class="material-symbols-outlined text-[18px]">error</span>{{ editSchoolError }}
+          </div>
+          <label class="flex flex-col gap-1">
+            <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Nama Sekolah</span>
+            <input v-model="editSchoolForm.name" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Alamat <span class="font-normal text-outline">(opsional)</span></span>
+            <input v-model="editSchoolForm.address" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+          </label>
+          <div class="grid grid-cols-2 gap-space-md">
+            <label class="flex flex-col gap-1">
+              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Nama PIC</span>
+              <input v-model="editSchoolForm.pic_name" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">No. HP PIC</span>
+              <input v-model="editSchoolForm.pic_phone" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+            </label>
+          </div>
+          <div class="flex items-center justify-end gap-space-sm pt-space-xs">
+            <button type="button" class="rounded-xl px-space-md py-2.5 font-label-lg text-label-lg text-on-surface hover:bg-surface-container" @click="showEditSchool = false">Batal</button>
+            <button type="submit" :disabled="savingEditSchool" class="inline-flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60">
+              <span v-if="savingEditSchool" class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+              Simpan Perubahan
             </button>
           </div>
         </form>
@@ -626,11 +809,95 @@ onMounted(loadSchools)
               class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"
             />
           </label>
+          <div class="flex flex-col gap-1">
+            <span class="font-label-md text-label-md font-semibold text-on-surface-variant"
+              >Level Belajar <span class="font-normal text-outline">(opsional)</span></span
+            >
+            <div class="inline-flex rounded-xl bg-surface-container-low p-1">
+              <button type="button" class="flex flex-1 items-center justify-center rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold capitalize transition-all" :class="studentForm.level === 'beginner' ? 'bg-primary-container text-on-primary shadow-sm' : 'text-on-surface-variant'" @click="studentForm.level = studentForm.level === 'beginner' ? '' : 'beginner'">
+                Beginner
+              </button>
+              <button type="button" class="flex flex-1 items-center justify-center rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold capitalize transition-all" :class="studentForm.level === 'intermediate' ? 'bg-primary-container text-on-primary shadow-sm' : 'text-on-surface-variant'" @click="studentForm.level = studentForm.level === 'intermediate' ? '' : 'intermediate'">
+                Intermediate
+              </button>
+            </div>
+          </div>
           <div class="flex items-center justify-end gap-space-sm pt-space-xs">
             <button type="button" class="rounded-xl px-space-md py-2.5 font-label-lg text-label-lg text-on-surface hover:bg-surface-container" @click="showAddStudent = false">Batal</button>
             <button type="submit" :disabled="savingStudent" class="inline-flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60">
               <span v-if="savingStudent" class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
               Simpan
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal edit murid -->
+    <div
+      v-if="showEditStudent"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-[#0B2A5B]/40 p-4 backdrop-blur-sm"
+      @click.self="showEditStudent = false"
+    >
+      <div class="w-full max-w-md rounded-2xl bg-surface-container-lowest shadow-xl animate-fade-in">
+        <div class="flex items-center justify-between border-b border-surface-container p-space-lg">
+          <div>
+            <h2 class="font-headline-md text-headline-md font-bold text-on-surface">Ubah Murid</h2>
+            <p class="font-body-sm text-body-sm text-on-surface-variant">{{ selectedSchool?.name }}</p>
+          </div>
+          <button class="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low" @click="showEditStudent = false">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form class="flex flex-col gap-space-md p-space-lg" @submit.prevent="submitEditStudent">
+          <div v-if="editStudentError" class="flex items-center gap-space-xs rounded-lg bg-error-container px-space-sm py-space-xs font-body-sm text-body-sm text-on-error-container">
+            <span class="material-symbols-outlined text-[18px]">error</span>{{ editStudentError }}
+          </div>
+          <label class="flex flex-col gap-1">
+            <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Nama Murid</span>
+            <input
+              v-model="editStudentForm.name"
+              required
+              class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Mata Pelajaran</span>
+            <select
+              v-model="editStudentForm.classroom_id"
+              required
+              class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"
+            >
+              <option v-for="c in selectedSchool?.classrooms ?? []" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="font-label-md text-label-md font-semibold text-on-surface-variant"
+              >Kelas <span class="font-normal text-outline">(opsional)</span></span
+            >
+            <input
+              v-model="editStudentForm.origin_class"
+              class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"
+            />
+          </label>
+          <div class="flex flex-col gap-1">
+            <span class="font-label-md text-label-md font-semibold text-on-surface-variant"
+              >Level Belajar <span class="font-normal text-outline">(opsional)</span></span
+            >
+            <div class="inline-flex rounded-xl bg-surface-container-low p-1">
+              <button type="button" class="flex flex-1 items-center justify-center rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold capitalize transition-all" :class="editStudentForm.level === 'beginner' ? 'bg-primary-container text-on-primary shadow-sm' : 'text-on-surface-variant'" @click="editStudentForm.level = editStudentForm.level === 'beginner' ? '' : 'beginner'">
+                Beginner
+              </button>
+              <button type="button" class="flex flex-1 items-center justify-center rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold capitalize transition-all" :class="editStudentForm.level === 'intermediate' ? 'bg-primary-container text-on-primary shadow-sm' : 'text-on-surface-variant'" @click="editStudentForm.level = editStudentForm.level === 'intermediate' ? '' : 'intermediate'">
+                Intermediate
+              </button>
+            </div>
+          </div>
+          <div class="flex items-center justify-end gap-space-sm pt-space-xs">
+            <button type="button" class="rounded-xl px-space-md py-2.5 font-label-lg text-label-lg text-on-surface hover:bg-surface-container" @click="showEditStudent = false">Batal</button>
+            <button type="submit" :disabled="savingEditStudent" class="inline-flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60">
+              <span v-if="savingEditStudent" class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+              Simpan Perubahan
             </button>
           </div>
         </form>

@@ -15,6 +15,7 @@ class StudentResource extends JsonResource
             'classroom_id' => $this->classroom_id,
             'name' => $this->name,
             'origin_class' => $this->origin_class,
+            'level' => $this->level,
             'created_by' => $this->created_by,
             'classroom' => new ClassroomResource($this->whenLoaded('classroom')),
             'school' => new SchoolResource($this->whenLoaded('school')),

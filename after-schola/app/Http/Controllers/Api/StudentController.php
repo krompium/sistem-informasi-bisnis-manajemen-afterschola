@@ -7,6 +7,7 @@ use App\Http\Resources\StudentResource;
 use App\Models\Classroom;
 use App\Models\Student;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use OpenSpout\Reader\CSV\Reader as CsvReader;
 use OpenSpout\Reader\XLSX\Reader as XlsxReader;
@@ -42,6 +43,7 @@ class StudentController extends Controller
             'classroom_id' => ['required', 'exists:classrooms,id'],
             'name' => ['required', 'string', 'max:255'],
             'origin_class' => ['nullable', 'string', 'max:100'],
+            'level' => ['nullable', Rule::in(['beginner', 'intermediate'])],
         ]);
 
         $this->ensureHandlesSchool($request, (int) $data['school_id']);
@@ -68,6 +70,7 @@ class StudentController extends Controller
             'classroom_id' => ['sometimes', 'required', 'exists:classrooms,id'],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'origin_class' => ['nullable', 'string', 'max:100'],
+            'level' => ['nullable', Rule::in(['beginner', 'intermediate'])],
         ]);
 
         if (isset($data['classroom_id'])) {
@@ -82,6 +85,16 @@ class StudentController extends Controller
     public function destroy(Student $student)
     {
         $this->authorize('delete', $student);
+
+        // Pengaman: kalau murid ini sudah punya riwayat absensi, jangan
+        // izinkan hapus permanen — hindari kehilangan data absensi yang
+        // sudah tercatat karena salah pencet. Untuk typo baru (belum ada
+        // riwayat), hapus langsung aman dilakukan.
+        if ($student->attendances()->exists()) {
+            return response()->json([
+                'message' => 'Murid ini sudah punya riwayat absensi, tidak bisa dihapus. Gunakan Edit untuk membetulkan nama/data lainnya.',
+            ], 422);
+        }
 
         $student->delete();
 
@@ -162,7 +175,7 @@ class StudentController extends Controller
         $belongs = Classroom::where('id', $classroomId)->where('school_id', $schoolId)->exists();
         if (! $belongs) {
             throw ValidationException::withMessages([
-                'classroom_id' => ['Level tidak berada di sekolah tersebut.'],
+                'classroom_id' => ['Mata pelajaran tidak berada di sekolah tersebut.'],
             ]);
         }
     }
