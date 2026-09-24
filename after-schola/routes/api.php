@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AttendanceImportController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClassroomController;
 use App\Http\Controllers\Api\ClassSessionController;
@@ -81,6 +82,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Export laporan ekspo (Excel & PDF dengan foto)
     Route::get('/exports/expo/excel', [ExportController::class, 'expoExcel']);
     Route::get('/exports/expo/pdf', [ExportController::class, 'expoPdf']);
+
+    // Import absensi dari Excel/CSV — pratinjau dulu sebelum disimpan
+    Route::post('/attendance-imports/preview', [AttendanceImportController::class, 'preview']);
+    Route::post('/attendance-imports/{token}/commit', [AttendanceImportController::class, 'commit']);
 
     // Laporan Ekspo / Free-Trial
     Route::get('/expo-reports', [ExpoReportController::class, 'index']);
