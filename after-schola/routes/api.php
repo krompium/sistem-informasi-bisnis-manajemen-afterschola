@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\TrainerAttendanceController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ProgramController;
 
 /*
 |--------------------------------------------------------------------------
@@ -106,5 +107,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/hot-issues', [HotIssueController::class, 'store']);
         Route::match(['put', 'patch'], '/hot-issues/{hotIssue}', [HotIssueController::class, 'update']);
         Route::delete('/hot-issues/{hotIssue}', [HotIssueController::class, 'destroy']);
+    });
+
+    // Publik - bisa diakses tanpa login, buat landing page
+    Route::get('/programs/aktif', [ProgramController::class, 'indexAktif']);
+
+    // Khusus Management - wajib login & role tertentu
+    Route::middleware(['auth:sanctum', 'role:management'])->group(function () {
+        Route::apiResource('programs', ProgramController::class);
     });
 });
