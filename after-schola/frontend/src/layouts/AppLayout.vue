@@ -22,6 +22,7 @@ const managementNav = [
   { label: 'Rekap Absensi', icon: 'summarize', to: '/management/absensi' },
   { label: 'Jadwal', icon: 'calendar_month', to: '/management/jadwal' },
   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/management/laporan-ekspo' },
+  { label: 'Evaluasi Trial', icon: 'rate_review', to: '/management/evaluasi-trial' },
   { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue' },
   { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user' },
 ]
@@ -32,6 +33,7 @@ const trainerNav = [
   { label: 'Jadwal Saya', icon: 'calendar_month', to: '/trainer/jadwal' },
   { label: 'Absensi', icon: 'fact_check', to: '/trainer/absensi' },
   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/trainer/laporan-ekspo' },
+  { label: 'Evaluasi Trial', icon: 'rate_review', to: '/trainer/evaluasi-trial' },
 ]
 
 const navItems = computed(() => (auth.isManagement ? managementNav : trainerNav))

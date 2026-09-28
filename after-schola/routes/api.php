@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\SchoolController;
 use App\Http\Controllers\Api\StudentAttendanceController;
 use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\TrainerAttendanceController;
+use App\Http\Controllers\Api\TrialEvaluationController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -93,6 +94,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/expo-reports/{expoReport}', [ExpoReportController::class, 'show']);
     Route::match(['put', 'patch'], '/expo-reports/{expoReport}', [ExpoReportController::class, 'update']);
     Route::delete('/expo-reports/{expoReport}', [ExpoReportController::class, 'destroy']);
+
+    // Evaluasi Trial (Modul 3) — trainer mengisi, Management melihat semua
+    Route::get('/trial-evaluations', [TrialEvaluationController::class, 'index']);
+    Route::post('/trial-evaluations', [TrialEvaluationController::class, 'store']);
+    Route::get('/trial-evaluations/{trialEvaluation}', [TrialEvaluationController::class, 'show']);
+    Route::match(['put', 'patch'], '/trial-evaluations/{trialEvaluation}', [TrialEvaluationController::class, 'update']);
+    Route::delete('/trial-evaluations/{trialEvaluation}', [TrialEvaluationController::class, 'destroy']);
 
     // Kelola user & role — hanya Management
     Route::middleware('permission:manage users')->group(function () {

@@ -27,6 +27,8 @@ class RoleSeeder extends Seeder
             'submit expo reports',   // trainer mengisi laporan ekspo
             'export data',           // export Excel/PDF
             'manage users',          // kelola user & role
+            'submit trial evaluations', // trainer mengisi evaluasi trial
+            'manage trial evaluations', // lihat & kelola semua evaluasi trial
             'manage hot issues',     // buat/ubah/nonaktifkan hot issue (popup notifikasi semua role)
         ];
 
@@ -43,6 +45,7 @@ class RoleSeeder extends Seeder
                 'input student attendance',
                 'input trainer attendance',
                 'submit expo reports',
+                'submit trial evaluations',
                 'export data',
             ],
             'developer' => [], // modul manajemen proyek (fase 3), belum ada di absensi
