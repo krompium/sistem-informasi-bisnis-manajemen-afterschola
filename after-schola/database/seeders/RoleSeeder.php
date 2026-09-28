@@ -27,6 +27,7 @@ class RoleSeeder extends Seeder
             'submit expo reports',   // trainer mengisi laporan ekspo
             'export data',           // export Excel/PDF
             'manage users',          // kelola user & role
+            'manage hot issues',     // buat/ubah/nonaktifkan hot issue (popup notifikasi semua role)
         ];
 
         foreach ($permissions as $permission) {

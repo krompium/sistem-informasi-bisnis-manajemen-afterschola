@@ -8,11 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Classroom extends Model
 {
-    protected $fillable = ['school_id', 'name', 'level', 'is_active'];
-
-    protected $casts = [
-        'is_active' => 'boolean',
-    ];
+    protected $fillable = ['school_id', 'name', 'level'];
 
     public function school(): BelongsTo
     {

@@ -1,6 +1,6 @@
 <script setup>
 // Kelola Jadwal (Management) — CRUD pertemuan sesuai FR-4:
-// Management membuat sekolah + mata pelajaran + trainer + tanggal + pertemuan ke- + mode.
+// Management membuat sekolah + level + trainer + tanggal + pertemuan ke- + mode.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/lib/api'
@@ -18,7 +18,7 @@ const errorMessage = ref('')
 const sessions = ref([])
 const schools = ref([])
 const trainers = ref([])
-const classroomsBySchool = reactive({}) // cache mata pelajaran per school_id
+const classroomsBySchool = reactive({}) // cache level per school_id
 
 // Filter
 const filters = reactive({ school_id: '', trainer_id: '', date: '', status: '' })
@@ -329,7 +329,7 @@ usePolling(() => {
           Kelola Jadwal Pertemuan
         </h1>
         <p class="font-body-md text-body-md text-on-surface-variant">
-          Atur sesi belajar: sekolah, mata pelajaran, trainer, tanggal, pertemuan ke-, dan mode. Trainer
+          Atur sesi belajar: sekolah, level, trainer, tanggal, pertemuan ke-, dan mode. Trainer
           hanya melihat &amp; menjalankan.
         </p>
       </div>
@@ -487,7 +487,7 @@ usePolling(() => {
             <tr class="bg-surface-container-low font-label-sm text-label-sm uppercase tracking-wider text-on-surface">
               <th class="rounded-l-xl p-space-sm">Pertemuan</th>
               <th class="p-space-sm">Sekolah</th>
-              <th class="p-space-sm">Mata Pelajaran</th>
+              <th class="p-space-sm">Level</th>
               <th class="p-space-sm">Trainer</th>
               <th class="p-space-sm">Mode</th>
               <th class="p-space-sm">Hadir</th>
@@ -674,16 +674,16 @@ usePolling(() => {
           </label>
 
           <label class="flex flex-col gap-1">
-            <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Mata Pelajaran</span>
+            <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Level (Kelas)</span>
             <select
               v-model="form.classroom_id"
               required
               :disabled="!form.school_id"
               class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15 disabled:bg-surface-container-low disabled:text-outline"
             >
-              <option value="" disabled>{{ form.school_id ? 'Pilih mata pelajaran…' : 'Pilih sekolah dulu' }}</option>
+              <option value="" disabled>{{ form.school_id ? 'Pilih level…' : 'Pilih sekolah dulu' }}</option>
               <option v-for="c in modalClassrooms" :key="c.id" :value="c.id">
-                {{ c.name }}
+                {{ c.name }}<span v-if="c.level"> — {{ c.level }}</span>
               </option>
             </select>
           </label>
@@ -840,10 +840,10 @@ usePolling(() => {
               </select>
             </label>
             <label class="flex flex-col gap-1">
-              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Mata Pelajaran</span>
+              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Level (Kelas)</span>
               <select v-model="recForm.classroom_id" required :disabled="!recForm.school_id" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15 disabled:bg-surface-container-low disabled:text-outline">
-                <option value="" disabled>{{ recForm.school_id ? 'Pilih mata pelajaran…' : 'Pilih sekolah dulu' }}</option>
-                <option v-for="c in recModalClassrooms" :key="c.id" :value="c.id">{{ c.name }}</option>
+                <option value="" disabled>{{ recForm.school_id ? 'Pilih level…' : 'Pilih sekolah dulu' }}</option>
+                <option v-for="c in recModalClassrooms" :key="c.id" :value="c.id">{{ c.name }}<span v-if="c.level"> — {{ c.level }}</span></option>
               </select>
             </label>
             <label class="flex flex-col gap-1">

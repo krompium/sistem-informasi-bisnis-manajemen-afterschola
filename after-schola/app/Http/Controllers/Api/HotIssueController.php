@@ -3,33 +3,37 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\HotIssueResource;
 use App\Models\HotIssue;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 
 class HotIssueController extends Controller
 {
-    /** Daftar semua hot issue — buat halaman kelola Management. */
+    /**
+     * Daftar semua hot issue (untuk halaman kelola — Management).
+     */
     public function index(Request $request)
     {
-        $this->authorize('manage', HotIssue::class);
+        $this->authorize('viewAny', HotIssue::class);
 
-        return HotIssue::latest()->paginate(20);
+        $issues = HotIssue::with('creator')->latest()->get();
+
+        return HotIssueResource::collection($issues);
     }
 
     /**
-     * Hot issue aktif yang BELUM di-dismiss user yang sedang login.
-     * Dipanggil oleh popup di dashboard, untuk semua role.
+     * Hot issue aktif yang BELUM ditutup user login — dipakai untuk popup setelah login,
+     * di semua dashboard/role.
      */
     public function active(Request $request)
     {
-        $issues = HotIssue::active()
-            ->notDismissedBy($request->user()->id)
-            ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
-            ->orderByDesc('published_at')
-            ->get(['id', 'title', 'content', 'priority', 'published_at']);
+        $issues = HotIssue::with('creator')
+            ->activeAndUndismissedFor($request->user()->id)
+            ->orderByRaw("CASE severity WHEN 'critical' THEN 1 WHEN 'warning' THEN 2 WHEN 'info' THEN 3 ELSE 4 END")
+            ->latest()
+            ->get();
 
-        return response()->json($issues);
+        return HotIssueResource::collection($issues);
     }
 
     public function store(Request $request)
@@ -38,18 +42,17 @@ class HotIssueController extends Controller
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
-            'content' => ['required', 'string'],
-            'priority' => ['required', 'in:low,medium,high'],
-            'is_published' => ['boolean'],
-            'published_at' => ['nullable', 'date'],
-            'expires_at' => ['nullable', 'date', 'after:published_at'],
+            'message' => ['required', 'string'],
+            'severity' => ['required', 'in:info,warning,critical'],
         ]);
 
-        $data['created_by'] = $request->user()->id;
+        $issue = HotIssue::create([
+            ...$data,
+            'is_active' => true,
+            'created_by' => $request->user()->id,
+        ]);
 
-        $hotIssue = HotIssue::create($data);
-
-        return response()->json($hotIssue, Response::HTTP_CREATED);
+        return (new HotIssueResource($issue->load('creator')))->response()->setStatusCode(201);
     }
 
     public function update(Request $request, HotIssue $hotIssue)
@@ -57,17 +60,15 @@ class HotIssueController extends Controller
         $this->authorize('update', $hotIssue);
 
         $data = $request->validate([
-            'title' => ['sometimes', 'string', 'max:255'],
-            'content' => ['sometimes', 'string'],
-            'priority' => ['sometimes', 'in:low,medium,high'],
-            'is_published' => ['sometimes', 'boolean'],
-            'published_at' => ['nullable', 'date'],
-            'expires_at' => ['nullable', 'date', 'after:published_at'],
+            'title' => ['sometimes', 'required', 'string', 'max:255'],
+            'message' => ['sometimes', 'required', 'string'],
+            'severity' => ['sometimes', 'required', 'in:info,warning,critical'],
+            'is_active' => ['sometimes', 'boolean'],
         ]);
 
         $hotIssue->update($data);
 
-        return response()->json($hotIssue);
+        return new HotIssueResource($hotIssue->load('creator'));
     }
 
     public function destroy(Request $request, HotIssue $hotIssue)
@@ -76,16 +77,21 @@ class HotIssueController extends Controller
 
         $hotIssue->delete();
 
-        return response()->json(null, Response::HTTP_NO_CONTENT);
+        return response()->json(['message' => 'Hot issue dihapus.']);
     }
 
-    /** Tandai satu hot issue sudah dibaca/ditutup oleh user yang login. */
+    /**
+     * Tutup popup untuk user login saat ini — tidak akan muncul lagi untuk dia.
+     */
     public function dismiss(Request $request, HotIssue $hotIssue)
     {
-        $hotIssue->dismissedBy()->syncWithoutDetaching([
-            $request->user()->id => ['dismissed_at' => now()],
-        ]);
+        $this->authorize('dismiss', $hotIssue);
 
-        return response()->json(['message' => 'dismissed']);
+        $hotIssue->dismissals()->firstOrCreate(
+            ['user_id' => $request->user()->id],
+            ['dismissed_at' => now()],
+        );
+
+        return response()->json(['message' => 'Ditandai sudah dibaca.']);
     }
 }

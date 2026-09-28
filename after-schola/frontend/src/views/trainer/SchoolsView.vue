@@ -1,6 +1,6 @@
 <script setup>
-// Sekolah (Trainer) — daftar sekolah binaan + rekap absensi murid per mata
-// pelajaran (matriks murid × pertemuan) yang bisa diexport ke Excel & PDF, + tambah murid.
+// Sekolah (Trainer) — daftar sekolah binaan + rekap absensi murid per level
+// (matriks murid × pertemuan) yang bisa diexport ke Excel & PDF.
 import { computed, onMounted, ref, watch } from 'vue'
 import api from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
@@ -15,19 +15,12 @@ const selectedSchoolId = ref(null)
 const recap = ref(null)
 const loadingRecap = ref(false)
 const recapError = ref('')
-const levelFilter = ref('') // '' = semua mata pelajaran, atau classroom_id
+const levelFilter = ref('') // '' = semua level, atau classroom_id
 const from = ref('')
 const to = ref('')
 
 const exporting = ref('') // 'excel' | 'pdf' | ''
 const exportError = ref('')
-
-// ---- Tambah Murid ----
-const classroomsForSchool = ref([]) // daftar mata pelajaran di sekolah yang dipilih (independen dari data rekap)
-const showAddStudent = ref(false)
-const savingStudent = ref(false)
-const studentFormError = ref('')
-const studentForm = ref({ classroom_id: '', name: '', origin_class: '' })
 
 const selectedSchool = computed(() => schools.value.find((s) => s.id === selectedSchoolId.value))
 
@@ -85,21 +78,6 @@ async function loadRecap() {
   }
 }
 
-// Ambil daftar mata pelajaran langsung dari /classrooms — tidak bergantung pada
-// rekap, jadi tetap bisa dipakai walau sekolah belum punya pertemuan/sesi sama sekali.
-async function loadClassroomsForSchool() {
-  if (!selectedSchoolId.value) {
-    classroomsForSchool.value = []
-    return
-  }
-  try {
-    const { data } = await api.get('/classrooms', { params: { school_id: selectedSchoolId.value } })
-    classroomsForSchool.value = unwrap(data)
-  } catch (e) {
-    classroomsForSchool.value = []
-  }
-}
-
 async function downloadExport(type) {
   if (!selectedSchoolId.value) return
   exporting.value = type
@@ -137,46 +115,7 @@ function selectSchool(id) {
   levelFilter.value = ''
 }
 
-// ---- Tambah Murid ----
-function openAddStudent() {
-  studentForm.value = {
-    classroom_id: classroomsForSchool.value[0]?.id ?? '',
-    name: '',
-    origin_class: '',
-  }
-  studentFormError.value = ''
-  showAddStudent.value = true
-}
-
-async function submitAddStudent() {
-  savingStudent.value = true
-  studentFormError.value = ''
-  try {
-    await api.post('/students', {
-      school_id: selectedSchoolId.value,
-      classroom_id: studentForm.value.classroom_id,
-      name: studentForm.value.name,
-      origin_class: studentForm.value.origin_class || null,
-    })
-    showAddStudent.value = false
-    await loadRecap() // refresh supaya murid baru ikut muncul di rekap
-  } catch (err) {
-    const res = err?.response
-    studentFormError.value =
-      res?.status === 422
-        ? Object.values(res.data?.errors ?? {}).flat().join(' ') || 'Data tidak valid.'
-        : res?.status === 403
-          ? 'Anda tidak ditugaskan pada sekolah ini.'
-          : 'Gagal menyimpan murid.'
-  } finally {
-    savingStudent.value = false
-  }
-}
-
-watch(selectedSchoolId, () => {
-  loadRecap()
-  loadClassroomsForSchool()
-})
+watch(selectedSchoolId, loadRecap)
 watch([from, to], loadRecap)
 
 onMounted(loadSchools)
@@ -185,32 +124,20 @@ onMounted(loadSchools)
 <template>
   <div class="flex w-full flex-col pb-space-3xl">
     <!-- Header -->
-    <div class="flex flex-col justify-between gap-space-md py-space-xl lg:flex-row lg:items-center">
-      <div class="flex flex-col gap-space-2xs">
-        <span class="font-label-sm text-label-sm font-semibold uppercase tracking-widest text-secondary"
-          >{{ auth.isManagement ? 'Modul Absensi • Rekap' : 'Portal Pelatih • Binaan' }}</span
-        >
-        <h1 class="font-headline-xl text-headline-xl font-bold tracking-tight text-on-surface">
-          {{ auth.isManagement ? 'Rekap Absensi Sekolah' : 'Sekolah Saya' }}
-        </h1>
-        <p class="font-body-md text-body-md text-on-surface-variant">
-          {{
-            auth.isManagement
-              ? 'Pilih sekolah untuk melihat rekap kehadiran murid per mata pelajaran dan unduh ke Excel / PDF.'
-              : 'Lihat rekap kehadiran murid per mata pelajaran dan unduh ke Excel / PDF untuk laporan sekolah.'
-          }}
-        </p>
-      </div>
-      <button
-        v-if="selectedSchoolId"
-        class="inline-flex items-center gap-space-xs self-start rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-50 lg:self-center"
-        :disabled="!classroomsForSchool.length"
-        :title="!classroomsForSchool.length ? 'Sekolah ini belum punya mata pelajaran' : ''"
-        @click="openAddStudent"
+    <div class="flex flex-col gap-space-2xs py-space-xl">
+      <span class="font-label-sm text-label-sm font-semibold uppercase tracking-widest text-secondary"
+        >{{ auth.isManagement ? 'Modul Absensi • Rekap' : 'Portal Pelatih • Binaan' }}</span
       >
-        <span class="material-symbols-outlined text-[18px]">person_add</span>
-        <span>Tambah Murid</span>
-      </button>
+      <h1 class="font-headline-xl text-headline-xl font-bold tracking-tight text-on-surface">
+        {{ auth.isManagement ? 'Rekap Absensi Sekolah' : 'Sekolah Saya' }}
+      </h1>
+      <p class="font-body-md text-body-md text-on-surface-variant">
+        {{
+          auth.isManagement
+            ? 'Pilih sekolah untuk melihat rekap kehadiran murid per level dan unduh ke Excel / PDF.'
+            : 'Lihat rekap kehadiran murid per level dan unduh ke Excel / PDF untuk laporan sekolah.'
+        }}
+      </p>
     </div>
 
     <!-- Pemilih sekolah -->
@@ -252,12 +179,12 @@ onMounted(loadSchools)
       <div class="mb-space-md flex flex-col gap-space-md rounded-2xl bg-surface-container-lowest p-space-md shadow-sm lg:flex-row lg:items-end lg:justify-between">
         <div class="flex flex-col gap-space-sm sm:flex-row sm:items-end">
           <label class="flex flex-col gap-1">
-            <span class="font-label-sm text-label-sm font-semibold text-on-surface-variant">Mata Pelajaran</span>
+            <span class="font-label-sm text-label-sm font-semibold text-on-surface-variant">Level</span>
             <select
               v-model="levelFilter"
               class="rounded-lg border border-outline-variant bg-white px-space-sm py-2 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"
             >
-              <option value="">Semua mata pelajaran</option>
+              <option value="">Semua level</option>
               <option v-for="g in recap?.groups || []" :key="g.classroom.id" :value="g.classroom.id">
                 {{ g.classroom.name }}
               </option>
@@ -312,7 +239,7 @@ onMounted(loadSchools)
         <button class="ml-auto font-label-md text-label-md font-semibold underline" @click="loadRecap">Coba lagi</button>
       </div>
 
-      <!-- Tabel rekap per mata pelajaran -->
+      <!-- Tabel rekap per level -->
       <template v-else>
         <div
           v-for="g in visibleGroups"
@@ -320,7 +247,7 @@ onMounted(loadSchools)
           class="mb-space-lg rounded-2xl bg-surface-container-lowest p-space-md shadow-sm"
         >
           <div class="mb-space-sm flex items-center justify-between">
-            <h2 class="font-headline-md text-headline-md font-bold text-on-surface">Mata Pelajaran: {{ g.classroom.name }}</h2>
+            <h2 class="font-headline-md text-headline-md font-bold text-on-surface">Level: {{ g.classroom.name }}</h2>
             <span class="font-label-sm text-label-sm text-on-surface-variant">{{ g.students.length }} murid • {{ g.sessions.length }} pertemuan</span>
           </div>
 
@@ -328,7 +255,7 @@ onMounted(loadSchools)
             Belum ada pertemuan pada periode ini.
           </div>
           <div v-else-if="!g.students.length" class="py-space-lg text-center font-body-sm text-body-sm text-on-surface-variant">
-            Belum ada murid pada mata pelajaran ini.
+            Belum ada murid pada level ini.
           </div>
           <div v-else class="overflow-x-auto">
             <table class="w-full border-collapse text-left">
@@ -379,70 +306,9 @@ onMounted(loadSchools)
         <div v-if="!visibleGroups.length" class="rounded-2xl bg-surface-container-lowest px-space-lg py-space-2xl text-center">
           <span class="material-symbols-outlined text-[36px] text-outline">summarize</span>
           <p class="mt-space-sm font-headline-sm text-headline-sm text-on-surface">Belum ada data rekap</p>
-          <p class="mt-1 font-body-sm text-body-sm text-on-surface-variant">Belum ada mata pelajaran/pertemuan untuk sekolah ini.</p>
+          <p class="mt-1 font-body-sm text-body-sm text-on-surface-variant">Belum ada level/pertemuan untuk sekolah ini.</p>
         </div>
       </template>
     </template>
-
-    <!-- Modal tambah murid -->
-    <div
-      v-if="showAddStudent"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-[#0B2A5B]/40 p-4 backdrop-blur-sm"
-      @click.self="showAddStudent = false"
-    >
-      <div class="w-full max-w-md rounded-2xl bg-surface-container-lowest shadow-xl animate-fade-in">
-        <div class="flex items-center justify-between border-b border-surface-container p-space-lg">
-          <div>
-            <h2 class="font-headline-md text-headline-md font-bold text-on-surface">Tambah Murid</h2>
-            <p class="font-body-sm text-body-sm text-on-surface-variant">{{ selectedSchool?.name }}</p>
-          </div>
-          <button class="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low" @click="showAddStudent = false">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
-        <form class="flex flex-col gap-space-md p-space-lg" @submit.prevent="submitAddStudent">
-          <div v-if="studentFormError" class="flex items-center gap-space-xs rounded-lg bg-error-container px-space-sm py-space-xs font-body-sm text-body-sm text-on-error-container">
-            <span class="material-symbols-outlined text-[18px]">error</span>{{ studentFormError }}
-          </div>
-          <label class="flex flex-col gap-1">
-            <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Nama Murid</span>
-            <input
-              v-model="studentForm.name"
-              required
-              placeholder="mis. Andi Pratama"
-              class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Mata Pelajaran</span>
-            <select
-              v-model="studentForm.classroom_id"
-              required
-              class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"
-            >
-              <option value="" disabled>Pilih mata pelajaran…</option>
-              <option v-for="c in classroomsForSchool" :key="c.id" :value="c.id">{{ c.name }}</option>
-            </select>
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="font-label-md text-label-md font-semibold text-on-surface-variant"
-              >Kelas <span class="font-normal text-outline">(opsional, mis. "8A")</span></span
-            >
-            <input
-              v-model="studentForm.origin_class"
-              placeholder="mis. 8A"
-              class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"
-            />
-          </label>
-          <div class="flex items-center justify-end gap-space-sm pt-space-xs">
-            <button type="button" class="rounded-xl px-space-md py-2.5 font-label-lg text-label-lg text-on-surface hover:bg-surface-container" @click="showAddStudent = false">Batal</button>
-            <button type="submit" :disabled="savingStudent" class="inline-flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60">
-              <span v-if="savingStudent" class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
-              Simpan
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
   </div>
 </template>
