@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\SchoolResource;
 use App\Models\School;
+use App\Models\Student;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -65,6 +66,16 @@ class SchoolController extends Controller
     public function destroy(Request $request, School $school)
     {
         $this->authorize('delete', $school);
+
+        // Pengaman: kalau sekolah ini sudah punya mata pelajaran atau murid,
+        // jangan izinkan hapus permanen — cegah data ikut hilang/rusak
+        // karena salah pencet. Sekolah kosong (baru dibuat, salah input)
+        // tetap aman dihapus langsung.
+        if ($school->classrooms()->exists() || Student::where('school_id', $school->id)->exists()) {
+            return response()->json([
+                'message' => 'Sekolah ini sudah punya mata pelajaran dan/atau murid, tidak bisa dihapus. Gunakan Edit untuk membetulkan datanya.',
+            ], 422);
+        }
 
         $school->delete();
 

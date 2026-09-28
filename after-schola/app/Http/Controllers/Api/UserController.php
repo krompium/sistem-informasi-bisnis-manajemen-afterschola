@@ -36,6 +36,10 @@ class UserController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'school_ids' => ['sometimes', 'array'],
             'school_ids.*' => ['integer', 'exists:schools,id'],
+            'subjects_taught' => ['sometimes', 'array'],
+            'subjects_taught.*' => ['string', 'max:255'],
+            'levels_taught' => ['sometimes', 'array'],
+            'levels_taught.*' => [Rule::in(['beginner', 'intermediate'])],
         ]);
 
         $user = User::create([
@@ -43,6 +47,8 @@ class UserController extends Controller
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
             'is_active' => $data['is_active'] ?? true,
+            'subjects_taught' => $data['subjects_taught'] ?? [],
+            'levels_taught' => $data['levels_taught'] ?? [],
         ]);
         $user->assignRole($data['role']);
 
@@ -68,9 +74,13 @@ class UserController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'school_ids' => ['sometimes', 'array'],
             'school_ids.*' => ['integer', 'exists:schools,id'],
+            'subjects_taught' => ['sometimes', 'array'],
+            'subjects_taught.*' => ['string', 'max:255'],
+            'levels_taught' => ['sometimes', 'array'],
+            'levels_taught.*' => [Rule::in(['beginner', 'intermediate'])],
         ]);
 
-        $user->fill(collect($data)->only(['name', 'email', 'is_active'])->all());
+        $user->fill(collect($data)->only(['name', 'email', 'is_active', 'subjects_taught', 'levels_taught'])->all());
         if (! empty($data['password'])) {
             $user->password = Hash::make($data['password']);
         }

@@ -10,6 +10,7 @@ import ManagementTrainerAssignmentView from '@/views/management/TrainerAssignmen
 import ManagementSchoolsAdminView from '@/views/management/SchoolsAdminView.vue'
 import ManagementRecapListView from '@/views/management/AttendanceRecapListView.vue'
 import ManagementRecapDetailView from '@/views/management/AttendanceRecapDetailView.vue'
+import ManagementUserManagementView from '@/views/management/UserManagementView.vue'
 import ManagementHotIssuesView from '@/views/management/HotIssuesView.vue'
 import TrainerScheduleView from '@/views/trainer/ScheduleView.vue'
 import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
@@ -67,7 +68,8 @@ const routes = [
       { path: 'management/hot-issue', name: 'management.hot-issues', component: ManagementHotIssuesView },
       {
         path: 'management/manajemen-user',
-        component: PlaceholderView,
+        name: 'management.users',
+        component: ManagementUserManagementView,
         meta: { title: 'Manajemen User', icon: 'manage_accounts' },
       },
     ],
