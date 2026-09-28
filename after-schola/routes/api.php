@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClassroomController;
 use App\Http\Controllers\Api\ClassSessionController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\ExpoReportController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\HotIssueController;
@@ -96,6 +97,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/trial-evaluations/{trialEvaluation}', [TrialEvaluationController::class, 'show']);
     Route::match(['put', 'patch'], '/trial-evaluations/{trialEvaluation}', [TrialEvaluationController::class, 'update']);
     Route::delete('/trial-evaluations/{trialEvaluation}', [TrialEvaluationController::class, 'destroy']);
+
+    // Keputusan lanjut/tidak + Pendaftaran Resmi (Modul 4) — hanya Management
+    Route::middleware('permission:manage enrollment')->group(function () {
+        Route::get('/enrollments', [EnrollmentController::class, 'index']);
+        Route::put('/trial-evaluations/{trialEvaluation}/decision', [EnrollmentController::class, 'saveDecision']);
+        Route::put('/trial-evaluations/{trialEvaluation}/registration', [EnrollmentController::class, 'saveRegistration']);
+        Route::post('/trial-evaluations/{trialEvaluation}/registration/submit', [EnrollmentController::class, 'submitRegistration']);
+    });
 
     // Kelola user & role — hanya Management
     Route::middleware('permission:manage users')->group(function () {
