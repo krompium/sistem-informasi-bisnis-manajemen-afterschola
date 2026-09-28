@@ -16,6 +16,7 @@ import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
 import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
 import SessionAttendanceView from '@/views/SessionAttendanceView.vue'
 import ExpoReportsView from '@/views/ExpoReportsView.vue'
+import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
 
 const routes = [
   {
@@ -42,6 +43,7 @@ const routes = [
         component: SessionAttendanceView,
       },
       { path: 'trainer/laporan-ekspo', name: 'trainer.expo', component: ExpoReportsView },
+      { path: 'trainer/evaluasi-trial', name: 'trainer.trial', component: TrialEvaluationsView },
 
       // ---- Management ----
       { path: 'management', name: 'management.dashboard', component: ManagementDashboardView },
@@ -64,6 +66,7 @@ const routes = [
       },
       { path: 'management/jadwal', name: 'management.schedule', component: ManagementScheduleView },
       { path: 'management/laporan-ekspo', name: 'management.expo', component: ExpoReportsView },
+      { path: 'management/evaluasi-trial', name: 'management.trial', component: TrialEvaluationsView },
       { path: 'management/hot-issue', name: 'management.hot-issues', component: ManagementHotIssuesView },
       {
         path: 'management/manajemen-user',

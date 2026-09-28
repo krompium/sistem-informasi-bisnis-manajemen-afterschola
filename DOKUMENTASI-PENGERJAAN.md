@@ -120,6 +120,16 @@ Login mendeteksi role otomatis → Management diarahkan ke `/management`, Traine
   (`GET/POST/PUT/DELETE /hot-issues`, permission `manage hot issues`). Role lain (Finance/HR/
   Trainer/Developer) hanya menerima & menutup popup, belum bisa membuat.
 
+### 3.10 Evaluasi Trial (Modul 3)
+- Trainer menilai calon siswa setelah sesi trial: kehadiran, skor 1–5 (antusiasme, pemahaman,
+  fokus, kerja sama), kekuatan, area perbaikan, level disarankan, dan **rekomendasi**
+  (lanjut / ragu-ragu / tidak lanjut). Management melihat & mengelola semua evaluasi.
+- Halaman `TrialEvaluationsView.vue` dipakai bersama (`/trainer/evaluasi-trial`,
+  `/management/evaluasi-trial`); hak akses ditegakkan `TrialEvaluationPolicy`.
+- `lead_id` & `program_id` **sengaja tanpa foreign key** — tabel leads (Modul 2) dan programs
+  (Modul 1) dikerjakan dev lain. Tambahkan FK setelah tabelnya fix. Kolom `recommendation`
+  menjadi bahan **Keputusan (Modul 4)**.
+
 ### 3.9 Laporan Ekspo / Free-Trial (FR-7)
 - **Trainer membuat** laporan (tanggal, sekolah, tim, rating 1–5, sesuai jadwal, antusiasme, kendala +
   penjelasan, **upload foto dokumentasi** [banyak], link dokumentasi).
@@ -156,6 +166,9 @@ GET    /api/exports/expo/{excel,pdf}
 GET    /api/hot-issues/active                  # aktif & belum ditutup user login
 POST   /api/hot-issues/{id}/dismiss             # tutup untuk diri sendiri
 GET/POST/PUT/DELETE /api/hot-issues             # kelola — permission "manage hot issues"
+# Evaluasi Trial (Modul 3) — trainer melihat miliknya, Management semua
+GET/POST        /api/trial-evaluations          # filter: q, recommendation, lead_id
+GET/PUT/DELETE  /api/trial-evaluations/{id}
 ```
 
 ---
