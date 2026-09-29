@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreProgramRequest;
 use App\Http\Requests\UpdateProgramRequest;
 use App\Http\Resources\ProgramResource;
+use App\Models\ProgramTrialSchedule;
+use Illuminate\Http\Request;
 use App\Models\Program;
 
 class ProgramController extends Controller
@@ -52,5 +54,25 @@ class ProgramController extends Controller
                 ->get();
 
             return ProgramResource::collection($programs);
+        }
+
+        public function storeJadwalTrial(Request $request, Program $program)
+        {
+            $validated = $request->validate([
+                'hari' => ['required', 'in:senin,selasa,rabu,kamis,jumat,sabtu,minggu'],
+                'jam_mulai' => ['required', 'date_format:H:i'],
+                'jam_selesai' => ['required', 'date_format:H:i', 'after:jam_mulai'],
+            ]);
+
+            $jadwal = $program->jadwalTrial()->create($validated);
+
+            return response()->json(['data' => $jadwal], 201);
+        }
+
+        public function destroyJadwalTrial(Program $program, ProgramTrialSchedule $jadwal)
+        {
+            $jadwal->delete();
+
+            return response()->json(['message' => 'Jadwal trial berhasil dihapus']);
         }
 }

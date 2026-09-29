@@ -114,11 +114,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/hot-issues/{hotIssue}', [HotIssueController::class, 'destroy']);
     });
 
-    // Publik - bisa diakses tanpa login, buat landing page
-    Route::get('/programs/aktif', [ProgramController::class, 'indexAktif']);
-
     // Khusus Management - wajib login & role tertentu
     Route::middleware(['auth:sanctum', 'role:management'])->group(function () {
-        Route::apiResource('programs', ProgramController::class);
+    Route::apiResource('programs', ProgramController::class);
+    Route::post('/programs/{program}/jadwal-trial', [ProgramController::class, 'storeJadwalTrial']);
+    Route::delete('/programs/{program}/jadwal-trial/{jadwal}', [ProgramController::class, 'destroyJadwalTrial']);
     });
+    
 });
+
+// Publik - bisa diakses tanpa login, buat landing page
+    Route::get('/programs/aktif', [ProgramController::class, 'indexAktif']);

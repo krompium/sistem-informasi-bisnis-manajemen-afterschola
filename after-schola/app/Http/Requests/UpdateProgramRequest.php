@@ -4,7 +4,8 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreProgramRequest extends FormRequest
+class UpdateProgramRequest extends FormRequest
+
 {
     public function authorize(): bool
     {
@@ -14,11 +15,11 @@ class StoreProgramRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nama' => ['required', 'string', 'max:255'],
-            'tipe' => ['required', 'in:online,offline'],
+            'nama' => ['sometimes', 'string', 'max:255'],
+            'tipe' => ['sometimes', 'in:online,offline'],
             'deskripsi' => ['nullable', 'string'],
-            'biaya' => ['required', 'numeric', 'min:0'],
-            'status_aktif' => ['boolean'],
+            'biaya' => ['sometimes', 'numeric', 'min:0'],
+            'status_aktif' => ['sometimes', 'boolean'],
         ];
     }
 }
