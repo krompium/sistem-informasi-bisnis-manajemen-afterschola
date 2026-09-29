@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\TrainerAttendanceController;
 use App\Http\Controllers\Api\TrialEvaluationController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ProgramController;
 
 /*
 |--------------------------------------------------------------------------
@@ -129,4 +130,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::match(['put', 'patch'], '/hot-issues/{hotIssue}', [HotIssueController::class, 'update']);
         Route::delete('/hot-issues/{hotIssue}', [HotIssueController::class, 'destroy']);
     });
+
+    // Khusus Management - wajib login & role tertentu
+    Route::middleware(['auth:sanctum', 'role:management'])->group(function () {
+    Route::apiResource('programs', ProgramController::class);
+    Route::post('/programs/{program}/jadwal-trial', [ProgramController::class, 'storeJadwalTrial']);
+    Route::delete('/programs/{program}/jadwal-trial/{jadwal}', [ProgramController::class, 'destroyJadwalTrial']);
+    });
+    
 });
+
+// Publik - bisa diakses tanpa login, buat landing page
+    Route::get('/programs/aktif', [ProgramController::class, 'indexAktif']);

@@ -19,6 +19,8 @@ import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
 import SessionAttendanceView from '@/views/SessionAttendanceView.vue'
 import ExpoReportsView from '@/views/ExpoReportsView.vue'
 import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
+import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
+
 
 const routes = [
   {
@@ -76,6 +78,12 @@ const routes = [
         name: 'management.users',
         component: ManagementUserManagementView,
         meta: { title: 'Manajemen User', icon: 'manage_accounts' },
+      },
+      {
+        path: 'management/program',
+        name: 'management.programs',
+        component: ManagementProgramView,
+        meta: { title: 'Program & Promosi', icon: 'inventory_2' },
       },
     ],
   },

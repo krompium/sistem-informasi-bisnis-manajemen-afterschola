@@ -26,6 +26,7 @@ const managementNav = [
   { label: 'Keputusan & Pendaftaran', icon: 'how_to_reg', to: '/management/keputusan-pendaftaran' },
   { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue' },
   { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user' },
+  { label: 'Program & Promosi', icon: 'inventory_2', to: '/management/program' },
 ]
 
 const trainerNav = [
