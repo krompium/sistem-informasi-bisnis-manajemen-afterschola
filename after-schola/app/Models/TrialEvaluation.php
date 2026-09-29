@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class TrialEvaluation extends Model
 {
@@ -24,5 +25,10 @@ class TrialEvaluation extends Model
     public function trainer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'trainer_id');
+    }
+
+    public function decision(): HasOne
+    {
+        return $this->hasOne(EnrollmentDecision::class, 'evaluation_id');
     }
 }

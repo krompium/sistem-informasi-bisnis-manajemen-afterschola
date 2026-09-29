@@ -29,6 +29,7 @@ class RoleSeeder extends Seeder
             'manage users',          // kelola user & role
             'submit trial evaluations', // trainer mengisi evaluasi trial
             'manage trial evaluations', // lihat & kelola semua evaluasi trial
+            'manage enrollment',        // keputusan lanjut/tidak + pendaftaran resmi
             'manage hot issues',     // buat/ubah/nonaktifkan hot issue (popup notifikasi semua role)
         ];
 

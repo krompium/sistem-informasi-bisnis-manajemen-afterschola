@@ -23,6 +23,7 @@ const managementNav = [
   { label: 'Jadwal', icon: 'calendar_month', to: '/management/jadwal' },
   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/management/laporan-ekspo' },
   { label: 'Evaluasi Trial', icon: 'rate_review', to: '/management/evaluasi-trial' },
+  { label: 'Keputusan & Pendaftaran', icon: 'how_to_reg', to: '/management/keputusan-pendaftaran' },
   { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue' },
   { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user' },
 ]
