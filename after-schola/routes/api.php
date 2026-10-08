@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\TrainerAttendanceController;
 use App\Http\Controllers\Api\TrialEvaluationController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\LeadController;
 
 /*
 |--------------------------------------------------------------------------
@@ -27,6 +28,7 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+Route::post('/leads', [LeadController::class, 'store'])->middleware('throttle:5,1');
 
 // --- Butuh autentikasi (Sanctum) ---
 Route::middleware('auth:sanctum')->group(function () {

@@ -18,6 +18,7 @@ import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
 import SessionAttendanceView from '@/views/SessionAttendanceView.vue'
 import ExpoReportsView from '@/views/ExpoReportsView.vue'
 import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
+import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
 
 const routes = [
   {
