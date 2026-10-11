@@ -479,6 +479,9 @@ onMounted(loadSchools)
                 <span class="material-symbols-outlined text-[18px]">person_add</span>
                 <span>Tambah Murid</span>
               </button>
+              </div>
+              </div>
+              
           <div class="mb-space-md flex flex-col gap-space-2xs border-b border-surface-container pb-space-md">
             <h2 class="font-headline-md text-headline-md font-bold text-on-surface">{{ selectedSchool.name }}</h2>
             <div class="flex flex-wrap items-center gap-x-space-md gap-y-1 font-body-sm text-body-sm text-on-surface-variant">

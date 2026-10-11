@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClassroomController;
 use App\Http\Controllers\Api\ClassSessionController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\ExpoReportController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\HotIssueController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\Api\TrialEvaluationController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\LeadController;
+use App\Http\Controllers\ProgramController;
 
 /*
 |--------------------------------------------------------------------------
@@ -104,6 +106,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::match(['put', 'patch'], '/trial-evaluations/{trialEvaluation}', [TrialEvaluationController::class, 'update']);
     Route::delete('/trial-evaluations/{trialEvaluation}', [TrialEvaluationController::class, 'destroy']);
 
+    // Keputusan lanjut/tidak + Pendaftaran Resmi (Modul 4) — hanya Management
+    Route::middleware('permission:manage enrollment')->group(function () {
+        Route::get('/enrollments', [EnrollmentController::class, 'index']);
+        Route::put('/trial-evaluations/{trialEvaluation}/decision', [EnrollmentController::class, 'saveDecision']);
+        Route::put('/trial-evaluations/{trialEvaluation}/registration', [EnrollmentController::class, 'saveRegistration']);
+        Route::post('/trial-evaluations/{trialEvaluation}/registration/submit', [EnrollmentController::class, 'submitRegistration']);
+    });
+
     // Kelola user & role — hanya Management
     Route::middleware('permission:manage users')->group(function () {
         Route::get('/users', [UserController::class, 'index']);
@@ -122,4 +132,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::match(['put', 'patch'], '/hot-issues/{hotIssue}', [HotIssueController::class, 'update']);
         Route::delete('/hot-issues/{hotIssue}', [HotIssueController::class, 'destroy']);
     });
+
+    // Khusus Management - wajib login & role tertentu
+    Route::middleware(['auth:sanctum', 'role:management'])->group(function () {
+    Route::apiResource('programs', ProgramController::class);
+    Route::post('/programs/{program}/jadwal-trial', [ProgramController::class, 'storeJadwalTrial']);
+    Route::delete('/programs/{program}/jadwal-trial/{jadwal}', [ProgramController::class, 'destroyJadwalTrial']);
+    });
+    
 });
+
+// Publik - bisa diakses tanpa login, buat landing page
+    Route::get('/programs/aktif', [ProgramController::class, 'indexAktif']);

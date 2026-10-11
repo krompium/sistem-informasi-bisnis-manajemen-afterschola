@@ -12,13 +12,19 @@ import ManagementRecapListView from '@/views/management/AttendanceRecapListView.
 import ManagementRecapDetailView from '@/views/management/AttendanceRecapDetailView.vue'
 import ManagementUserManagementView from '@/views/management/UserManagementView.vue'
 import ManagementHotIssuesView from '@/views/management/HotIssuesView.vue'
+import ManagementEnrollmentView from '@/views/management/EnrollmentView.vue'
 import TrainerScheduleView from '@/views/trainer/ScheduleView.vue'
 import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
 import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
 import SessionAttendanceView from '@/views/SessionAttendanceView.vue'
 import ExpoReportsView from '@/views/ExpoReportsView.vue'
 import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
+<<<<<<< HEAD
 import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
+=======
+import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
+
+>>>>>>> origin/main
 
 const routes = [
   {
@@ -69,12 +75,19 @@ const routes = [
       { path: 'management/jadwal', name: 'management.schedule', component: ManagementScheduleView },
       { path: 'management/laporan-ekspo', name: 'management.expo', component: ExpoReportsView },
       { path: 'management/evaluasi-trial', name: 'management.trial', component: TrialEvaluationsView },
+      { path: 'management/keputusan-pendaftaran', name: 'management.enrollment', component: ManagementEnrollmentView },
       { path: 'management/hot-issue', name: 'management.hot-issues', component: ManagementHotIssuesView },
       {
         path: 'management/manajemen-user',
         name: 'management.users',
         component: ManagementUserManagementView,
         meta: { title: 'Manajemen User', icon: 'manage_accounts' },
+      },
+      {
+        path: 'management/program',
+        name: 'management.programs',
+        component: ManagementProgramView,
+        meta: { title: 'Program & Promosi', icon: 'inventory_2' },
       },
     ],
   },
