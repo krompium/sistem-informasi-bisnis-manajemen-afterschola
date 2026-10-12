@@ -19,12 +19,8 @@ import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
 import SessionAttendanceView from '@/views/SessionAttendanceView.vue'
 import ExpoReportsView from '@/views/ExpoReportsView.vue'
 import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
-<<<<<<< HEAD
 import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
-=======
 import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
-
->>>>>>> origin/main
 
 const routes = [
   {
@@ -32,6 +28,11 @@ const routes = [
     name: 'login',
     component: LoginView,
     meta: { guestOnly: true },
+  },
+  {
+    path: '/daftar-trial',
+    name: 'public.trial-registration',
+    component: TrialRegistrationView,
   },
   {
     path: '/',
