@@ -31,6 +31,7 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 Route::post('/leads', [LeadController::class, 'store'])->middleware('throttle:5,1');
+Route::get('/programs/aktif', [ProgramController::class, 'indexAktif']);
 
 // --- Butuh autentikasi (Sanctum) ---
 Route::middleware('auth:sanctum')->group(function () {
@@ -141,6 +142,3 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     
 });
-
-// Publik - bisa diakses tanpa login, buat landing page
-    Route::get('/programs/aktif', [ProgramController::class, 'indexAktif']);
