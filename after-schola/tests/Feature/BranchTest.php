@@ -32,11 +32,24 @@ class BranchTest extends TestCase
         }
     }
 
+    public function test_management_without_function_permission_gets_403_but_users_admin_can_list(): void
+    {
+        $bdg = $this->makeBranch();
+        Sanctum::actingAs($this->makeStaff('management', 'all'));
+        $this->getJson('/api/branches')->assertStatus(403);
+
+        // Form user perlu daftar cabang: manage users cukup untuk membaca, bukan menulis.
+        Sanctum::actingAs($this->makeStaff('management', 'all', [], ['manage users']));
+        $this->getJson('/api/branches')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson("/api/branches/{$bdg->id}")->assertStatus(403);
+        $this->postJson('/api/branches', ['name' => 'X', 'code' => 'XXX'])->assertStatus(403);
+    }
+
     public function test_all_scope_lists_every_branch(): void
     {
         $this->makeBranch('Cabang Bandung', 'BDG');
         $this->makeBranch('Cabang Jakarta', 'JKT');
-        Sanctum::actingAs($this->makeStaff('management', 'all'));
+        Sanctum::actingAs($this->makeStaff('management', 'all', [], ['manage branches']));
 
         $this->getJson('/api/branches')->assertOk()->assertJsonCount(2, 'data');
     }
@@ -45,7 +58,7 @@ class BranchTest extends TestCase
     {
         $bdg = $this->makeBranch('Cabang Bandung', 'BDG');
         $this->makeBranch('Cabang Jakarta', 'JKT');
-        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id]));
+        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id], ['manage branches']));
 
         $this->getJson('/api/branches')->assertOk()
             ->assertJsonCount(1, 'data')
@@ -54,7 +67,7 @@ class BranchTest extends TestCase
 
     public function test_all_scope_can_create_branch(): void
     {
-        Sanctum::actingAs($this->makeStaff('management', 'all'));
+        Sanctum::actingAs($this->makeStaff('management', 'all', [], ['manage branches']));
 
         $this->postJson('/api/branches', ['name' => 'Cabang Bandung', 'code' => 'BDG', 'address' => 'Jl. Braga 1'])
             ->assertStatus(201)
@@ -67,7 +80,7 @@ class BranchTest extends TestCase
     public function test_assigned_scope_cannot_create_branch(): void
     {
         $bdg = $this->makeBranch();
-        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id]));
+        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id], ['manage branches']));
 
         $this->postJson('/api/branches', ['name' => 'Cabang Baru', 'code' => 'NEW'])->assertStatus(403);
         $this->assertDatabaseMissing('branches', ['code' => 'NEW']);
@@ -76,7 +89,7 @@ class BranchTest extends TestCase
     public function test_create_validates_name_and_unique_code_format(): void
     {
         $this->makeBranch('Cabang Bandung', 'BDG');
-        Sanctum::actingAs($this->makeStaff('management', 'all'));
+        Sanctum::actingAs($this->makeStaff('management', 'all', [], ['manage branches']));
 
         $this->postJson('/api/branches', ['code' => 'JKT'])->assertStatus(422)->assertJsonValidationErrors('name');
         $this->postJson('/api/branches', ['name' => 'Dobel', 'code' => 'BDG'])->assertStatus(422)->assertJsonValidationErrors('code');
@@ -86,7 +99,7 @@ class BranchTest extends TestCase
     public function test_show_and_update_in_scope(): void
     {
         $bdg = $this->makeBranch();
-        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id]));
+        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id], ['manage branches']));
 
         $this->getJson("/api/branches/{$bdg->id}")->assertOk()->assertJsonPath('data.name', 'Cabang Bandung');
         $this->putJson("/api/branches/{$bdg->id}", ['name' => 'Cabang Bandung Pusat', 'code' => 'BDG'])
@@ -98,7 +111,7 @@ class BranchTest extends TestCase
     {
         $bdg = $this->makeBranch('Cabang Bandung', 'BDG');
         $jkt = $this->makeBranch('Cabang Jakarta', 'JKT');
-        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id]));
+        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id], ['manage branches']));
 
         $this->getJson("/api/branches/{$jkt->id}")->assertStatus(404);
         // Payload kosong tetap 404 (bukan 422) agar keberadaan cabang tidak bocor.
@@ -110,7 +123,7 @@ class BranchTest extends TestCase
     public function test_branch_can_be_deactivated_and_is_never_deleted(): void
     {
         $bdg = $this->makeBranch();
-        Sanctum::actingAs($this->makeStaff('management', 'all'));
+        Sanctum::actingAs($this->makeStaff('management', 'all', [], ['manage branches']));
 
         $this->putJson("/api/branches/{$bdg->id}", ['name' => $bdg->name, 'code' => $bdg->code, 'is_active' => false])
             ->assertOk()

@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Classroom;
 use App\Models\School;
 use App\Models\User;
+use App\Support\FunctionPermissions;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -24,6 +25,7 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Admin Schola', 'password' => Hash::make('password'), 'is_active' => true, 'branch_scope' => 'all'],
         );
         $admin->syncRoles('management');
+        $admin->givePermissionTo(FunctionPermissions::ALL); // admin tertinggi: semua fungsi
 
         // Akun Trainer contoh.
         $trainer = User::firstOrCreate(

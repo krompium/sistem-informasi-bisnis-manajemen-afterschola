@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Support\FunctionPermissions;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -14,7 +15,8 @@ class RoleSeeder extends Seeder
         // Reset cache spatie agar perubahan langsung terpakai.
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $permissions = [
+        // Permission lama (absensi sekolah, trial, pendaftaran interim). Role management memegang semuanya.
+        $legacyPermissions = [
             'manage schools',        // CRUD sekolah + penugasan trainer
             'manage classrooms',     // CRUD level per sekolah
             'manage students',       // CRUD murid penuh
@@ -26,25 +28,20 @@ class RoleSeeder extends Seeder
             'manage expo reports',   // lihat & rekap semua laporan ekspo
             'submit expo reports',   // trainer mengisi laporan ekspo
             'export data',           // export Excel/PDF
-            'manage users',          // kelola user & role
-            'manage branches',       // CRUD cabang (pembuatan hanya oleh scope 'all')
             'submit trial evaluations', // trainer mengisi evaluasi trial
             'manage trial evaluations', // lihat & kelola semua evaluasi trial
             'manage enrollment',        // keputusan lanjut/tidak + pendaftaran resmi
             'manage hot issues',     // buat/ubah/nonaktifkan hot issue (popup notifikasi semua role)
-            'verify registrations',  // verifikasi pendaftaran resmi (setujui / minta revisi)
-            'manage invoices',       // lihat invoice, catat pembayaran, batalkan invoice
-            'confirm payments',      // konfirmasi / tolak pembayaran
-            'view finance reports',  // umur piutang & laporan keuangan
         ];
 
-        foreach ($permissions as $permission) {
+        // Permission fungsi (PRD 3.2): diberikan per user, bukan lewat role management.
+        foreach (array_merge($legacyPermissions, FunctionPermissions::ALL) as $permission) {
             Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
         }
 
         $roles = [
-            'management' => $permissions, // akses penuh
-            'finance' => ['view attendance', 'export data', 'manage invoices', 'confirm payments', 'view finance reports'],
+            'management' => $legacyPermissions, // permission fungsi (FunctionPermissions) diberikan per user
+            'finance' => ['view attendance', 'export data', 'manage invoices', 'confirm payments', 'view finance reports', 'export trainer attendance'],
             'hr' => ['view attendance', 'export data'],
             'trainer' => [
                 'add students',

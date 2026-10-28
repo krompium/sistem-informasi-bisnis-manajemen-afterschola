@@ -18,6 +18,8 @@ class UserResource extends JsonResource
             'branches' => BranchResource::collection($this->whenLoaded('branches')),
             'roles' => $this->getRoleNames(),
             'permissions' => $this->getAllPermissions()->pluck('name'),
+            // Permission fungsi yang diberikan langsung ke user ini (bukan dari role).
+            'direct_permissions' => $this->getDirectPermissions()->pluck('name')->values(),
             'assigned_schools' => SchoolResource::collection($this->whenLoaded('assignedSchools')),
         ];
     }

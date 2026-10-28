@@ -4,6 +4,7 @@ namespace Tests\Concerns;
 
 use App\Models\Branch;
 use App\Models\User;
+use App\Support\FunctionPermissions;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -42,5 +43,15 @@ trait MakesBranchFixtures
         }
 
         return $user;
+    }
+
+    /**
+     * Management dengan semua permission fungsi (setara admin sistem + semua fungsi).
+     *
+     * @param  array<int, int>  $branchIds
+     */
+    protected function makeAdmin(string $scope = 'all', array $branchIds = []): User
+    {
+        return $this->makeStaff('management', $scope, $branchIds, FunctionPermissions::ALL);
     }
 }

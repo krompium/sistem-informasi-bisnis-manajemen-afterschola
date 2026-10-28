@@ -3,7 +3,11 @@
 // dengan kemampuan mengajar: mata pelajaran & level yang dikuasai).
 import { computed, onMounted, reactive, ref } from 'vue'
 import api from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { initials, unwrap } from '@/lib/format'
+import UserAccessFields from './UserAccessFields.vue'
+
+const auth = useAuthStore()
 
 const ROLES = [
   { value: 'management', label: 'Management' },
@@ -21,6 +25,7 @@ const loading = ref(true)
 const users = ref([])
 const schools = ref([])
 const subjectCatalog = ref([])
+const branches = ref([]) // cabang yang boleh dipilih pelaku (backend sudah memfilter per scope)
 
 const showCreate = ref(false)
 const saving = ref(false)
@@ -30,6 +35,9 @@ const form = reactive({
   email: '',
   password: '',
   role: 'trainer',
+  branch_scope: 'assigned',
+  branch_ids: [],
+  permissions: [],
   school_ids: [],
   subjects_taught: [],
   levels_taught: [],
@@ -45,6 +53,9 @@ const editForm = reactive({
   email: '',
   password: '',
   role: 'trainer',
+  branch_scope: 'assigned',
+  branch_ids: [],
+  permissions: [],
   school_ids: [],
   subjects_taught: [],
   levels_taught: [],
@@ -70,6 +81,21 @@ async function loadRefData() {
   } catch (e) {
     // non-fatal, form tetap bisa dipakai tanpa opsi ini
   }
+  try {
+    const { data } = await api.get('/branches')
+    branches.value = unwrap(data)
+  } catch (e) {
+    // non-fatal: tanpa daftar cabang, user ber-scope 'assigned' tidak bisa disimpan
+  }
+}
+
+// Payload bagian akses; permission fungsi hanya untuk Management (role lain dikosongkan).
+function accessPayload(f) {
+  return {
+    branch_scope: f.branch_scope,
+    branch_ids: f.branch_scope === 'assigned' ? f.branch_ids : [],
+    permissions: f.role === 'management' ? f.permissions : [],
+  }
 }
 
 function openCreate() {
@@ -78,6 +104,9 @@ function openCreate() {
     email: '',
     password: '',
     role: 'trainer',
+    branch_scope: 'assigned',
+    branch_ids: [],
+    permissions: [],
     school_ids: [],
     subjects_taught: [],
     levels_taught: [],
@@ -95,6 +124,7 @@ async function submitCreate() {
       email: form.email,
       password: form.password,
       role: form.role,
+      ...accessPayload(form),
     }
     if (form.role === 'trainer') {
       payload.school_ids = form.school_ids
@@ -125,6 +155,10 @@ function openEdit(user) {
     email: user.email,
     password: '',
     role: (user.roles ?? [])[0] ?? 'trainer',
+    branch_scope: user.branch_scope ?? 'assigned',
+    // Hanya cabang yang bisa dipilih pelaku; sisanya dipertahankan backend.
+    branch_ids: (user.branches ?? []).map((b) => b.id).filter((id) => branches.value.some((b) => b.id === id)),
+    permissions: user.direct_permissions ?? [],
     school_ids: (user.assignedSchools ?? user.assigned_schools ?? user.schools ?? []).map((s) => s.id),
     subjects_taught: user.subjects_taught ?? [],
     levels_taught: user.levels_taught ?? [],
@@ -142,6 +176,7 @@ async function submitEdit() {
       name: editForm.name,
       email: editForm.email,
       role: editForm.role,
+      ...accessPayload(editForm),
     }
     if (editForm.password) {
       payload.password = editForm.password
@@ -169,18 +204,8 @@ async function toggleActive(user) {
   try {
     await api.put(`/users/${user.id}`, { is_active: !user.is_active })
     await loadUsers()
-  } catch (e) {
-    window.alert('Gagal mengubah status user.')
-  }
-}
-
-async function removeUser(user) {
-  if (!window.confirm(`Hapus akun "${user.name}"? Tindakan ini tidak bisa dibatalkan.`)) return
-  try {
-    await api.delete(`/users/${user.id}`)
-    await loadUsers()
   } catch (err) {
-    window.alert(err?.response?.data?.message || 'Gagal menghapus user.')
+    window.alert(err?.response?.data?.errors?.is_active?.[0] || 'Gagal mengubah status user.')
   }
 }
 
@@ -238,6 +263,8 @@ onMounted(() => {
 
         <div class="flex flex-wrap items-center gap-1 sm:ml-space-md">
           <span v-for="r in u.roles ?? []" :key="r" class="rounded-full bg-primary-fixed px-2 py-0.5 font-label-sm text-label-sm font-semibold capitalize text-primary">{{ roleLabel(r) }}</span>
+          <span class="rounded-full bg-surface-container px-2 py-0.5 font-label-sm text-label-sm text-on-surface-variant" :title="'Cakupan cabang'">{{ u.branch_scope === 'all' ? 'Semua cabang' : (u.branches ?? []).map((b) => b.code).join(', ') || 'Tanpa cabang' }}</span>
+          <span v-if="(u.direct_permissions ?? []).length" class="rounded-full bg-secondary-container px-2 py-0.5 font-label-sm text-label-sm text-on-secondary-container" :title="u.direct_permissions.join(', ')">{{ u.direct_permissions.length }} fungsi</span>
           <span v-for="sub in u.subjects_taught ?? []" :key="sub" class="rounded-full bg-surface-container px-2 py-0.5 font-label-sm text-label-sm text-on-surface-variant">{{ sub }}</span>
           <span v-for="lvl in u.levels_taught ?? []" :key="lvl" class="rounded-full bg-surface-container px-2 py-0.5 font-label-sm text-label-sm capitalize text-on-surface-variant">{{ lvl }}</span>
         </div>
@@ -252,9 +279,6 @@ onMounted(() => {
           </button>
           <button class="rounded-lg p-1.5 text-secondary hover:bg-surface-container" title="Ubah user" @click="openEdit(u)">
             <span class="material-symbols-outlined text-[18px]">edit</span>
-          </button>
-          <button class="rounded-lg p-1.5 text-error hover:bg-error-container" title="Hapus" @click="removeUser(u)">
-            <span class="material-symbols-outlined text-[18px]">delete</span>
           </button>
         </div>
       </div>
@@ -301,6 +325,15 @@ onMounted(() => {
                 <option v-for="r in ROLES" :key="r.value" :value="r.value">{{ r.label }}</option>
               </select>
             </label>
+
+            <UserAccessFields
+              v-model:scope="form.branch_scope"
+              v-model:branch-ids="form.branch_ids"
+              v-model:permissions="form.permissions"
+              :branches="branches"
+              :can-set-all="auth.hasAllBranches"
+              :show-permissions="form.role === 'management'"
+            />
 
             <!-- Khusus Trainer -->
             <template v-if="form.role === 'trainer'">
@@ -400,6 +433,15 @@ onMounted(() => {
                 <option v-for="r in ROLES" :key="r.value" :value="r.value">{{ r.label }}</option>
               </select>
             </label>
+
+            <UserAccessFields
+              v-model:scope="editForm.branch_scope"
+              v-model:branch-ids="editForm.branch_ids"
+              v-model:permissions="editForm.permissions"
+              :branches="branches"
+              :can-set-all="auth.hasAllBranches"
+              :show-permissions="editForm.role === 'management'"
+            />
 
             <!-- Khusus Trainer -->
             <template v-if="editForm.role === 'trainer'">

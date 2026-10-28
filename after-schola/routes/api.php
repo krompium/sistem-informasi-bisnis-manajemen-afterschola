@@ -149,17 +149,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/finance/aging', [FinanceReportController::class, 'aging'])->middleware('permission:view finance reports');
 
     // Kelola user & role — hanya Management
+    // Daftar user juga dipakai dropdown di halaman Management lain (trainer, developer): terbuka
+    // untuk role management, tetap dibatasi scope cabang. Tulis/detail butuh manage users.
+    Route::get('/users', [UserController::class, 'index'])->middleware('role_or_permission:management|manage users');
     Route::middleware('permission:manage users')->group(function () {
-        Route::get('/users', [UserController::class, 'index']);
         Route::post('/users', [UserController::class, 'store']);
         Route::get('/users/{user}', [UserController::class, 'show']);
         Route::match(['put', 'patch'], '/users/{user}', [UserController::class, 'update']);
-        Route::delete('/users/{user}', [UserController::class, 'destroy']);
+        // Tidak ada DELETE: user dinonaktifkan lewat is_active (MGT-04).
     });
 
-    // Cabang — hanya pusat membuat; tidak ada DELETE (nonaktifkan lewat is_active)
+    // Cabang — hanya pusat membuat; tidak ada DELETE (nonaktifkan lewat is_active).
+    // Daftar cabang juga dibaca form user (manage users) untuk memilih cabang.
+    Route::get('/branches', [BranchController::class, 'index'])->middleware('permission:manage branches|manage users');
     Route::middleware('permission:manage branches')->group(function () {
-        Route::get('/branches', [BranchController::class, 'index']);
         Route::post('/branches', [BranchController::class, 'store']);
         Route::get('/branches/{branch}', [BranchController::class, 'show']);
         Route::match(['put', 'patch'], '/branches/{branch}', [BranchController::class, 'update']);

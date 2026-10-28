@@ -6,6 +6,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -109,5 +110,24 @@ class User extends Authenticatable
     public function handlesBranch(int $branchId): bool
     {
         return $this->hasAllBranches() || in_array($branchId, $this->accessibleBranchIds(), true);
+    }
+
+    /**
+     * User internal yang boleh dikelola/dilihat `$viewer` (orang tua tidak pernah termasuk).
+     * Scope 'all' melihat semua; scope 'assigned' hanya dirinya dan user ber-scope 'assigned'
+     * yang berbagi minimal satu cabang (staf cabang tidak boleh menyentuh akun pusat).
+     */
+    public function scopeVisibleTo(Builder $query, User $viewer): Builder
+    {
+        $query->whereDoesntHave('roles', fn ($roles) => $roles->where('name', 'parent'));
+
+        if ($viewer->hasAllBranches()) {
+            return $query;
+        }
+
+        return $query->where(fn ($q) => $q->whereKey($viewer->id)->orWhere(
+            fn ($q) => $q->where('branch_scope', 'assigned')
+                ->whereHas('branches', fn ($b) => $b->whereIn('branches.id', $viewer->accessibleBranchIds())),
+        ));
     }
 }
