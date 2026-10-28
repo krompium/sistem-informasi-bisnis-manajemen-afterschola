@@ -14,6 +14,9 @@ export const useAuthStore = defineStore('auth', {
     isManagement: (state) => (state.user?.roles ?? []).includes('management'),
     isTrainer: (state) => (state.user?.roles ?? []).includes('trainer'),
 	isDeveloper: (state) => (state.user?.roles ?? []).includes('developer'),
+    isParent: (state) => (state.user?.roles ?? []).includes('parent'),
+    // Scope 'all' = pusat (lintas cabang); selain itu hanya cabang di user.branches.
+    hasAllBranches: (state) => state.user?.branch_scope === 'all',
     permissions: (state) => state.user?.permissions ?? [],
     // Cek permission tunggal (backend tetap otoritas final).
     can: (state) => (perm) => (state.user?.permissions ?? []).includes(perm),
@@ -21,7 +24,8 @@ export const useAuthStore = defineStore('auth', {
     // Dashboard tujuan sesuai peran. Management diprioritaskan bila punya dua peran.
     homeRoute() {
       if (this.isManagement) return '/management'
-      return this.isDeveloper ? '/developer' : '/trainer'
+      if (this.isDeveloper) return '/developer'
+      return this.isParent ? '/portal' : '/trainer'
     },
   },
 

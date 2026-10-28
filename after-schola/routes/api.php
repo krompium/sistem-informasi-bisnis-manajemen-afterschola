@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AttendanceImportController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\ClassroomController;
 use App\Http\Controllers\Api\ClassSessionController;
 use App\Http\Controllers\Api\DashboardController;
@@ -154,6 +155,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users/{user}', [UserController::class, 'show']);
         Route::match(['put', 'patch'], '/users/{user}', [UserController::class, 'update']);
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
+    });
+
+    // Cabang — hanya pusat membuat; tidak ada DELETE (nonaktifkan lewat is_active)
+    Route::middleware('permission:manage branches')->group(function () {
+        Route::get('/branches', [BranchController::class, 'index']);
+        Route::post('/branches', [BranchController::class, 'store']);
+        Route::get('/branches/{branch}', [BranchController::class, 'show']);
+        Route::match(['put', 'patch'], '/branches/{branch}', [BranchController::class, 'update']);
     });
 
     // Hot Issue — popup notifikasi yang tampil setelah login di semua role dashboard.

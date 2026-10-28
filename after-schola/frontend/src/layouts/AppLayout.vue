@@ -30,6 +30,7 @@ const managementNav = [
   { label: 'Umur Piutang', icon: 'hourglass_bottom', to: '/management/umur-piutang' },
   { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue' },
   { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user' },
+  { label: 'Cabang', icon: 'store', to: '/management/cabang', perm: 'manage branches' },
   { label: 'Program & Promosi', icon: 'inventory_2', to: '/management/program' },
   { label: 'Team', icon: 'groups', to: '/management/team' },
   { label: 'Proyek & Task', icon: 'view_kanban', to: '/management/proyek' },
@@ -51,9 +52,13 @@ const developerNav = [
   { label: 'Kalender', icon: 'calendar_month', to: '/developer/kalender' },
 ]
 
+const parentNav = [{ label: 'Beranda', icon: 'family_restroom', to: '/portal' }]
+
+// Item bertanda `perm` hanya tampil bila user punya permission itu (backend tetap otoritas).
 const navItems = computed(() => {
-  if (auth.isManagement) return managementNav
-  return auth.isDeveloper ? developerNav : trainerNav
+  if (auth.isManagement) return managementNav.filter((i) => !i.perm || auth.can(i.perm))
+  if (auth.isDeveloper) return developerNav
+  return auth.isParent ? parentNav : trainerNav
 })
 
 const roleBadge = computed(() => {
@@ -61,6 +66,7 @@ const roleBadge = computed(() => {
     return { text: 'Management', cls: 'bg-secondary-container text-on-secondary-container' }
   }
   if (auth.isDeveloper) return { text: 'Developer', cls: 'bg-primary-fixed text-primary' }
+  if (auth.isParent) return { text: 'Orang Tua', cls: 'bg-primary-fixed text-primary' }
   return { text: 'Trainer', cls: 'bg-tertiary-fixed text-on-tertiary-fixed' }
 })
 
@@ -78,7 +84,7 @@ const initials = computed(() => {
 
 function isActive(to) {
   // Dashboard cocok persis; menu lain menyorot juga pada sub-rute (mis. /trainer/absensi/5).
-  if (to === '/trainer' || to === '/management' || to === '/developer') return route.path === to
+  if (to === '/trainer' || to === '/management' || to === '/developer' || to === '/portal') return route.path === to
   return route.path === to || route.path.startsWith(to + '/')
 }
 

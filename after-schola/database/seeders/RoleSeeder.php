@@ -27,6 +27,7 @@ class RoleSeeder extends Seeder
             'submit expo reports',   // trainer mengisi laporan ekspo
             'export data',           // export Excel/PDF
             'manage users',          // kelola user & role
+            'manage branches',       // CRUD cabang (pembuatan hanya oleh scope 'all')
             'submit trial evaluations', // trainer mengisi evaluasi trial
             'manage trial evaluations', // lihat & kelola semua evaluasi trial
             'manage enrollment',        // keputusan lanjut/tidak + pendaftaran resmi
@@ -53,6 +54,7 @@ class RoleSeeder extends Seeder
                 'submit trial evaluations',
                 'export data',
             ],
+            'parent' => [], // Orangtua: akses lewat kepemilikan anak (students.parent_id), bukan permission
             'developer' => [], // modul manajemen proyek (fase 3), belum ada di absensi
         ];
 

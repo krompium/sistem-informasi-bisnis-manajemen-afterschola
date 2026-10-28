@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Branch;
 use App\Models\Classroom;
 use App\Models\School;
 use App\Models\User;
@@ -20,7 +21,7 @@ class DatabaseSeeder extends Seeder
         // Akun Management (admin tertinggi).
         $admin = User::firstOrCreate(
             ['email' => 'admin@afterschola.id'],
-            ['name' => 'Admin Schola', 'password' => Hash::make('password'), 'is_active' => true],
+            ['name' => 'Admin Schola', 'password' => Hash::make('password'), 'is_active' => true, 'branch_scope' => 'all'],
         );
         $admin->syncRoles('management');
 
@@ -30,6 +31,10 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Trainer Satu', 'password' => Hash::make('password'), 'is_active' => true],
         );
         $trainer->syncRoles('trainer');
+
+        // Cabang contoh; trainer (scope 'assigned') ditempatkan di sana.
+        $branch = Branch::firstOrCreate(['code' => 'UTM'], ['name' => 'Cabang Utama']);
+        $trainer->branches()->syncWithoutDetaching([$branch->id]);
 
         // Data master contoh + penugasan trainer, agar API bisa langsung dicoba.
         $school = School::firstOrCreate(
