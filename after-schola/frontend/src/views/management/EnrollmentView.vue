@@ -140,8 +140,17 @@ async function submitForVerification(row) {
   }
 }
 
-const isDraft = (row) => row.registration?.status === 'draft'
-const isSubmitted = (row) => row.registration?.status === 'menunggu_verifikasi'
+const regStatus = (row) => row.registration?.status
+// Terkunci sejak diajukan sampai diverifikasi; "perlu revisi" kembali bisa diedit dan diajukan ulang (Modul 5).
+const isLocked = (row) => ['menunggu_verifikasi', 'terverifikasi'].includes(regStatus(row))
+const canSubmit = (row) => ['draft', 'perlu_revisi'].includes(regStatus(row))
+const regBadge = (row) =>
+  ({
+    draft: { label: 'Draft pendaftaran', cls: 'bg-[#FEF3C7] text-[#92400E]' },
+    menunggu_verifikasi: { label: 'Menunggu verifikasi', cls: 'bg-[#DBEAFE] text-[#1E40AF]' },
+    perlu_revisi: { label: 'Perlu revisi', cls: 'bg-error-container text-on-error-container' },
+    terverifikasi: { label: 'Terverifikasi', cls: 'bg-[#D1FAE5] text-[#065F46]' },
+  })[regStatus(row)]
 const total = computed(() => rows.value.length)
 </script>
 
@@ -203,32 +212,35 @@ const total = computed(() => rows.value.length)
         <div v-if="row.decision?.decision === 'lanjut'" class="rounded-xl bg-surface-container-low p-space-md font-body-sm text-body-sm text-on-surface-variant">
           <template v-if="row.registration">
             <div class="flex flex-wrap items-center gap-space-sm">
-              <span class="rounded-full px-2.5 py-1 font-label-sm text-label-sm font-semibold" :class="isSubmitted(row) ? 'bg-[#D1FAE5] text-[#065F46]' : 'bg-[#FEF3C7] text-[#92400E]'">
-                {{ isSubmitted(row) ? 'Menunggu verifikasi' : 'Draft pendaftaran' }}
+              <span v-if="regBadge(row)" class="rounded-full px-2.5 py-1 font-label-sm text-label-sm font-semibold" :class="regBadge(row).cls">
+                {{ regBadge(row).label }}
               </span>
               <span>Level {{ levelLabel(row.registration.level) }} • Wali: {{ row.registration.parent_name }} ({{ row.registration.parent_phone }})</span>
             </div>
+            <p v-if="row.registration.status === 'perlu_revisi' && row.registration.revision_note" class="mt-space-xs whitespace-pre-line">
+              <b class="text-on-surface">Catatan revisi:</b> {{ row.registration.revision_note }}
+            </p>
           </template>
           <span v-else>Pendaftaran resmi belum diisi.</span>
         </div>
 
         <div class="flex flex-wrap gap-space-xs">
           <button
-            v-if="!isSubmitted(row)"
+            v-if="!isLocked(row)"
             class="rounded-xl border border-outline-variant px-space-md py-2 font-label-lg text-label-lg text-on-surface transition-all hover:bg-surface-container-low"
             @click="openDecision(row)"
           >
             {{ row.decision ? 'Ubah Keputusan' : 'Catat Keputusan' }}
           </button>
           <button
-            v-if="row.decision?.decision === 'lanjut' && !isSubmitted(row)"
+            v-if="row.decision?.decision === 'lanjut' && !isLocked(row)"
             class="rounded-xl border border-outline-variant px-space-md py-2 font-label-lg text-label-lg text-on-surface transition-all hover:bg-surface-container-low"
             @click="openRegistration(row)"
           >
             {{ row.registration ? 'Ubah Pendaftaran' : 'Isi Pendaftaran' }}
           </button>
           <button
-            v-if="isDraft(row)"
+            v-if="canSubmit(row)"
             class="rounded-xl bg-primary-container px-space-md py-2 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95"
             @click="submitForVerification(row)"
           >

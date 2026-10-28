@@ -8,6 +8,7 @@ import api from '@/lib/api'
 import { formatDate, isOnsite, modeLabel, unwrap } from '@/lib/format'
 import { usePolling } from '@/lib/usePolling'
 import HotIssueModal from '@/components/HotIssueModal.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -24,9 +25,15 @@ const managementNav = [
   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/management/laporan-ekspo' },
   { label: 'Evaluasi Trial', icon: 'rate_review', to: '/management/evaluasi-trial' },
   { label: 'Keputusan & Pendaftaran', icon: 'how_to_reg', to: '/management/keputusan-pendaftaran' },
+  { label: 'Verifikasi Pendaftaran', icon: 'fact_check', to: '/management/verifikasi-pendaftaran' },
+  { label: 'Invoice & Pembayaran', icon: 'receipt_long', to: '/management/invoice' },
+  { label: 'Umur Piutang', icon: 'hourglass_bottom', to: '/management/umur-piutang' },
   { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue' },
   { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user' },
   { label: 'Program & Promosi', icon: 'inventory_2', to: '/management/program' },
+  { label: 'Team', icon: 'groups', to: '/management/team' },
+  { label: 'Proyek & Task', icon: 'view_kanban', to: '/management/proyek' },
+  { label: 'Kalender Proyek', icon: 'calendar_month', to: '/management/kalender' },
 ]
 
 const trainerNav = [
@@ -38,13 +45,24 @@ const trainerNav = [
   { label: 'Evaluasi Trial', icon: 'rate_review', to: '/trainer/evaluasi-trial' },
 ]
 
-const navItems = computed(() => (auth.isManagement ? managementNav : trainerNav))
+const developerNav = [
+  { label: 'Dashboard', icon: 'dashboard', to: '/developer' },
+  { label: 'Proyek', icon: 'view_kanban', to: '/developer/proyek' },
+  { label: 'Kalender', icon: 'calendar_month', to: '/developer/kalender' },
+]
 
-const roleBadge = computed(() =>
-  auth.isManagement
-    ? { text: 'Management', cls: 'bg-secondary-container text-on-secondary-container' }
-    : { text: 'Trainer', cls: 'bg-tertiary-fixed text-on-tertiary-fixed' },
-)
+const navItems = computed(() => {
+  if (auth.isManagement) return managementNav
+  return auth.isDeveloper ? developerNav : trainerNav
+})
+
+const roleBadge = computed(() => {
+  if (auth.isManagement) {
+    return { text: 'Management', cls: 'bg-secondary-container text-on-secondary-container' }
+  }
+  if (auth.isDeveloper) return { text: 'Developer', cls: 'bg-primary-fixed text-primary' }
+  return { text: 'Trainer', cls: 'bg-tertiary-fixed text-on-tertiary-fixed' }
+})
 
 const userName = computed(() => auth.user?.name || 'Pengguna')
 
@@ -60,7 +78,7 @@ const initials = computed(() => {
 
 function isActive(to) {
   // Dashboard cocok persis; menu lain menyorot juga pada sub-rute (mis. /trainer/absensi/5).
-  if (to === '/trainer' || to === '/management') return route.path === to
+  if (to === '/trainer' || to === '/management' || to === '/developer') return route.path === to
   return route.path === to || route.path.startsWith(to + '/')
 }
 
@@ -230,7 +248,8 @@ async function handleLogout() {
         </div>
 
         <div class="flex items-center gap-space-lg">
-          <div class="relative">
+          <NotificationBell v-if="auth.isDeveloper" />
+          <div v-else class="relative">
             <button
               class="relative rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface"
               aria-label="Notifikasi"

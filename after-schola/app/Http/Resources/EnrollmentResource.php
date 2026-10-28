@@ -36,6 +36,7 @@ class EnrollmentResource extends JsonResource
             'registration' => $reg ? [
                 'id' => $reg->id,
                 'status' => $reg->status,
+                'revision_note' => $reg->revision_note,
                 'student_name' => $reg->student_name,
                 'birth_date' => $reg->birth_date?->toDateString(),
                 'origin_school' => $reg->origin_school,

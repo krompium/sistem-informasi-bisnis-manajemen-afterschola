@@ -13,6 +13,9 @@ import ManagementRecapDetailView from '@/views/management/AttendanceRecapDetailV
 import ManagementUserManagementView from '@/views/management/UserManagementView.vue'
 import ManagementHotIssuesView from '@/views/management/HotIssuesView.vue'
 import ManagementEnrollmentView from '@/views/management/EnrollmentView.vue'
+import ManagementVerificationView from '@/views/management/VerificationView.vue'
+import ManagementInvoicesView from '@/views/management/InvoicesView.vue'
+import ManagementAgingReportView from '@/views/management/AgingReportView.vue'
 import TrainerScheduleView from '@/views/trainer/ScheduleView.vue'
 import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
 import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
@@ -21,6 +24,12 @@ import ExpoReportsView from '@/views/ExpoReportsView.vue'
 import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
 import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
 import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
+import DeveloperDashboardView from '@/views/developer/DeveloperDashboardView.vue'
+import ManagementTeamsView from '@/views/management/TeamsView.vue'
+import ProjectsView from '@/views/projects/ProjectsView.vue'
+import ProjectBoardView from '@/views/projects/ProjectBoardView.vue'
+import ProjectCalendarView from '@/views/projects/ProjectCalendarView.vue'
+import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
 
 const routes = [
   {
@@ -54,7 +63,17 @@ const routes = [
       { path: 'trainer/laporan-ekspo', name: 'trainer.expo', component: ExpoReportsView },
       { path: 'trainer/evaluasi-trial', name: 'trainer.trial', component: TrialEvaluationsView },
 
-      // ---- Management ----
+            // ---- Developer (Modul 12: Manajemen Proyek) ----
+      
+      { path: 'developer', name: 'developer.dashboard', component: DeveloperDashboardView },
+      { path: 'developer/proyek', name: 'developer.projects', component: ProjectsView },
+      { path: 'developer/proyek/:id', name: 'developer.project.board', component: ProjectBoardView },
+	  { path: 'developer/kalender', name: 'developer.calendar', component: ProjectCalendarView },
+	  { path: 'developer/proyek/:id/gantt', name: 'developer.project.gantt', component: ProjectGanttView },
+      
+      
+	  
+	  // ---- Management ----
       { path: 'management', name: 'management.dashboard', component: ManagementDashboardView },
       { path: 'management/sekolah-murid', name: 'management.schools', component: ManagementSchoolsAdminView },
       {
@@ -77,6 +96,9 @@ const routes = [
       { path: 'management/laporan-ekspo', name: 'management.expo', component: ExpoReportsView },
       { path: 'management/evaluasi-trial', name: 'management.trial', component: TrialEvaluationsView },
       { path: 'management/keputusan-pendaftaran', name: 'management.enrollment', component: ManagementEnrollmentView },
+      { path: 'management/verifikasi-pendaftaran', name: 'management.verification', component: ManagementVerificationView },
+      { path: 'management/invoice', name: 'management.invoices', component: ManagementInvoicesView },
+      { path: 'management/umur-piutang', name: 'management.aging', component: ManagementAgingReportView },
       { path: 'management/hot-issue', name: 'management.hot-issues', component: ManagementHotIssuesView },
       {
         path: 'management/manajemen-user',
@@ -90,6 +112,11 @@ const routes = [
         component: ManagementProgramView,
         meta: { title: 'Program & Promosi', icon: 'inventory_2' },
       },
+	  { path: 'management/team', name: 'management.teams', component: ManagementTeamsView },
+      { path: 'management/proyek', name: 'management.projects', component: ProjectsView },
+      { path: 'management/proyek/:id', name: 'management.project.board', component: ProjectBoardView },
+	  { path: 'management/kalender', name: 'management.calendar', component: ProjectCalendarView },
+	  { path: 'management/proyek/:id/gantt', name: 'management.project.gantt', component: ProjectGanttView },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
@@ -127,6 +154,7 @@ router.beforeEach(async (to) => {
   if (auth.isAuthenticated && auth.user) {
     if (to.path.startsWith('/management') && !auth.isManagement) return auth.homeRoute
     if (to.path.startsWith('/trainer') && !auth.isTrainer) return auth.homeRoute
+	if (to.path.startsWith('/developer') && !auth.isDeveloper) return auth.homeRoute
   }
 
   return true

@@ -13,13 +13,15 @@ export const useAuthStore = defineStore('auth', {
     roles: (state) => state.user?.roles ?? [],
     isManagement: (state) => (state.user?.roles ?? []).includes('management'),
     isTrainer: (state) => (state.user?.roles ?? []).includes('trainer'),
+	isDeveloper: (state) => (state.user?.roles ?? []).includes('developer'),
     permissions: (state) => state.user?.permissions ?? [],
     // Cek permission tunggal (backend tetap otoritas final).
     can: (state) => (perm) => (state.user?.permissions ?? []).includes(perm),
     firstName: (state) => (state.user?.name ? state.user.name.split(' ')[0] : ''),
     // Dashboard tujuan sesuai peran. Management diprioritaskan bila punya dua peran.
     homeRoute() {
-      return this.isManagement ? '/management' : '/trainer'
+      if (this.isManagement) return '/management'
+      return this.isDeveloper ? '/developer' : '/trainer'
     },
   },
 

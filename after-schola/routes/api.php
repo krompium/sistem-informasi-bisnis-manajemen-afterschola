@@ -6,6 +6,10 @@ use App\Http\Controllers\Api\ClassroomController;
 use App\Http\Controllers\Api\ClassSessionController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EnrollmentController;
+use App\Http\Controllers\Api\FinanceReportController;
+use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\RegistrationController;
 use App\Http\Controllers\Api\ExpoReportController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\HotIssueController;
@@ -18,6 +22,16 @@ use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\ProgramController;
+use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\TeamController;
+use App\Http\Controllers\Api\TaskController;
+use App\Http\Controllers\Api\TaskUpdateController;
+use App\Http\Controllers\Api\ProjectExportController;
+use App\Http\Controllers\Api\TaskChecklistItemController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\TaskAttachmentController;
+use App\Http\Controllers\Api\ProjectGanttController;
+use App\Http\Controllers\Api\TaskDependencyController;
 
 /*
 |--------------------------------------------------------------------------
@@ -115,6 +129,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/trial-evaluations/{trialEvaluation}/registration/submit', [EnrollmentController::class, 'submitRegistration']);
     });
 
+    // Verifikasi & Pembayaran (Modul 5)
+    Route::middleware('permission:verify registrations')->group(function () {
+        Route::get('/registrations', [RegistrationController::class, 'index']);
+        Route::post('/registrations/{registration}/approve', [RegistrationController::class, 'approve']);
+        Route::post('/registrations/{registration}/request-revision', [RegistrationController::class, 'requestRevision']);
+    });
+    Route::middleware('permission:manage invoices')->group(function () {
+        Route::get('/invoices', [InvoiceController::class, 'index']);
+        Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
+        Route::post('/invoices/{invoice}/payments', [PaymentController::class, 'store']);
+        Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'void']);
+    });
+    Route::middleware('permission:confirm payments')->group(function () {
+        Route::post('/payments/{payment}/confirm', [PaymentController::class, 'confirm']);
+        Route::post('/payments/{payment}/reject', [PaymentController::class, 'reject']);
+    });
+    Route::get('/finance/aging', [FinanceReportController::class, 'aging'])->middleware('permission:view finance reports');
+
     // Kelola user & role — hanya Management
     Route::middleware('permission:manage users')->group(function () {
         Route::get('/users', [UserController::class, 'index']);
@@ -132,6 +164,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/hot-issues', [HotIssueController::class, 'store']);
         Route::match(['put', 'patch'], '/hot-issues/{hotIssue}', [HotIssueController::class, 'update']);
         Route::delete('/hot-issues/{hotIssue}', [HotIssueController::class, 'destroy']);
+    });
+	
+	Route::get('notifications', [NotificationController::class, 'index']);
+    Route::post('notifications/read-all', [NotificationController::class, 'readAll']);
+    Route::post('notifications/{id}/read', [NotificationController::class, 'read']);
+	
+	// Manajemen Proyek (Modul 12) — Management lihat semua, Developer hanya team-nya (detail di Policy).
+    Route::middleware('role:management|developer')->group(function () {
+		Route::apiResource('teams', TeamController::class);
+        Route::apiResource('projects', ProjectController::class);
+		Route::apiResource('tasks', TaskController::class);
+		Route::apiResource('tasks.updates', TaskUpdateController::class)->only(['index', 'store']);
+		Route::apiResource('tasks.checklist', TaskChecklistItemController::class)->shallow()->except(['show']);
+        Route::get('projects/{project}/export', ProjectExportController::class);
+		Route::apiResource('tasks.attachments', TaskAttachmentController::class)->shallow()->only(['index', 'store', 'destroy']);
+        Route::get('attachments/{attachment}/download', [TaskAttachmentController::class, 'download']);
+		Route::apiResource('tasks.dependencies', TaskDependencyController::class)->shallow()->only(['index', 'store', 'destroy']);
+        Route::get('projects/{project}/gantt', ProjectGanttController::class);
     });
 
     // Khusus Management - wajib login & role tertentu

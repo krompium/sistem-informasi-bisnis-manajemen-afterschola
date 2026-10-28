@@ -1,0 +1,2141 @@
+diff --git a/after-schola/app/Http/Controllers/Api/EnrollmentController.php b/after-schola/app/Http/Controllers/Api/EnrollmentController.php
+index a7b725b..95f7a65 100644
+--- a/after-schola/app/Http/Controllers/Api/EnrollmentController.php
++++ b/after-schola/app/Http/Controllers/Api/EnrollmentController.php
+@@ -66,7 +66,7 @@ public function saveDecision(Request $request, TrialEvaluation $trialEvaluation)
+         $registration = $existing?->registration;
+ 
+         // Pendaftaran yang sudah diajukan verifikasi tidak boleh dibatalkan lewat keputusan.
+-        if ($registration && $registration->status !== 'draft' && $data['decision'] !== 'lanjut') {
++        if ($registration && ! in_array($registration->status, ['draft', 'perlu_revisi'], true) && $data['decision'] !== 'lanjut') {
+             throw ValidationException::withMessages([
+                 'decision' => ['Pendaftaran sudah diajukan untuk verifikasi, keputusan tidak dapat diubah.'],
+             ]);
+@@ -103,7 +103,7 @@ public function saveRegistration(Request $request, TrialEvaluation $trialEvaluat
+         }
+ 
+         $existing = $decision->registration;
+-        if ($existing && $existing->status !== 'draft') {
++        if ($existing && ! in_array($existing->status, ['draft', 'perlu_revisi'], true)) {
+             throw ValidationException::withMessages([
+                 'status' => ['Pendaftaran sudah diajukan untuk verifikasi dan tidak dapat diubah.'],
+             ]);
+@@ -142,6 +142,12 @@ public function submitRegistration(TrialEvaluation $trialEvaluation)
+             ]);
+         }
+ 
++        if (! in_array($registration->status, ['draft', 'perlu_revisi'], true)) {
++            throw ValidationException::withMessages([
++                'status' => ['Pendaftaran sudah diajukan untuk verifikasi.'],
++            ]);
++        }
++
+         $registration->update(['status' => 'menunggu_verifikasi']);
+ 
+         return new EnrollmentResource($trialEvaluation->fresh(self::WITH));
+diff --git a/after-schola/app/Http/Controllers/Api/FinanceReportController.php b/after-schola/app/Http/Controllers/Api/FinanceReportController.php
+new file mode 100644
+index 0000000..f1a67ea
+--- /dev/null
++++ b/after-schola/app/Http/Controllers/Api/FinanceReportController.php
+@@ -0,0 +1,51 @@
++<?php
++
++namespace App\Http\Controllers\Api;
++
++use App\Http\Controllers\Controller;
++use App\Http\Resources\InvoiceResource;
++use App\Models\Invoice;
++
++/**
++ * Laporan keuangan. Hak akses: permission "view finance reports" (dipasang di routes).
++ * TODO(nanti): laporan pemasukan per periode (PRD KEU-07) dan filter cabang.
++ */
++class FinanceReportController extends Controller
++{
++    /**
++     * Umur piutang: invoice unpaid dikelompokkan menurut hari keterlambatan dari jatuh tempo.
++     */
++    public function aging()
++    {
++        $invoices = Invoice::query()->with('registration.program')
++            ->where('status', 'unpaid')->orderBy('due_date')->get();
++
++        $empty = fn () => ['count' => 0, 'total' => 0.0];
++        $buckets = [
++            'belum_jatuh_tempo' => $empty(), 'd1_30' => $empty(), 'd31_60' => $empty(),
++            'd61_90' => $empty(), 'd90_plus' => $empty(),
++        ];
++        $total = $empty();
++
++        foreach ($invoices as $invoice) {
++            $days = $invoice->daysOverdue();
++            $key = match (true) {
++                $days === 0 => 'belum_jatuh_tempo',
++                $days <= 30 => 'd1_30',
++                $days <= 60 => 'd31_60',
++                $days <= 90 => 'd61_90',
++                default => 'd90_plus',
++            };
++            $buckets[$key]['count']++;
++            $buckets[$key]['total'] += (float) $invoice->amount;
++            $total['count']++;
++            $total['total'] += (float) $invoice->amount;
++        }
++
++        return response()->json(['data' => [
++            'buckets' => $buckets,
++            'total' => $total,
++            'invoices' => InvoiceResource::collection($invoices)->resolve(),
++        ]]);
++    }
++}
+diff --git a/after-schola/app/Http/Controllers/Api/InvoiceController.php b/after-schola/app/Http/Controllers/Api/InvoiceController.php
+new file mode 100644
+index 0000000..7c38f71
+--- /dev/null
++++ b/after-schola/app/Http/Controllers/Api/InvoiceController.php
+@@ -0,0 +1,81 @@
++<?php
++
++namespace App\Http\Controllers\Api;
++
++use App\Http\Controllers\Controller;
++use App\Http\Resources\InvoiceResource;
++use App\Models\Invoice;
++use Illuminate\Http\Request;
++use Illuminate\Support\Facades\DB;
++use Illuminate\Validation\ValidationException;
++
++/**
++ * Modul 5 (bagian invoice): daftar, detail, batalkan.
++ * Hak akses: permission "manage invoices" (dipasang di routes).
++ */
++class InvoiceController extends Controller
++{
++    private const WITH = ['registration.program', 'payments'];
++
++    public function index(Request $request)
++    {
++        $request->validate([
++            'status' => ['nullable', 'in:unpaid,paid,void'],
++            'q' => ['nullable', 'string', 'max:100'],
++            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
++        ]);
++
++        $query = Invoice::query()->with(self::WITH);
++
++        if ($request->filled('status')) {
++            $query->where('status', $request->string('status')->toString());
++        }
++        if ($request->filled('q')) {
++            $q = '%'.$request->string('q').'%';
++            $query->where(fn ($w) => $w
++                ->where('number', 'like', $q)
++                ->orWhereHas('registration', fn ($r) => $r->where('student_name', 'like', $q)->orWhere('parent_name', 'like', $q)));
++        }
++
++        return InvoiceResource::collection(
++            $query->orderByDesc('issued_at')->orderByDesc('id')->paginate($request->integer('per_page', 25))
++        );
++    }
++
++    public function show(Invoice $invoice)
++    {
++        return new InvoiceResource($invoice->load(self::WITH));
++    }
++
++    /**
++     * Batalkan invoice; pendaftaran kembali ke antrian verifikasi agar bisa disetujui ulang (invoice baru).
++     */
++    public function void(Request $request, Invoice $invoice)
++    {
++        $data = $request->validate([
++            'reason' => ['required', 'string', 'max:500'],
++        ]);
++
++        if ($invoice->status !== 'unpaid') {
++            throw ValidationException::withMessages([
++                'status' => ['Hanya invoice yang belum lunas yang dapat dibatalkan.'],
++            ]);
++        }
++        if ($invoice->payments()->whereIn('status', ['pending', 'confirmed'])->exists()) {
++            throw ValidationException::withMessages([
++                'invoice' => ['Tolak dulu pembayaran yang menunggu konfirmasi sebelum membatalkan invoice.'],
++            ]);
++        }
++
++        DB::transaction(function () use ($invoice, $data) {
++            $invoice->update(['status' => 'void', 'void_reason' => $data['reason']]);
++            $invoice->registration->update([
++                'status' => 'menunggu_verifikasi',
++                'verified_by' => null,
++                'verified_at' => null,
++            ]);
++        });
++
++        return new InvoiceResource($invoice->fresh(self::WITH));
++    }
++}
+diff --git a/after-schola/app/Http/Controllers/Api/PaymentController.php b/after-schola/app/Http/Controllers/Api/PaymentController.php
+new file mode 100644
+index 0000000..de2276c
+--- /dev/null
++++ b/after-schola/app/Http/Controllers/Api/PaymentController.php
+@@ -0,0 +1,95 @@
++<?php
++
++namespace App\Http\Controllers\Api;
++
++use App\Http\Controllers\Controller;
++use App\Http\Resources\PaymentResource;
++use App\Models\Invoice;
++use App\Models\Payment;
++use Illuminate\Http\Request;
++use Illuminate\Support\Facades\DB;
++use Illuminate\Support\Str;
++use Illuminate\Validation\ValidationException;
++
++/**
++ * Modul 5 (bagian pembayaran). Mencatat pembayaran = permission "manage invoices";
++ * mengonfirmasi / menolak = permission "confirm payments" (dipasang di routes).
++ * Nominal selalu = nominal invoice (lunas sekaligus).
++ * TODO(nanti): cicilan — tabel sudah mendukung banyak pembayaran per invoice (PRD KEU-11, [v3]).
++ */
++class PaymentController extends Controller
++{
++    public function store(Request $request, Invoice $invoice)
++    {
++        $data = $request->validate([
++            'method' => ['required', 'in:transfer,tunai'],
++            'paid_date' => ['required', 'date', 'before_or_equal:today'],
++            'proof' => ['nullable', 'required_if:method,transfer', 'image', 'mimes:jpeg,jpg,png', 'max:5120'],
++        ]);
++
++        if ($invoice->status !== 'unpaid') {
++            throw ValidationException::withMessages(['invoice' => ['Invoice ini tidak dapat menerima pembayaran.']]);
++        }
++        if ($invoice->payments()->whereIn('status', ['pending', 'confirmed'])->exists()) {
++            throw ValidationException::withMessages(['invoice' => ['Invoice ini sudah punya pembayaran yang menunggu atau sudah dikonfirmasi.']]);
++        }
++
++        $path = null;
++        if ($request->hasFile('proof')) {
++            $file = $request->file('proof');
++            // Nama hasil generate, bukan nama asli dari client.
++            $path = $file->storeAs('payment-proofs', Str::uuid().'.'.$file->extension(), 'public');
++        }
++
++        $payment = Payment::create([
++            'invoice_id' => $invoice->id,
++            'amount' => $invoice->amount,
++            'method' => $data['method'],
++            'paid_date' => $data['paid_date'],
++            'proof_path' => $path,
++            'status' => 'pending',
++            'recorded_by' => $request->user()->id,
++        ]);
++
++        return (new PaymentResource($payment))->response()->setStatusCode(201);
++    }
++
++    public function confirm(Request $request, Payment $payment)
++    {
++        $this->ensurePending($payment);
++
++        DB::transaction(function () use ($payment, $request) {
++            $payment->update([
++                'status' => 'confirmed',
++                'confirmed_by' => $request->user()->id,
++                'confirmed_at' => now(),
++            ]);
++
++            $invoice = $payment->invoice;
++            if ($invoice->payments()->where('status', 'confirmed')->sum('amount') >= $invoice->amount) {
++                $invoice->update(['status' => 'paid', 'paid_at' => now()]);
++            }
++        });
++
++        return new PaymentResource($payment->fresh());
++    }
++
++    public function reject(Request $request, Payment $payment)
++    {
++        $data = $request->validate([
++            'reason' => ['required', 'string', 'max:500'],
++        ]);
++        $this->ensurePending($payment);
++
++        $payment->update(['status' => 'rejected', 'reject_reason' => $data['reason']]);
++
++        return new PaymentResource($payment->fresh());
++    }
++
++    private function ensurePending(Payment $payment): void
++    {
++        if ($payment->status !== 'pending') {
++            throw ValidationException::withMessages(['status' => ['Pembayaran ini sudah diproses.']]);
++        }
++    }
++}
+diff --git a/after-schola/app/Http/Controllers/Api/RegistrationController.php b/after-schola/app/Http/Controllers/Api/RegistrationController.php
+new file mode 100644
+index 0000000..f318cfb
+--- /dev/null
++++ b/after-schola/app/Http/Controllers/Api/RegistrationController.php
+@@ -0,0 +1,104 @@
++<?php
++
++namespace App\Http\Controllers\Api;
++
++use App\Http\Controllers\Controller;
++use App\Http\Resources\RegistrationResource;
++use App\Models\Invoice;
++use App\Models\Registration;
++use Illuminate\Http\Request;
++use Illuminate\Support\Facades\DB;
++use Illuminate\Validation\ValidationException;
++
++/**
++ * Modul 5 (bagian verifikasi): antrian pendaftaran, setujui (+ invoice otomatis), minta revisi.
++ * Hak akses: permission "verify registrations" (dipasang di routes).
++ */
++class RegistrationController extends Controller
++{
++    private const WITH = ['decision', 'program', 'activeInvoice'];
++
++    // TODO(nanti): jatuh tempo default diatur Management (PRD MGT-14).
++    private const DUE_DAYS = 7;
++
++    public function index(Request $request)
++    {
++        $request->validate([
++            'status' => ['nullable', 'in:menunggu_verifikasi,perlu_revisi,terverifikasi'],
++            'q' => ['nullable', 'string', 'max:100'],
++            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
++        ]);
++
++        $query = Registration::query()->where('status', '!=', 'draft')->with(self::WITH);
++
++        if ($request->filled('status')) {
++            $query->where('status', $request->string('status')->toString());
++        }
++        if ($request->filled('q')) {
++            $q = '%'.$request->string('q').'%';
++            $query->where(fn ($w) => $w->where('student_name', 'like', $q)->orWhere('parent_name', 'like', $q));
++        }
++
++        return RegistrationResource::collection(
++            $query->orderByDesc('updated_at')->orderByDesc('id')->paginate($request->integer('per_page', 25))
++        );
++    }
++
++    public function approve(Request $request, Registration $registration)
++    {
++        $this->ensureWaiting($registration);
++
++        $program = $registration->program;
++        if (! $program) {
++            throw ValidationException::withMessages([
++                'program' => ['Program pendaftaran tidak ditemukan, invoice tidak dapat diterbitkan.'],
++            ]);
++        }
++
++        DB::transaction(function () use ($registration, $program, $request) {
++            $registration->update([
++                'status' => 'terverifikasi',
++                'revision_note' => null,
++                'verified_by' => $request->user()->id,
++                'verified_at' => now(),
++            ]);
++
++            Invoice::create([
++                'registration_id' => $registration->id,
++                'number' => Invoice::nextNumber(),
++                'amount' => $program->biaya, // snapshot harga saat terbit
++                'due_date' => now()->addDays(self::DUE_DAYS)->toDateString(),
++                'status' => 'unpaid',
++                'issued_at' => now(),
++            ]);
++        });
++
++        return new RegistrationResource($registration->fresh(self::WITH));
++    }
++
++    public function requestRevision(Request $request, Registration $registration)
++    {
++        $data = $request->validate([
++            'note' => ['required', 'string', 'max:1000'],
++        ]);
++        $this->ensureWaiting($registration);
++
++        $registration->update([
++            'status' => 'perlu_revisi',
++            'revision_note' => $data['note'],
++            'verified_by' => null,
++            'verified_at' => null,
++        ]);
++
++        return new RegistrationResource($registration->fresh(self::WITH));
++    }
++
++    private function ensureWaiting(Registration $registration): void
++    {
++        if ($registration->status !== 'menunggu_verifikasi') {
++            throw ValidationException::withMessages([
++                'status' => ['Pendaftaran tidak sedang menunggu verifikasi.'],
++            ]);
++        }
++    }
++}
+diff --git a/after-schola/app/Http/Resources/EnrollmentResource.php b/after-schola/app/Http/Resources/EnrollmentResource.php
+index 1fdcd75..18d5338 100644
+--- a/after-schola/app/Http/Resources/EnrollmentResource.php
++++ b/after-schola/app/Http/Resources/EnrollmentResource.php
+@@ -36,6 +36,7 @@ public function toArray(Request $request): array
+             'registration' => $reg ? [
+                 'id' => $reg->id,
+                 'status' => $reg->status,
++                'revision_note' => $reg->revision_note,
+                 'student_name' => $reg->student_name,
+                 'birth_date' => $reg->birth_date?->toDateString(),
+                 'origin_school' => $reg->origin_school,
+diff --git a/after-schola/app/Http/Resources/InvoiceResource.php b/after-schola/app/Http/Resources/InvoiceResource.php
+new file mode 100644
+index 0000000..90524a5
+--- /dev/null
++++ b/after-schola/app/Http/Resources/InvoiceResource.php
+@@ -0,0 +1,36 @@
++<?php
++
++namespace App\Http\Resources;
++
++use Illuminate\Http\Request;
++use Illuminate\Http\Resources\Json\JsonResource;
++
++/**
++ * Eager load: registration.program (dan payments untuk daftar/detail).
++ */
++class InvoiceResource extends JsonResource
++{
++    public function toArray(Request $request): array
++    {
++        $registration = $this->registration;
++
++        return [
++            'id' => $this->id,
++            'number' => $this->number,
++            'amount' => (float) $this->amount,
++            'due_date' => $this->due_date?->toDateString(),
++            'status' => $this->status,
++            'issued_at' => $this->issued_at?->toIso8601String(),
++            'paid_at' => $this->paid_at?->toIso8601String(),
++            'void_reason' => $this->void_reason,
++            'is_overdue' => $this->isOverdue(),
++            'days_overdue' => $this->daysOverdue(),
++            'registration_id' => $this->registration_id,
++            'student_name' => $registration?->student_name,
++            'parent_name' => $registration?->parent_name,
++            'parent_phone' => $registration?->parent_phone,
++            'program_name' => $registration?->program?->nama,
++            'payments' => PaymentResource::collection($this->whenLoaded('payments')),
++        ];
++    }
++}
+diff --git a/after-schola/app/Http/Resources/PaymentResource.php b/after-schola/app/Http/Resources/PaymentResource.php
+new file mode 100644
+index 0000000..12e58f6
+--- /dev/null
++++ b/after-schola/app/Http/Resources/PaymentResource.php
+@@ -0,0 +1,24 @@
++<?php
++
++namespace App\Http\Resources;
++
++use Illuminate\Http\Request;
++use Illuminate\Http\Resources\Json\JsonResource;
++
++class PaymentResource extends JsonResource
++{
++    public function toArray(Request $request): array
++    {
++        return [
++            'id' => $this->id,
++            'invoice_id' => $this->invoice_id,
++            'amount' => (float) $this->amount,
++            'method' => $this->method,
++            'paid_date' => $this->paid_date?->toDateString(),
++            'status' => $this->status,
++            'proof_url' => $this->proofUrl(),
++            'reject_reason' => $this->reject_reason,
++            'confirmed_at' => $this->confirmed_at?->toIso8601String(),
++        ];
++    }
++}
+diff --git a/after-schola/app/Http/Resources/RegistrationResource.php b/after-schola/app/Http/Resources/RegistrationResource.php
+new file mode 100644
+index 0000000..4309a39
+--- /dev/null
++++ b/after-schola/app/Http/Resources/RegistrationResource.php
+@@ -0,0 +1,44 @@
++<?php
++
++namespace App\Http\Resources;
++
++use Illuminate\Http\Request;
++use Illuminate\Http\Resources\Json\JsonResource;
++
++/**
++ * Pendaftaran resmi dalam antrian verifikasi (Modul 5). Eager load: decision, program, activeInvoice.
++ */
++class RegistrationResource extends JsonResource
++{
++    public function toArray(Request $request): array
++    {
++        $invoice = $this->activeInvoice;
++
++        return [
++            'id' => $this->id,
++            'evaluation_id' => $this->decision?->evaluation_id,
++            'status' => $this->status,
++            'revision_note' => $this->revision_note,
++            'verified_at' => $this->verified_at?->toIso8601String(),
++            'student_name' => $this->student_name,
++            'birth_date' => $this->birth_date?->toDateString(),
++            'origin_school' => $this->origin_school,
++            'origin_class' => $this->origin_class,
++            'level' => $this->level,
++            'parent_name' => $this->parent_name,
++            'parent_phone' => $this->parent_phone,
++            'parent_email' => $this->parent_email,
++            'parent_address' => $this->parent_address,
++            'program_id' => $this->program_id,
++            'program_name' => $this->program?->nama,
++            'program_price' => $this->program ? (float) $this->program->biaya : null,
++            'invoice' => $invoice ? [
++                'id' => $invoice->id,
++                'number' => $invoice->number,
++                'amount' => (float) $invoice->amount,
++                'status' => $invoice->status,
++            ] : null,
++            'updated_at' => $this->updated_at?->toIso8601String(),
++        ];
++    }
++}
+diff --git a/after-schola/app/Models/Invoice.php b/after-schola/app/Models/Invoice.php
+new file mode 100644
+index 0000000..8d1a3d3
+--- /dev/null
++++ b/after-schola/app/Models/Invoice.php
+@@ -0,0 +1,63 @@
++<?php
++
++namespace App\Models;
++
++use Illuminate\Database\Eloquent\Model;
++use Illuminate\Database\Eloquent\Relations\BelongsTo;
++use Illuminate\Database\Eloquent\Relations\HasMany;
++
++class Invoice extends Model
++{
++    protected $fillable = [
++        'registration_id', 'number', 'amount', 'due_date', 'status',
++        'issued_at', 'paid_at', 'void_reason',
++    ];
++
++    protected function casts(): array
++    {
++        return [
++            'amount' => 'decimal:2',
++            'due_date' => 'date',
++            'issued_at' => 'datetime',
++            'paid_at' => 'datetime',
++        ];
++    }
++
++    public function registration(): BelongsTo
++    {
++        return $this->belongsTo(Registration::class);
++    }
++
++    public function payments(): HasMany
++    {
++        return $this->hasMany(Payment::class);
++    }
++
++    /**
++     * Nomor berikutnya: INV/{YYYYMM}/{urut 4 digit}.
++     * Panggil di dalam transaksi. Invoice tidak pernah dihapus, jadi hitungan aman dipakai sebagai urutan.
++     * TODO(nanti): sisipkan kode cabang setelah entitas cabang ada (PRD BR-06).
++     */
++    public static function nextNumber(): string
++    {
++        $prefix = 'INV/'.now()->format('Ym').'/';
++        $count = static::where('number', 'like', $prefix.'%')->lockForUpdate()->count();
++
++        return $prefix.str_pad((string) ($count + 1), 4, '0', STR_PAD_LEFT);
++    }
++
++    /** Hari keterlambatan; 0 bila belum jatuh tempo atau sudah tidak berstatus unpaid. */
++    public function daysOverdue(): int
++    {
++        if ($this->status !== 'unpaid' || ! $this->due_date->lt(today())) {
++            return 0;
++        }
++
++        return (int) abs($this->due_date->startOfDay()->diffInDays(today()));
++    }
++
++    public function isOverdue(): bool
++    {
++        return $this->daysOverdue() > 0;
++    }
++}
+diff --git a/after-schola/app/Models/Payment.php b/after-schola/app/Models/Payment.php
+new file mode 100644
+index 0000000..ebacde1
+--- /dev/null
++++ b/after-schola/app/Models/Payment.php
+@@ -0,0 +1,34 @@
++<?php
++
++namespace App\Models;
++
++use Illuminate\Database\Eloquent\Model;
++use Illuminate\Database\Eloquent\Relations\BelongsTo;
++use Illuminate\Support\Facades\Storage;
++
++class Payment extends Model
++{
++    protected $fillable = [
++        'invoice_id', 'amount', 'method', 'paid_date', 'proof_path', 'status',
++        'reject_reason', 'recorded_by', 'confirmed_by', 'confirmed_at',
++    ];
++
++    protected function casts(): array
++    {
++        return [
++            'amount' => 'decimal:2',
++            'paid_date' => 'date',
++            'confirmed_at' => 'datetime',
++        ];
++    }
++
++    public function invoice(): BelongsTo
++    {
++        return $this->belongsTo(Invoice::class);
++    }
++
++    public function proofUrl(): ?string
++    {
++        return $this->proof_path ? Storage::disk('public')->url($this->proof_path) : null;
++    }
++}
+diff --git a/after-schola/app/Models/Registration.php b/after-schola/app/Models/Registration.php
+index df1ae4b..a0afa17 100644
+--- a/after-schola/app/Models/Registration.php
++++ b/after-schola/app/Models/Registration.php
+@@ -4,6 +4,8 @@
+ 
+ use Illuminate\Database\Eloquent\Model;
+ use Illuminate\Database\Eloquent\Relations\BelongsTo;
++use Illuminate\Database\Eloquent\Relations\HasMany;
++use Illuminate\Database\Eloquent\Relations\HasOne;
+ 
+ class Registration extends Model
+ {
+@@ -12,15 +14,33 @@ class Registration extends Model
+         'student_name', 'birth_date', 'origin_school', 'origin_class', 'level',
+         'parent_name', 'parent_phone', 'parent_email', 'parent_address',
+         'status', 'student_id', 'registered_by',
++        'revision_note', 'verified_by', 'verified_at',
+     ];
+ 
+     protected function casts(): array
+     {
+         return [
+             'birth_date' => 'date',
++            'verified_at' => 'datetime',
+         ];
+     }
+ 
++    public function program(): BelongsTo
++    {
++        return $this->belongsTo(Program::class);
++    }
++
++    public function invoices(): HasMany
++    {
++        return $this->hasMany(Invoice::class);
++    }
++
++    /** Invoice terbaru yang belum di-void. */
++    public function activeInvoice(): HasOne
++    {
++        return $this->hasOne(Invoice::class)->ofMany(['id' => 'max'], fn ($q) => $q->where('status', '!=', 'void'));
++    }
++
+     public function decision(): BelongsTo
+     {
+         return $this->belongsTo(EnrollmentDecision::class, 'decision_id');
+diff --git a/after-schola/database/migrations/2026_10_27_100000_add_verification_fields_to_registrations_table.php b/after-schola/database/migrations/2026_10_27_100000_add_verification_fields_to_registrations_table.php
+new file mode 100644
+index 0000000..6e4513d
+--- /dev/null
++++ b/after-schola/database/migrations/2026_10_27_100000_add_verification_fields_to_registrations_table.php
+@@ -0,0 +1,27 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class extends Migration
++{
++    public function up(): void
++    {
++        Schema::table('registrations', function (Blueprint $table) {
++            // Status bertambah (perlu_revisi, terverifikasi) → string agar enum tidak diubah tiap fase.
++            $table->string('status', 30)->default('draft')->change();
++            $table->text('revision_note')->nullable();
++            $table->foreignId('verified_by')->nullable()->constrained('users')->nullOnDelete();
++            $table->timestamp('verified_at')->nullable();
++        });
++    }
++
++    public function down(): void
++    {
++        Schema::table('registrations', function (Blueprint $table) {
++            $table->dropConstrainedForeignId('verified_by');
++            $table->dropColumn(['revision_note', 'verified_at']);
++        });
++    }
++};
+diff --git a/after-schola/database/migrations/2026_10_27_100100_create_invoices_table.php b/after-schola/database/migrations/2026_10_27_100100_create_invoices_table.php
+new file mode 100644
+index 0000000..e6c6e7c
+--- /dev/null
++++ b/after-schola/database/migrations/2026_10_27_100100_create_invoices_table.php
+@@ -0,0 +1,32 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class extends Migration
++{
++    public function up(): void
++    {
++        Schema::create('invoices', function (Blueprint $table) {
++            $table->id();
++            // Bukan unik: invoice yang di-void bisa diterbitkan ulang untuk pendaftaran yang sama.
++            $table->foreignId('registration_id')->constrained('registrations')->restrictOnDelete();
++            $table->string('number')->unique();
++            $table->decimal('amount', 12, 2);
++            $table->date('due_date');
++            $table->string('status', 20)->default('unpaid'); // unpaid | paid | void
++            $table->timestamp('issued_at');
++            $table->timestamp('paid_at')->nullable();
++            $table->text('void_reason')->nullable();
++            $table->timestamps();
++
++            $table->index(['status', 'due_date']);
++        });
++    }
++
++    public function down(): void
++    {
++        Schema::dropIfExists('invoices');
++    }
++};
+diff --git a/after-schola/database/migrations/2026_10_27_100200_create_payments_table.php b/after-schola/database/migrations/2026_10_27_100200_create_payments_table.php
+new file mode 100644
+index 0000000..37bbe21
+--- /dev/null
++++ b/after-schola/database/migrations/2026_10_27_100200_create_payments_table.php
+@@ -0,0 +1,33 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class extends Migration
++{
++    public function up(): void
++    {
++        Schema::create('payments', function (Blueprint $table) {
++            $table->id();
++            $table->foreignId('invoice_id')->constrained('invoices')->restrictOnDelete();
++            $table->decimal('amount', 12, 2);
++            $table->string('method', 20); // transfer | tunai
++            $table->date('paid_date');
++            $table->string('proof_path')->nullable(); // path relatif di disk "public"
++            $table->string('status', 20)->default('pending'); // pending | confirmed | rejected
++            $table->text('reject_reason')->nullable();
++            $table->foreignId('recorded_by')->nullable()->constrained('users')->nullOnDelete();
++            $table->foreignId('confirmed_by')->nullable()->constrained('users')->nullOnDelete();
++            $table->timestamp('confirmed_at')->nullable();
++            $table->timestamps();
++
++            $table->index(['invoice_id', 'status']);
++        });
++    }
++
++    public function down(): void
++    {
++        Schema::dropIfExists('payments');
++    }
++};
+diff --git a/after-schola/database/seeders/RoleSeeder.php b/after-schola/database/seeders/RoleSeeder.php
+index 809e79a..f08a642 100644
+--- a/after-schola/database/seeders/RoleSeeder.php
++++ b/after-schola/database/seeders/RoleSeeder.php
+@@ -31,6 +31,10 @@ public function run(): void
+             'manage trial evaluations', // lihat & kelola semua evaluasi trial
+             'manage enrollment',        // keputusan lanjut/tidak + pendaftaran resmi
+             'manage hot issues',     // buat/ubah/nonaktifkan hot issue (popup notifikasi semua role)
++            'verify registrations',  // verifikasi pendaftaran resmi (setujui / minta revisi)
++            'manage invoices',       // lihat invoice, catat pembayaran, batalkan invoice
++            'confirm payments',      // konfirmasi / tolak pembayaran
++            'view finance reports',  // umur piutang & laporan keuangan
+         ];
+ 
+         foreach ($permissions as $permission) {
+@@ -39,7 +43,7 @@ public function run(): void
+ 
+         $roles = [
+             'management' => $permissions, // akses penuh
+-            'finance' => ['view attendance', 'export data'],
++            'finance' => ['view attendance', 'export data', 'manage invoices', 'confirm payments', 'view finance reports'],
+             'hr' => ['view attendance', 'export data'],
+             'trainer' => [
+                 'add students',
+diff --git a/after-schola/frontend/src/layouts/AppLayout.vue b/after-schola/frontend/src/layouts/AppLayout.vue
+index f64f7f2..1798a39 100644
+--- a/after-schola/frontend/src/layouts/AppLayout.vue
++++ b/after-schola/frontend/src/layouts/AppLayout.vue
+@@ -24,6 +24,9 @@ const managementNav = [
+   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/management/laporan-ekspo' },
+   { label: 'Evaluasi Trial', icon: 'rate_review', to: '/management/evaluasi-trial' },
+   { label: 'Keputusan & Pendaftaran', icon: 'how_to_reg', to: '/management/keputusan-pendaftaran' },
++  { label: 'Verifikasi Pendaftaran', icon: 'fact_check', to: '/management/verifikasi-pendaftaran' },
++  { label: 'Invoice & Pembayaran', icon: 'receipt_long', to: '/management/invoice' },
++  { label: 'Umur Piutang', icon: 'hourglass_bottom', to: '/management/umur-piutang' },
+   { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue' },
+   { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user' },
+   { label: 'Program & Promosi', icon: 'inventory_2', to: '/management/program' },
+diff --git a/after-schola/frontend/src/lib/format.js b/after-schola/frontend/src/lib/format.js
+index 51680a1..3bc3e7a 100644
+--- a/after-schola/frontend/src/lib/format.js
++++ b/after-schola/frontend/src/lib/format.js
+@@ -119,3 +119,6 @@ export function unwrap(payload) {
+   if (payload && Array.isArray(payload.data)) return payload.data
+   return []
+ }
++
++export const formatRupiah = (n) =>
++  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n ?? 0)
+diff --git a/after-schola/frontend/src/router/index.js b/after-schola/frontend/src/router/index.js
+index 1b0816b..312dea5 100644
+--- a/after-schola/frontend/src/router/index.js
++++ b/after-schola/frontend/src/router/index.js
+@@ -13,6 +13,9 @@ import ManagementRecapDetailView from '@/views/management/AttendanceRecapDetailV
+ import ManagementUserManagementView from '@/views/management/UserManagementView.vue'
+ import ManagementHotIssuesView from '@/views/management/HotIssuesView.vue'
+ import ManagementEnrollmentView from '@/views/management/EnrollmentView.vue'
++import ManagementVerificationView from '@/views/management/VerificationView.vue'
++import ManagementInvoicesView from '@/views/management/InvoicesView.vue'
++import ManagementAgingReportView from '@/views/management/AgingReportView.vue'
+ import TrainerScheduleView from '@/views/trainer/ScheduleView.vue'
+ import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
+ import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
+@@ -77,6 +80,9 @@ const routes = [
+       { path: 'management/laporan-ekspo', name: 'management.expo', component: ExpoReportsView },
+       { path: 'management/evaluasi-trial', name: 'management.trial', component: TrialEvaluationsView },
+       { path: 'management/keputusan-pendaftaran', name: 'management.enrollment', component: ManagementEnrollmentView },
++      { path: 'management/verifikasi-pendaftaran', name: 'management.verification', component: ManagementVerificationView },
++      { path: 'management/invoice', name: 'management.invoices', component: ManagementInvoicesView },
++      { path: 'management/umur-piutang', name: 'management.aging', component: ManagementAgingReportView },
+       { path: 'management/hot-issue', name: 'management.hot-issues', component: ManagementHotIssuesView },
+       {
+         path: 'management/manajemen-user',
+diff --git a/after-schola/frontend/src/views/management/AgingReportView.vue b/after-schola/frontend/src/views/management/AgingReportView.vue
+new file mode 100644
+index 0000000..a82920a
+--- /dev/null
++++ b/after-schola/frontend/src/views/management/AgingReportView.vue
+@@ -0,0 +1,75 @@
++<script setup>
++// Umur Piutang (Modul 5) — invoice belum lunas dikelompokkan menurut hari keterlambatan dari jatuh tempo.
++import { onMounted, ref } from 'vue'
++import api from '@/lib/api'
++import { formatDate, formatRupiah } from '@/lib/format'
++
++const loading = ref(true)
++const report = ref(null)
++
++const buckets = [
++  { key: 'belum_jatuh_tempo', label: 'Belum jatuh tempo' },
++  { key: 'd1_30', label: 'Telat 1–30 hari' },
++  { key: 'd31_60', label: 'Telat 31–60 hari' },
++  { key: 'd61_90', label: 'Telat 61–90 hari' },
++  { key: 'd90_plus', label: 'Telat > 90 hari' },
++]
++
++async function load() {
++  loading.value = true
++  try {
++    const { data } = await api.get('/finance/aging')
++    report.value = data.data
++  } catch (err) {
++    alert(err.response?.data?.message || 'Gagal memuat umur piutang.')
++  } finally {
++    loading.value = false
++  }
++}
++onMounted(load)
++</script>
++
++<template>
++  <div class="flex w-full flex-col pb-space-3xl">
++    <div class="flex flex-col gap-space-2xs py-space-xl">
++      <span class="font-label-sm text-label-sm font-semibold uppercase tracking-widest text-secondary">Pendaftaran & Pembayaran</span>
++      <h1 class="font-headline-xl text-headline-xl font-bold tracking-tight text-on-surface">Umur Piutang</h1>
++      <p class="font-body-md text-body-md text-on-surface-variant">Invoice yang belum lunas, dikelompokkan menurut keterlambatan.</p>
++    </div>
++
++    <div v-if="loading" class="grid gap-space-sm sm:grid-cols-2 lg:grid-cols-5">
++      <div v-for="i in 5" :key="i" class="h-24 animate-pulse rounded-2xl bg-surface-container"></div>
++    </div>
++
++    <template v-else-if="report">
++      <div class="grid gap-space-sm sm:grid-cols-2 lg:grid-cols-5">
++        <div v-for="b in buckets" :key="b.key" class="flex flex-col gap-1 rounded-2xl bg-surface-container-lowest p-space-lg shadow-sm">
++          <span class="font-label-sm text-label-sm font-semibold text-on-surface-variant">{{ b.label }}</span>
++          <span class="font-headline-sm text-headline-sm font-bold text-on-surface">{{ formatRupiah(report.buckets[b.key].total) }}</span>
++          <span class="font-body-sm text-body-sm text-on-surface-variant">{{ report.buckets[b.key].count }} invoice</span>
++        </div>
++      </div>
++
++      <p class="mt-space-md font-body-md text-body-md text-on-surface">
++        Total piutang <b>{{ formatRupiah(report.total.total) }}</b> dari {{ report.total.count }} invoice.
++      </p>
++
++      <div v-if="!report.invoices.length" class="mt-space-md rounded-2xl bg-surface-container-lowest px-space-lg py-space-2xl text-center font-body-md text-on-surface-variant">
++        Tidak ada piutang.
++      </div>
++      <div v-else class="mt-space-md flex flex-col gap-space-xs">
++        <div v-for="inv in report.invoices" :key="inv.id" class="flex flex-wrap items-center justify-between gap-space-sm rounded-xl bg-surface-container-lowest px-space-lg py-space-md shadow-sm">
++          <div class="flex flex-col">
++            <span class="font-label-lg text-label-lg font-semibold text-on-surface">{{ inv.student_name }}</span>
++            <span class="font-label-sm text-label-sm text-on-surface-variant">{{ inv.number }} • Wali: {{ inv.parent_name }} ({{ inv.parent_phone }})</span>
++          </div>
++          <div class="flex items-center gap-space-md font-body-sm text-body-sm text-on-surface-variant">
++            <span>Jatuh tempo {{ formatDate(inv.due_date) }}</span>
++            <span v-if="inv.is_overdue" class="rounded-full bg-error-container px-2.5 py-1 font-label-sm text-label-sm font-semibold text-on-error-container">{{ inv.days_overdue }} hari</span>
++            <b class="text-on-surface">{{ formatRupiah(inv.amount) }}</b>
++          </div>
++        </div>
++      </div>
++    </template>
++  </div>
++</template>
+diff --git a/after-schola/frontend/src/views/management/EnrollmentView.vue b/after-schola/frontend/src/views/management/EnrollmentView.vue
+index 29655e9..94ef05e 100644
+--- a/after-schola/frontend/src/views/management/EnrollmentView.vue
++++ b/after-schola/frontend/src/views/management/EnrollmentView.vue
+@@ -140,8 +140,17 @@ async function submitForVerification(row) {
+   }
+ }
+ 
+-const isDraft = (row) => row.registration?.status === 'draft'
+-const isSubmitted = (row) => row.registration?.status === 'menunggu_verifikasi'
++const regStatus = (row) => row.registration?.status
++// Terkunci sejak diajukan sampai diverifikasi; "perlu revisi" kembali bisa diedit dan diajukan ulang (Modul 5).
++const isLocked = (row) => ['menunggu_verifikasi', 'terverifikasi'].includes(regStatus(row))
++const canSubmit = (row) => ['draft', 'perlu_revisi'].includes(regStatus(row))
++const regBadge = (row) =>
++  ({
++    draft: { label: 'Draft pendaftaran', cls: 'bg-[#FEF3C7] text-[#92400E]' },
++    menunggu_verifikasi: { label: 'Menunggu verifikasi', cls: 'bg-[#DBEAFE] text-[#1E40AF]' },
++    perlu_revisi: { label: 'Perlu revisi', cls: 'bg-error-container text-on-error-container' },
++    terverifikasi: { label: 'Terverifikasi', cls: 'bg-[#D1FAE5] text-[#065F46]' },
++  })[regStatus(row)]
+ const total = computed(() => rows.value.length)
+ </script>
+ 
+@@ -203,32 +212,35 @@ const total = computed(() => rows.value.length)
+         <div v-if="row.decision?.decision === 'lanjut'" class="rounded-xl bg-surface-container-low p-space-md font-body-sm text-body-sm text-on-surface-variant">
+           <template v-if="row.registration">
+             <div class="flex flex-wrap items-center gap-space-sm">
+-              <span class="rounded-full px-2.5 py-1 font-label-sm text-label-sm font-semibold" :class="isSubmitted(row) ? 'bg-[#D1FAE5] text-[#065F46]' : 'bg-[#FEF3C7] text-[#92400E]'">
+-                {{ isSubmitted(row) ? 'Menunggu verifikasi' : 'Draft pendaftaran' }}
++              <span v-if="regBadge(row)" class="rounded-full px-2.5 py-1 font-label-sm text-label-sm font-semibold" :class="regBadge(row).cls">
++                {{ regBadge(row).label }}
+               </span>
+               <span>Level {{ levelLabel(row.registration.level) }} • Wali: {{ row.registration.parent_name }} ({{ row.registration.parent_phone }})</span>
+             </div>
++            <p v-if="row.registration.status === 'perlu_revisi' && row.registration.revision_note" class="mt-space-xs whitespace-pre-line">
++              <b class="text-on-surface">Catatan revisi:</b> {{ row.registration.revision_note }}
++            </p>
+           </template>
+           <span v-else>Pendaftaran resmi belum diisi.</span>
+         </div>
+ 
+         <div class="flex flex-wrap gap-space-xs">
+           <button
+-            v-if="!isSubmitted(row)"
++            v-if="!isLocked(row)"
+             class="rounded-xl border border-outline-variant px-space-md py-2 font-label-lg text-label-lg text-on-surface transition-all hover:bg-surface-container-low"
+             @click="openDecision(row)"
+           >
+             {{ row.decision ? 'Ubah Keputusan' : 'Catat Keputusan' }}
+           </button>
+           <button
+-            v-if="row.decision?.decision === 'lanjut' && !isSubmitted(row)"
++            v-if="row.decision?.decision === 'lanjut' && !isLocked(row)"
+             class="rounded-xl border border-outline-variant px-space-md py-2 font-label-lg text-label-lg text-on-surface transition-all hover:bg-surface-container-low"
+             @click="openRegistration(row)"
+           >
+             {{ row.registration ? 'Ubah Pendaftaran' : 'Isi Pendaftaran' }}
+           </button>
+           <button
+-            v-if="isDraft(row)"
++            v-if="canSubmit(row)"
+             class="rounded-xl bg-primary-container px-space-md py-2 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95"
+             @click="submitForVerification(row)"
+           >
+diff --git a/after-schola/frontend/src/views/management/InvoicesView.vue b/after-schola/frontend/src/views/management/InvoicesView.vue
+new file mode 100644
+index 0000000..6a6f75c
+--- /dev/null
++++ b/after-schola/frontend/src/views/management/InvoicesView.vue
+@@ -0,0 +1,262 @@
++<script setup>
++// Invoice & Pembayaran (Modul 5) — catat pembayaran (bukti transfer / tunai), konfirmasi atau tolak,
++// dan batalkan invoice. Nominal pembayaran selalu = nominal invoice (lunas sekaligus).
++import { computed, onMounted, reactive, ref, watch } from 'vue'
++import api from '@/lib/api'
++import { useAuthStore } from '@/stores/auth'
++import { formatDate, formatRupiah, unwrap } from '@/lib/format'
++
++const auth = useAuthStore()
++const loading = ref(true)
++const rows = ref([])
++const search = ref('')
++const status = ref('unpaid')
++const busyId = ref(null)
++
++const inputCls =
++  'rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15'
++const labelCls = 'font-label-md text-label-md font-semibold text-on-surface-variant'
++
++const invoiceMeta = {
++  unpaid: { label: 'Belum lunas', cls: 'bg-[#FEF3C7] text-[#92400E]' },
++  paid: { label: 'Lunas', cls: 'bg-[#D1FAE5] text-[#065F46]' },
++  void: { label: 'Dibatalkan', cls: 'bg-surface-container text-on-surface-variant' },
++}
++const paymentMeta = {
++  pending: { label: 'Menunggu konfirmasi', cls: 'bg-[#DBEAFE] text-[#1E40AF]' },
++  confirmed: { label: 'Dikonfirmasi', cls: 'bg-[#D1FAE5] text-[#065F46]' },
++  rejected: { label: 'Ditolak', cls: 'bg-error-container text-on-error-container' },
++}
++const methodLabel = (m) => ({ transfer: 'Transfer', tunai: 'Tunai' })[m] || m
++
++const errMsg = (err, fallback) => {
++  const errors = err.response?.data?.errors
++  return (errors && Object.values(errors).flat()[0]) || err.response?.data?.message || fallback
++}
++
++const canConfirm = computed(() => auth.can('confirm payments'))
++// Invoice bisa menerima pembayaran / dibatalkan bila belum lunas dan tidak ada pembayaran aktif.
++const hasActivePayment = (inv) => inv.payments.some((p) => ['pending', 'confirmed'].includes(p.status))
++const canRecord = (inv) => inv.status === 'unpaid' && !hasActivePayment(inv)
++
++async function load() {
++  loading.value = true
++  try {
++    const { data } = await api.get('/invoices', {
++      params: { status: status.value || undefined, q: search.value || undefined, per_page: 100 },
++    })
++    rows.value = unwrap(data)
++  } catch (err) {
++    alert(errMsg(err, 'Gagal memuat invoice.'))
++  } finally {
++    loading.value = false
++  }
++}
++
++// --- Catat pembayaran ---
++const pay = reactive({ open: false, inv: null, method: 'transfer', paid_date: '', file: null, error: '', saving: false })
++const today = () => new Date().toISOString().slice(0, 10)
++function openPay(inv) {
++  Object.assign(pay, { open: true, inv, method: 'transfer', paid_date: today(), file: null, error: '', saving: false })
++}
++async function submitPay() {
++  pay.saving = true
++  pay.error = ''
++  const form = new FormData()
++  form.append('method', pay.method)
++  form.append('paid_date', pay.paid_date)
++  if (pay.file) form.append('proof', pay.file)
++  try {
++    await api.post(`/invoices/${pay.inv.id}/payments`, form)
++    pay.open = false
++    await load()
++  } catch (err) {
++    pay.error = errMsg(err, 'Gagal mencatat pembayaran.')
++  } finally {
++    pay.saving = false
++  }
++}
++
++// --- Konfirmasi / tolak pembayaran ---
++async function confirmPayment(p) {
++  if (!confirm('Konfirmasi pembayaran ini? Invoice akan berstatus lunas.')) return
++  busyId.value = p.id
++  try {
++    await api.post(`/payments/${p.id}/confirm`)
++    await load()
++  } catch (err) {
++    alert(errMsg(err, 'Gagal mengonfirmasi pembayaran.'))
++  } finally {
++    busyId.value = null
++  }
++}
++
++// Satu modal alasan dipakai untuk tolak pembayaran dan batalkan invoice.
++const reason = reactive({ open: false, kind: '', target: null, text: '', error: '', saving: false })
++function openReason(kind, target) {
++  Object.assign(reason, { open: true, kind, target, text: '', error: '', saving: false })
++}
++async function submitReason() {
++  reason.saving = true
++  reason.error = ''
++  const url = reason.kind === 'reject' ? `/payments/${reason.target.id}/reject` : `/invoices/${reason.target.id}/void`
++  try {
++    await api.post(url, { reason: reason.text })
++    reason.open = false
++    await load()
++  } catch (err) {
++    reason.error = errMsg(err, 'Gagal menyimpan.')
++  } finally {
++    reason.saving = false
++  }
++}
++
++let timer
++watch(search, () => {
++  clearTimeout(timer)
++  timer = setTimeout(load, 300)
++})
++watch(status, load)
++onMounted(load)
++</script>
++
++<template>
++  <div class="flex w-full flex-col pb-space-3xl">
++    <div class="flex flex-col gap-space-2xs py-space-xl">
++      <span class="font-label-sm text-label-sm font-semibold uppercase tracking-widest text-secondary">Pendaftaran & Pembayaran</span>
++      <h1 class="font-headline-xl text-headline-xl font-bold tracking-tight text-on-surface">Invoice & Pembayaran</h1>
++      <p class="font-body-md text-body-md text-on-surface-variant">
++        Catat bukti pembayaran dari orang tua, lalu konfirmasi setelah dicek.
++      </p>
++    </div>
++
++    <div class="mb-space-md flex flex-col gap-space-sm sm:flex-row">
++      <input v-model="search" placeholder="Cari nomor invoice, siswa, atau wali..." :class="[inputCls, 'flex-1']" />
++      <select v-model="status" :class="[inputCls, 'sm:w-52']">
++        <option value="unpaid">Belum lunas</option>
++        <option value="paid">Lunas</option>
++        <option value="void">Dibatalkan</option>
++        <option value="">Semua</option>
++      </select>
++    </div>
++
++    <div v-if="loading" class="flex flex-col gap-space-sm">
++      <div v-for="i in 3" :key="i" class="h-28 animate-pulse rounded-2xl bg-surface-container"></div>
++    </div>
++
++    <div v-else-if="!rows.length" class="rounded-2xl bg-surface-container-lowest px-space-lg py-space-2xl text-center">
++      <span class="material-symbols-outlined text-[36px] text-outline">receipt_long</span>
++      <p class="mt-space-sm font-headline-sm text-headline-sm text-on-surface">Tidak ada invoice</p>
++      <p class="mt-1 font-body-sm text-body-sm text-on-surface-variant">Invoice terbit otomatis saat pendaftaran disetujui.</p>
++    </div>
++
++    <div v-else class="flex flex-col gap-space-sm">
++      <div v-for="inv in rows" :key="inv.id" class="flex flex-col gap-space-sm rounded-2xl bg-surface-container-lowest p-space-lg shadow-sm">
++        <div class="flex flex-wrap items-start justify-between gap-space-sm">
++          <div class="flex flex-col">
++            <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">{{ inv.student_name }}</h3>
++            <span class="font-label-sm text-label-sm text-on-surface-variant">
++              {{ inv.number }} • {{ inv.program_name || 'Program -' }} • Wali: {{ inv.parent_name }} ({{ inv.parent_phone }})
++            </span>
++          </div>
++          <div class="flex flex-wrap items-center gap-space-2xs">
++            <span v-if="inv.is_overdue" class="rounded-full bg-error-container px-2.5 py-1 font-label-sm text-label-sm font-semibold text-on-error-container">
++              Terlambat {{ inv.days_overdue }} hari
++            </span>
++            <span class="rounded-full px-2.5 py-1 font-label-sm text-label-sm font-semibold" :class="invoiceMeta[inv.status]?.cls">
++              {{ invoiceMeta[inv.status]?.label || inv.status }}
++            </span>
++          </div>
++        </div>
++
++        <div class="flex flex-wrap items-baseline gap-x-space-lg gap-y-1 font-body-sm text-body-sm text-on-surface-variant">
++          <span class="font-headline-sm text-headline-sm font-bold text-on-surface">{{ formatRupiah(inv.amount) }}</span>
++          <span>Jatuh tempo {{ formatDate(inv.due_date) }}</span>
++          <span v-if="inv.paid_at">Lunas {{ formatDate(inv.paid_at) }}</span>
++        </div>
++        <p v-if="inv.status === 'void' && inv.void_reason" class="font-body-sm text-body-sm text-on-surface-variant">
++          <b class="text-on-surface">Dibatalkan:</b> {{ inv.void_reason }}
++        </p>
++
++        <div v-if="inv.payments.length" class="flex flex-col gap-space-2xs rounded-xl bg-surface-container-low p-space-md font-body-sm text-body-sm text-on-surface-variant">
++          <div v-for="p in inv.payments" :key="p.id" class="flex flex-wrap items-center justify-between gap-space-xs">
++            <div class="flex flex-wrap items-center gap-space-xs">
++              <span class="rounded-full px-2.5 py-1 font-label-sm text-label-sm font-semibold" :class="paymentMeta[p.status]?.cls">{{ paymentMeta[p.status]?.label }}</span>
++              <span>{{ methodLabel(p.method) }} • {{ formatDate(p.paid_date) }}</span>
++              <a v-if="p.proof_url" :href="p.proof_url" target="_blank" rel="noopener" class="font-semibold text-primary underline">Lihat bukti</a>
++              <span v-if="p.reject_reason">• Alasan tolak: {{ p.reject_reason }}</span>
++            </div>
++            <div v-if="p.status === 'pending' && canConfirm" class="flex gap-space-xs">
++              <button
++                class="rounded-lg bg-primary-container px-space-sm py-1.5 font-label-md text-label-md text-on-primary disabled:opacity-60"
++                :disabled="busyId === p.id"
++                @click="confirmPayment(p)"
++              >
++                Konfirmasi
++              </button>
++              <button class="rounded-lg border border-outline-variant px-space-sm py-1.5 font-label-md text-label-md text-on-surface" @click="openReason('reject', p)">Tolak</button>
++            </div>
++          </div>
++        </div>
++
++        <div v-if="canRecord(inv)" class="flex flex-wrap gap-space-xs">
++          <button class="rounded-xl bg-primary-container px-space-md py-2 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95" @click="openPay(inv)">
++            Catat Pembayaran
++          </button>
++          <button class="rounded-xl border border-outline-variant px-space-md py-2 font-label-lg text-label-lg text-on-surface transition-all hover:bg-surface-container-low" @click="openReason('void', inv)">
++            Batalkan Invoice
++          </button>
++        </div>
++      </div>
++    </div>
++
++    <!-- Modal catat pembayaran -->
++    <div v-if="pay.open" class="fixed inset-0 z-50 flex items-center justify-center bg-[#0B2A5B]/40 p-4 backdrop-blur-sm" @click.self="pay.open = false">
++      <div class="w-full max-w-md rounded-2xl bg-surface-container-lowest shadow-xl animate-fade-in">
++        <div class="border-b border-surface-container p-space-lg">
++          <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Catat pembayaran</h3>
++          <p class="font-body-sm text-body-sm text-on-surface-variant">{{ pay.inv?.student_name }} • {{ formatRupiah(pay.inv?.amount) }}</p>
++        </div>
++        <div class="flex flex-col gap-space-sm p-space-lg">
++          <label :class="labelCls">Metode</label>
++          <select v-model="pay.method" :class="inputCls">
++            <option value="transfer">Transfer (bukti wajib)</option>
++            <option value="tunai">Tunai</option>
++          </select>
++          <label :class="labelCls">Tanggal bayar</label>
++          <input v-model="pay.paid_date" type="date" :max="today()" :class="inputCls" />
++          <label :class="labelCls">Bukti pembayaran (JPG/PNG, maks. 5 MB)</label>
++          <input type="file" accept="image/png,image/jpeg" :class="inputCls" @change="pay.file = $event.target.files[0] || null" />
++          <p v-if="pay.error" class="font-body-sm text-body-sm text-error">{{ pay.error }}</p>
++          <div class="flex justify-end gap-space-xs">
++            <button class="rounded-xl border border-outline-variant px-space-md py-2 font-label-lg text-label-lg" @click="pay.open = false">Batal</button>
++            <button class="rounded-xl bg-primary-container px-space-md py-2 font-label-lg text-label-lg text-on-primary disabled:opacity-60" :disabled="pay.saving" @click="submitPay">Simpan</button>
++          </div>
++        </div>
++      </div>
++    </div>
++
++    <!-- Modal alasan (tolak pembayaran / batalkan invoice) -->
++    <div v-if="reason.open" class="fixed inset-0 z-50 flex items-center justify-center bg-[#0B2A5B]/40 p-4 backdrop-blur-sm" @click.self="reason.open = false">
++      <div class="w-full max-w-md rounded-2xl bg-surface-container-lowest shadow-xl animate-fade-in">
++        <div class="border-b border-surface-container p-space-lg">
++          <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">
++            {{ reason.kind === 'reject' ? 'Tolak pembayaran' : 'Batalkan invoice' }}
++          </h3>
++          <p v-if="reason.kind === 'void'" class="font-body-sm text-body-sm text-on-surface-variant">
++            Pendaftaran akan kembali ke antrian verifikasi dan bisa disetujui ulang.
++          </p>
++        </div>
++        <div class="flex flex-col gap-space-sm p-space-lg">
++          <label :class="labelCls">Alasan</label>
++          <textarea v-model="reason.text" rows="3" :class="inputCls"></textarea>
++          <p v-if="reason.error" class="font-body-sm text-body-sm text-error">{{ reason.error }}</p>
++          <div class="flex justify-end gap-space-xs">
++            <button class="rounded-xl border border-outline-variant px-space-md py-2 font-label-lg text-label-lg" @click="reason.open = false">Batal</button>
++            <button class="rounded-xl bg-primary-container px-space-md py-2 font-label-lg text-label-lg text-on-primary disabled:opacity-60" :disabled="reason.saving || !reason.text.trim()" @click="submitReason">Simpan</button>
++          </div>
++        </div>
++      </div>
++    </div>
++  </div>
++</template>
+diff --git a/after-schola/frontend/src/views/management/VerificationView.vue b/after-schola/frontend/src/views/management/VerificationView.vue
+new file mode 100644
+index 0000000..ccaac07
+--- /dev/null
++++ b/after-schola/frontend/src/views/management/VerificationView.vue
+@@ -0,0 +1,185 @@
++<script setup>
++// Verifikasi Pendaftaran (Modul 5) — Management memeriksa pendaftaran resmi yang diajukan:
++// setujui (invoice terbit otomatis) atau minta revisi dengan catatan.
++import { onMounted, reactive, ref, watch } from 'vue'
++import api from '@/lib/api'
++import { formatRupiah, unwrap } from '@/lib/format'
++
++const loading = ref(true)
++const rows = ref([])
++const search = ref('')
++const status = ref('menunggu_verifikasi')
++const busyId = ref(null)
++
++const inputCls =
++  'rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15'
++
++const statusMeta = {
++  menunggu_verifikasi: { label: 'Menunggu verifikasi', cls: 'bg-[#DBEAFE] text-[#1E40AF]' },
++  perlu_revisi: { label: 'Perlu revisi', cls: 'bg-error-container text-on-error-container' },
++  terverifikasi: { label: 'Terverifikasi', cls: 'bg-[#D1FAE5] text-[#065F46]' },
++}
++const levelLabel = (v) => ({ beginner: 'Beginner', intermediate: 'Intermediate' })[v] || '-'
++
++const errMsg = (err, fallback) => {
++  const errors = err.response?.data?.errors
++  return (errors && Object.values(errors).flat()[0]) || err.response?.data?.message || fallback
++}
++
++async function load() {
++  loading.value = true
++  try {
++    const { data } = await api.get('/registrations', {
++      params: { status: status.value || undefined, q: search.value || undefined, per_page: 100 },
++    })
++    rows.value = unwrap(data)
++  } catch (err) {
++    alert(errMsg(err, 'Gagal memuat pendaftaran.'))
++  } finally {
++    loading.value = false
++  }
++}
++
++async function approve(row) {
++  if (!confirm(`Setujui pendaftaran ${row.student_name}? Invoice akan terbit otomatis.`)) return
++  busyId.value = row.id
++  try {
++    await api.post(`/registrations/${row.id}/approve`)
++    await load()
++  } catch (err) {
++    alert(errMsg(err, 'Gagal menyetujui pendaftaran.'))
++  } finally {
++    busyId.value = null
++  }
++}
++
++const revision = reactive({ open: false, row: null, note: '', error: '', saving: false })
++function openRevision(row) {
++  Object.assign(revision, { open: true, row, note: '', error: '', saving: false })
++}
++async function submitRevision() {
++  revision.saving = true
++  revision.error = ''
++  try {
++    await api.post(`/registrations/${revision.row.id}/request-revision`, { note: revision.note })
++    revision.open = false
++    await load()
++  } catch (err) {
++    revision.error = errMsg(err, 'Gagal meminta revisi.')
++  } finally {
++    revision.saving = false
++  }
++}
++
++let timer
++watch(search, () => {
++  clearTimeout(timer)
++  timer = setTimeout(load, 300)
++})
++watch(status, load)
++onMounted(load)
++</script>
++
++<template>
++  <div class="flex w-full flex-col pb-space-3xl">
++    <div class="flex flex-col gap-space-2xs py-space-xl">
++      <span class="font-label-sm text-label-sm font-semibold uppercase tracking-widest text-secondary">Pendaftaran & Pembayaran</span>
++      <h1 class="font-headline-xl text-headline-xl font-bold tracking-tight text-on-surface">Verifikasi Pendaftaran</h1>
++      <p class="font-body-md text-body-md text-on-surface-variant">
++        Periksa data pendaftaran resmi. Setelah disetujui, invoice terbit otomatis sesuai harga program.
++      </p>
++    </div>
++
++    <div class="mb-space-md flex flex-col gap-space-sm sm:flex-row">
++      <input v-model="search" placeholder="Cari nama siswa atau wali..." :class="[inputCls, 'flex-1']" />
++      <select v-model="status" :class="[inputCls, 'sm:w-52']">
++        <option value="menunggu_verifikasi">Menunggu verifikasi</option>
++        <option value="perlu_revisi">Perlu revisi</option>
++        <option value="terverifikasi">Terverifikasi</option>
++        <option value="">Semua</option>
++      </select>
++    </div>
++
++    <div v-if="loading" class="flex flex-col gap-space-sm">
++      <div v-for="i in 3" :key="i" class="h-28 animate-pulse rounded-2xl bg-surface-container"></div>
++    </div>
++
++    <div v-else-if="!rows.length" class="rounded-2xl bg-surface-container-lowest px-space-lg py-space-2xl text-center">
++      <span class="material-symbols-outlined text-[36px] text-outline">fact_check</span>
++      <p class="mt-space-sm font-headline-sm text-headline-sm text-on-surface">Tidak ada pendaftaran</p>
++      <p class="mt-1 font-body-sm text-body-sm text-on-surface-variant">Pendaftaran yang diajukan dari Keputusan & Pendaftaran akan muncul di sini.</p>
++    </div>
++
++    <div v-else class="flex flex-col gap-space-sm">
++      <div v-for="row in rows" :key="row.id" class="flex flex-col gap-space-sm rounded-2xl bg-surface-container-lowest p-space-lg shadow-sm">
++        <div class="flex flex-wrap items-start justify-between gap-space-sm">
++          <div class="flex flex-col">
++            <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">{{ row.student_name }}</h3>
++            <span class="font-label-sm text-label-sm text-on-surface-variant">
++              {{ row.program_name || 'Program belum dipilih' }}
++              <template v-if="row.program_price != null"> • {{ formatRupiah(row.program_price) }}</template>
++              • Level {{ levelLabel(row.level) }}
++            </span>
++          </div>
++          <span class="rounded-full px-2.5 py-1 font-label-sm text-label-sm font-semibold" :class="statusMeta[row.status]?.cls">
++            {{ statusMeta[row.status]?.label || row.status }}
++          </span>
++        </div>
++
++        <div class="rounded-xl bg-surface-container-low p-space-md font-body-sm text-body-sm text-on-surface-variant">
++          <div>Wali: <b class="text-on-surface">{{ row.parent_name }}</b> • {{ row.parent_phone }}<template v-if="row.parent_email"> • {{ row.parent_email }}</template></div>
++          <div v-if="row.origin_school || row.origin_class">Asal: {{ [row.origin_school, row.origin_class].filter(Boolean).join(' • ') }}</div>
++          <div v-if="row.parent_address">Alamat: {{ row.parent_address }}</div>
++        </div>
++
++        <p v-if="row.status === 'perlu_revisi' && row.revision_note" class="whitespace-pre-line font-body-sm text-body-sm text-on-surface-variant">
++          <b class="text-on-surface">Catatan revisi:</b> {{ row.revision_note }}
++        </p>
++        <p v-if="row.invoice" class="font-body-sm text-body-sm text-on-surface-variant">
++          <b class="text-on-surface">Invoice:</b> {{ row.invoice.number }} • {{ formatRupiah(row.invoice.amount) }}
++        </p>
++
++        <div v-if="row.status === 'menunggu_verifikasi'" class="flex flex-wrap gap-space-xs">
++          <button
++            class="rounded-xl bg-primary-container px-space-md py-2 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60"
++            :disabled="busyId === row.id"
++            @click="approve(row)"
++          >
++            {{ busyId === row.id ? 'Memproses...' : 'Setujui' }}
++          </button>
++          <button
++            class="rounded-xl border border-outline-variant px-space-md py-2 font-label-lg text-label-lg text-on-surface transition-all hover:bg-surface-container-low"
++            @click="openRevision(row)"
++          >
++            Minta Revisi
++          </button>
++        </div>
++      </div>
++    </div>
++
++    <!-- Modal minta revisi -->
++    <div v-if="revision.open" class="fixed inset-0 z-50 flex items-center justify-center bg-[#0B2A5B]/40 p-4 backdrop-blur-sm" @click.self="revision.open = false">
++      <div class="w-full max-w-md rounded-2xl bg-surface-container-lowest shadow-xl animate-fade-in">
++        <div class="border-b border-surface-container p-space-lg">
++          <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Minta revisi</h3>
++          <p class="font-body-sm text-body-sm text-on-surface-variant">{{ revision.row?.student_name }}</p>
++        </div>
++        <div class="flex flex-col gap-space-sm p-space-lg">
++          <label class="font-label-md text-label-md font-semibold text-on-surface-variant">Catatan untuk perbaikan</label>
++          <textarea v-model="revision.note" rows="4" :class="inputCls" placeholder="Mis. nomor HP wali tidak valid"></textarea>
++          <p v-if="revision.error" class="font-body-sm text-body-sm text-error">{{ revision.error }}</p>
++          <div class="flex justify-end gap-space-xs">
++            <button class="rounded-xl border border-outline-variant px-space-md py-2 font-label-lg text-label-lg" @click="revision.open = false">Batal</button>
++            <button
++              class="rounded-xl bg-primary-container px-space-md py-2 font-label-lg text-label-lg text-on-primary disabled:opacity-60"
++              :disabled="revision.saving || !revision.note.trim()"
++              @click="submitRevision"
++            >
++              Kirim
++            </button>
++          </div>
++        </div>
++      </div>
++    </div>
++  </div>
++</template>
+diff --git a/after-schola/routes/api.php b/after-schola/routes/api.php
+index 486eb04..a802997 100644
+--- a/after-schola/routes/api.php
++++ b/after-schola/routes/api.php
+@@ -6,6 +6,10 @@
+ use App\Http\Controllers\Api\ClassSessionController;
+ use App\Http\Controllers\Api\DashboardController;
+ use App\Http\Controllers\Api\EnrollmentController;
++use App\Http\Controllers\Api\FinanceReportController;
++use App\Http\Controllers\Api\InvoiceController;
++use App\Http\Controllers\Api\PaymentController;
++use App\Http\Controllers\Api\RegistrationController;
+ use App\Http\Controllers\Api\ExpoReportController;
+ use App\Http\Controllers\Api\ExportController;
+ use App\Http\Controllers\Api\HotIssueController;
+@@ -115,6 +119,24 @@
+         Route::post('/trial-evaluations/{trialEvaluation}/registration/submit', [EnrollmentController::class, 'submitRegistration']);
+     });
+ 
++    // Verifikasi & Pembayaran (Modul 5)
++    Route::middleware('permission:verify registrations')->group(function () {
++        Route::get('/registrations', [RegistrationController::class, 'index']);
++        Route::post('/registrations/{registration}/approve', [RegistrationController::class, 'approve']);
++        Route::post('/registrations/{registration}/request-revision', [RegistrationController::class, 'requestRevision']);
++    });
++    Route::middleware('permission:manage invoices')->group(function () {
++        Route::get('/invoices', [InvoiceController::class, 'index']);
++        Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
++        Route::post('/invoices/{invoice}/payments', [PaymentController::class, 'store']);
++        Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'void']);
++    });
++    Route::middleware('permission:confirm payments')->group(function () {
++        Route::post('/payments/{payment}/confirm', [PaymentController::class, 'confirm']);
++        Route::post('/payments/{payment}/reject', [PaymentController::class, 'reject']);
++    });
++    Route::get('/finance/aging', [FinanceReportController::class, 'aging'])->middleware('permission:view finance reports');
++
+     // Kelola user & role — hanya Management
+     Route::middleware('permission:manage users')->group(function () {
+         Route::get('/users', [UserController::class, 'index']);
+diff --git a/after-schola/tests/Concerns/MakesFinanceFixtures.php b/after-schola/tests/Concerns/MakesFinanceFixtures.php
+new file mode 100644
+index 0000000..7abcf18
+--- /dev/null
++++ b/after-schola/tests/Concerns/MakesFinanceFixtures.php
+@@ -0,0 +1,92 @@
++<?php
++
++namespace Tests\Concerns;
++
++use App\Models\EnrollmentDecision;
++use App\Models\Invoice;
++use App\Models\Program;
++use App\Models\Registration;
++use App\Models\TrialEvaluation;
++use App\Models\User;
++use Database\Seeders\RoleSeeder;
++use Illuminate\Support\Facades\Hash;
++
++/**
++ * Fixture bersama untuk test Modul 5 (Verifikasi & Pembayaran).
++ */
++trait MakesFinanceFixtures
++{
++    protected function seedRoles(): void
++    {
++        $this->seed(RoleSeeder::class);
++    }
++
++    protected function makeUser(string $role): User
++    {
++        $user = User::create([
++            'name' => ucfirst($role),
++            'email' => $role.'_'.uniqid().'@test.id',
++            'password' => Hash::make('password'),
++            'is_active' => true,
++        ]);
++        $user->assignRole($role);
++
++        return $user;
++    }
++
++    protected function makeProgram(float $biaya = 500000): Program
++    {
++        return Program::create([
++            'nama' => 'Coding Kids',
++            'tipe' => 'offline',
++            'biaya' => $biaya,
++            'status_aktif' => true,
++        ]);
++    }
++
++    /**
++     * Rantai evaluasi trial -> keputusan "lanjut" -> pendaftaran (default: menunggu_verifikasi).
++     */
++    protected function makeRegistration(array $overrides = [], ?Program $program = null): Registration
++    {
++        $trainer = $this->makeUser('trainer');
++        $evaluation = TrialEvaluation::create([
++            'program_id' => $program?->id,
++            'participant_name' => 'Budi Santoso',
++            'trainer_id' => $trainer->id,
++            'trial_date' => '2026-10-01',
++            'attendance' => 'hadir',
++        ]);
++        $decision = EnrollmentDecision::create([
++            'evaluation_id' => $evaluation->id,
++            'decision' => 'lanjut',
++            'decided_at' => '2026-10-02',
++        ]);
++
++        return Registration::create(array_merge([
++            'decision_id' => $decision->id,
++            'program_id' => $program?->id,
++            'student_name' => 'Budi Santoso',
++            'level' => 'beginner',
++            'parent_name' => 'Ibu Budi',
++            'parent_phone' => '081234567890',
++            'status' => 'menunggu_verifikasi',
++        ], $overrides));
++    }
++
++    protected function makeInvoice(?Registration $registration = null, array $overrides = []): Invoice
++    {
++        $registration ??= $this->makeRegistration(['status' => 'terverifikasi'], $this->makeProgram());
++        static $seq = 0;
++        $seq++;
++
++        return Invoice::create(array_merge([
++            'registration_id' => $registration->id,
++            'number' => sprintf('INV/%s/T%04d', now()->format('Ym'), $seq),
++            'amount' => 500000,
++            'due_date' => now()->addDays(7)->toDateString(),
++            'status' => 'unpaid',
++            'issued_at' => now(),
++        ], $overrides));
++    }
++}
+diff --git a/after-schola/tests/Feature/AgingReportTest.php b/after-schola/tests/Feature/AgingReportTest.php
+new file mode 100644
+index 0000000..f635e52
+--- /dev/null
++++ b/after-schola/tests/Feature/AgingReportTest.php
+@@ -0,0 +1,54 @@
++<?php
++
++namespace Tests\Feature;
++
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Laravel\Sanctum\Sanctum;
++use Tests\Concerns\MakesFinanceFixtures;
++use Tests\TestCase;
++
++/**
++ * Umur piutang: invoice unpaid dikelompokkan menurut keterlambatan dari jatuh tempo.
++ */
++class AgingReportTest extends TestCase
++{
++    use MakesFinanceFixtures, RefreshDatabase;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seedRoles();
++    }
++
++    public function test_requires_view_finance_reports_permission(): void
++    {
++        $this->getJson('/api/finance/aging')->assertStatus(401);
++
++        Sanctum::actingAs($this->makeUser('trainer'));
++        $this->getJson('/api/finance/aging')->assertStatus(403);
++
++        Sanctum::actingAs($this->makeUser('finance'));
++        $this->getJson('/api/finance/aging')->assertOk();
++    }
++
++    public function test_groups_unpaid_invoices_into_buckets_and_ignores_paid_and_void(): void
++    {
++        $days = ['belum_jatuh_tempo' => [3, 100000], 'd1_30' => [-5, 200000], 'd31_60' => [-45, 300000], 'd61_90' => [-75, 400000], 'd90_plus' => [-120, 500000]];
++        foreach ($days as [$offset, $amount]) {
++            $this->makeInvoice(null, ['due_date' => now()->addDays($offset)->toDateString(), 'amount' => $amount]);
++        }
++        $this->makeInvoice(null, ['due_date' => now()->subDays(10)->toDateString(), 'status' => 'paid', 'paid_at' => now()]);
++        $this->makeInvoice(null, ['due_date' => now()->subDays(10)->toDateString(), 'status' => 'void']);
++        Sanctum::actingAs($this->makeUser('finance'));
++
++        $res = $this->getJson('/api/finance/aging')->assertOk();
++
++        foreach ($days as $bucket => [, $amount]) {
++            $this->assertSame(1, $res->json("data.buckets.{$bucket}.count"), $bucket);
++            $this->assertEquals($amount, $res->json("data.buckets.{$bucket}.total"), $bucket);
++        }
++        $this->assertSame(5, $res->json('data.total.count'));
++        $this->assertEquals(1500000, $res->json('data.total.total'));
++        $this->assertCount(5, $res->json('data.invoices'));
++    }
++}
+diff --git a/after-schola/tests/Feature/InvoicePaymentTest.php b/after-schola/tests/Feature/InvoicePaymentTest.php
+new file mode 100644
+index 0000000..186c8b8
+--- /dev/null
++++ b/after-schola/tests/Feature/InvoicePaymentTest.php
+@@ -0,0 +1,272 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\Invoice;
++use App\Models\Payment;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Http\UploadedFile;
++use Illuminate\Support\Facades\Storage;
++use Laravel\Sanctum\Sanctum;
++use Tests\Concerns\MakesFinanceFixtures;
++use Tests\TestCase;
++
++/**
++ * Modul 5 (bagian pembayaran): daftar invoice, catat pembayaran + bukti, konfirmasi/tolak, batalkan invoice.
++ */
++class InvoicePaymentTest extends TestCase
++{
++    use MakesFinanceFixtures, RefreshDatabase;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seedRoles();
++        Storage::fake('public');
++    }
++
++    /** PNG 1x1 valid; $padTo menambah byte agar ukuran file bisa diatur tanpa ekstensi GD. */
++    private function proof(string $name = 'bukti.png', int $padTo = 0): UploadedFile
++    {
++        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
++        if ($padTo > strlen($png)) {
++            $png = str_pad($png, $padTo, "\0");
++        }
++
++        return UploadedFile::fake()->createWithContent($name, $png);
++    }
++
++    private function asFinance(): void
++    {
++        Sanctum::actingAs($this->makeUser('finance'));
++    }
++
++    private function recordPayment(Invoice $invoice, array $data = []): \Illuminate\Testing\TestResponse
++    {
++        return $this->post("/api/invoices/{$invoice->id}/payments", array_merge([
++            'method' => 'transfer',
++            'paid_date' => now()->toDateString(),
++            'proof' => $this->proof(),
++        ], $data), ['Accept' => 'application/json']);
++    }
++
++    public function test_invoice_list_requires_manage_invoices_permission(): void
++    {
++        $this->makeInvoice();
++
++        $this->getJson('/api/invoices')->assertStatus(401);
++
++        Sanctum::actingAs($this->makeUser('trainer'));
++        $this->getJson('/api/invoices')->assertStatus(403);
++
++        foreach (['management', 'finance'] as $role) {
++            Sanctum::actingAs($this->makeUser($role));
++            $this->getJson('/api/invoices')->assertOk();
++        }
++    }
++
++    public function test_invoice_list_filters_by_status_and_exposes_summary(): void
++    {
++        $unpaid = $this->makeInvoice(null, ['due_date' => now()->subDays(3)->toDateString()]);
++        $this->makeInvoice(null, ['status' => 'paid', 'paid_at' => now()]);
++        $this->asFinance();
++
++        $res = $this->getJson('/api/invoices?status=unpaid')->assertOk();
++        $this->assertCount(1, $res->json('data'));
++        $res->assertJsonPath('data.0.id', $unpaid->id)
++            ->assertJsonPath('data.0.student_name', 'Budi Santoso')
++            ->assertJsonPath('data.0.is_overdue', true)
++            ->assertJsonPath('data.0.days_overdue', 3);
++    }
++
++    public function test_transfer_payment_requires_proof(): void
++    {
++        $invoice = $this->makeInvoice();
++        $this->asFinance();
++
++        $this->recordPayment($invoice, ['proof' => null])
++            ->assertStatus(422)
++            ->assertJsonValidationErrors('proof');
++        $this->assertSame(0, Payment::count());
++    }
++
++    public function test_cash_payment_does_not_need_proof_and_amount_comes_from_invoice(): void
++    {
++        $invoice = $this->makeInvoice(null, ['amount' => 640000]);
++        $this->asFinance();
++
++        $this->recordPayment($invoice, ['method' => 'tunai', 'proof' => null])
++            ->assertCreated()
++            ->assertJsonPath('data.status', 'pending')
++            ->assertJsonPath('data.method', 'tunai');
++
++        $payment = Payment::firstOrFail();
++        $this->assertEquals(640000, $payment->amount);
++        $this->assertNull($payment->proof_path);
++    }
++
++    public function test_proof_must_be_png_or_jpeg_and_at_most_5mb(): void
++    {
++        $invoice = $this->makeInvoice();
++        $this->asFinance();
++
++        $pdf = UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf');
++        $this->recordPayment($invoice, ['proof' => $pdf])->assertStatus(422)->assertJsonValidationErrors('proof');
++
++        $this->recordPayment($invoice, ['proof' => $this->proof('besar.png', 6 * 1024 * 1024)])
++            ->assertStatus(422)
++            ->assertJsonValidationErrors('proof');
++
++        $this->assertSame(0, Payment::count());
++    }
++
++    public function test_proof_is_stored_under_generated_name(): void
++    {
++        $invoice = $this->makeInvoice();
++        $this->asFinance();
++
++        $this->recordPayment($invoice, ['proof' => $this->proof('bukti-asli-ortu.png')])->assertCreated();
++
++        $path = Payment::firstOrFail()->proof_path;
++        $this->assertStringNotContainsString('bukti-asli-ortu', $path);
++        Storage::disk('public')->assertExists($path);
++    }
++
++    public function test_cannot_record_new_payment_while_one_is_pending_or_confirmed(): void
++    {
++        $invoice = $this->makeInvoice();
++        $this->asFinance();
++
++        $this->recordPayment($invoice)->assertCreated();
++        $this->recordPayment($invoice)->assertStatus(422)->assertJsonValidationErrors('invoice');
++
++        Payment::query()->update(['status' => 'confirmed']);
++        $this->recordPayment($invoice)->assertStatus(422)->assertJsonValidationErrors('invoice');
++        $this->assertSame(1, Payment::count());
++    }
++
++    public function test_confirm_marks_payment_confirmed_and_invoice_paid(): void
++    {
++        $invoice = $this->makeInvoice();
++        $finance = $this->makeUser('finance');
++        Sanctum::actingAs($finance);
++        $this->recordPayment($invoice)->assertCreated();
++        $payment = Payment::firstOrFail();
++
++        $this->postJson("/api/payments/{$payment->id}/confirm")
++            ->assertOk()
++            ->assertJsonPath('data.status', 'confirmed');
++
++        $payment->refresh();
++        $this->assertSame($finance->id, $payment->confirmed_by);
++        $this->assertNotNull($payment->confirmed_at);
++        $invoice->refresh();
++        $this->assertSame('paid', $invoice->status);
++        $this->assertNotNull($invoice->paid_at);
++    }
++
++    public function test_confirm_and_reject_require_confirm_permission(): void
++    {
++        $invoice = $this->makeInvoice();
++        $this->asFinance();
++        $this->recordPayment($invoice)->assertCreated();
++        $payment = Payment::firstOrFail();
++
++        // HR hanya diberi "manage invoices": boleh mencatat, tidak boleh mengonfirmasi.
++        $clerk = $this->makeUser('hr');
++        $clerk->givePermissionTo('manage invoices');
++        Sanctum::actingAs($clerk);
++        $this->postJson("/api/payments/{$payment->id}/confirm")->assertStatus(403);
++        $this->postJson("/api/payments/{$payment->id}/reject", ['reason' => 'x'])->assertStatus(403);
++
++        Sanctum::actingAs($this->makeUser('trainer'));
++        $this->postJson("/api/payments/{$payment->id}/confirm")->assertStatus(403);
++
++        $this->assertSame('pending', $payment->fresh()->status);
++    }
++
++    public function test_reject_requires_reason_and_allows_a_new_payment(): void
++    {
++        $invoice = $this->makeInvoice();
++        $this->asFinance();
++        $this->recordPayment($invoice)->assertCreated();
++        $payment = Payment::firstOrFail();
++
++        $this->postJson("/api/payments/{$payment->id}/reject", ['reason' => ''])
++            ->assertStatus(422)->assertJsonValidationErrors('reason');
++
++        $this->postJson("/api/payments/{$payment->id}/reject", ['reason' => 'Nominal tidak sesuai'])
++            ->assertOk()
++            ->assertJsonPath('data.status', 'rejected')
++            ->assertJsonPath('data.reject_reason', 'Nominal tidak sesuai');
++        $this->assertSame('unpaid', $invoice->fresh()->status);
++
++        $this->recordPayment($invoice)->assertCreated();
++        $this->assertSame(2, Payment::count());
++    }
++
++    public function test_confirm_and_reject_only_for_pending_payments(): void
++    {
++        $invoice = $this->makeInvoice();
++        $this->asFinance();
++        $this->recordPayment($invoice)->assertCreated();
++        $payment = Payment::firstOrFail();
++        $this->postJson("/api/payments/{$payment->id}/confirm")->assertOk();
++
++        $this->postJson("/api/payments/{$payment->id}/confirm")->assertStatus(422)->assertJsonValidationErrors('status');
++        $this->postJson("/api/payments/{$payment->id}/reject", ['reason' => 'x'])->assertStatus(422)->assertJsonValidationErrors('status');
++    }
++
++    public function test_void_requires_reason_and_sends_registration_back_to_verification(): void
++    {
++        $registration = $this->makeRegistration(['status' => 'terverifikasi'], $this->makeProgram());
++        $invoice = $this->makeInvoice($registration);
++        $this->asFinance();
++
++        $this->postJson("/api/invoices/{$invoice->id}/void", ['reason' => ''])
++            ->assertStatus(422)->assertJsonValidationErrors('reason');
++
++        $this->postJson("/api/invoices/{$invoice->id}/void", ['reason' => 'Nominal salah'])
++            ->assertOk()
++            ->assertJsonPath('data.status', 'void');
++
++        $this->assertSame('Nominal salah', $invoice->fresh()->void_reason);
++        $this->assertSame('menunggu_verifikasi', $registration->fresh()->status);
++    }
++
++    public function test_cannot_void_paid_invoice_or_one_with_pending_payment(): void
++    {
++        $paid = $this->makeInvoice(null, ['status' => 'paid', 'paid_at' => now()]);
++        $withPending = $this->makeInvoice();
++        $this->asFinance();
++        $this->recordPayment($withPending)->assertCreated();
++
++        $this->postJson("/api/invoices/{$paid->id}/void", ['reason' => 'x'])
++            ->assertStatus(422)->assertJsonValidationErrors('status');
++        $this->postJson("/api/invoices/{$withPending->id}/void", ['reason' => 'x'])
++            ->assertStatus(422)->assertJsonValidationErrors('invoice');
++    }
++
++    public function test_voided_invoice_cannot_receive_payment(): void
++    {
++        $invoice = $this->makeInvoice(null, ['status' => 'void', 'void_reason' => 'salah']);
++        $this->asFinance();
++
++        $this->recordPayment($invoice)->assertStatus(422)->assertJsonValidationErrors('invoice');
++    }
++
++    public function test_reapproving_after_void_issues_a_new_invoice(): void
++    {
++        $registration = $this->makeRegistration([], $this->makeProgram());
++        Sanctum::actingAs($this->makeUser('management'));
++
++        $this->postJson("/api/registrations/{$registration->id}/approve")->assertOk();
++        $first = Invoice::firstOrFail();
++        $this->postJson("/api/invoices/{$first->id}/void", ['reason' => 'Salah paket'])->assertOk();
++        $this->postJson("/api/registrations/{$registration->id}/approve")->assertOk();
++
++        $ym = now()->format('Ym');
++        $this->assertSame(["INV/{$ym}/0001", "INV/{$ym}/0002"], Invoice::orderBy('id')->pluck('number')->all());
++        $this->assertSame(['void', 'unpaid'], Invoice::orderBy('id')->pluck('status')->all());
++    }
++}
+diff --git a/after-schola/tests/Feature/RegistrationVerificationTest.php b/after-schola/tests/Feature/RegistrationVerificationTest.php
+new file mode 100644
+index 0000000..efdb4fe
+--- /dev/null
++++ b/after-schola/tests/Feature/RegistrationVerificationTest.php
+@@ -0,0 +1,191 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\Invoice;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Laravel\Sanctum\Sanctum;
++use Tests\Concerns\MakesFinanceFixtures;
++use Tests\TestCase;
++
++/**
++ * Modul 5 (bagian verifikasi): antrian, setujui (+ invoice otomatis), minta revisi, kirim ulang.
++ */
++class RegistrationVerificationTest extends TestCase
++{
++    use MakesFinanceFixtures, RefreshDatabase;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seedRoles();
++    }
++
++    private function asManagement(): void
++    {
++        Sanctum::actingAs($this->makeUser('management'));
++    }
++
++    public function test_queue_excludes_drafts_and_supports_status_filter(): void
++    {
++        $this->makeRegistration(['status' => 'draft', 'student_name' => 'Anak Draft']);
++        $this->makeRegistration(['status' => 'menunggu_verifikasi', 'student_name' => 'Anak Antri']);
++        $this->makeRegistration(['status' => 'perlu_revisi', 'student_name' => 'Anak Revisi']);
++        $this->asManagement();
++
++        $all = collect($this->getJson('/api/registrations')->assertOk()->json('data'))->pluck('student_name')->all();
++        $this->assertEqualsCanonicalizing(['Anak Antri', 'Anak Revisi'], $all);
++
++        $filtered = collect($this->getJson('/api/registrations?status=perlu_revisi')->assertOk()->json('data'))->pluck('student_name')->all();
++        $this->assertSame(['Anak Revisi'], $filtered);
++    }
++
++    public function test_only_users_with_verify_permission_can_access(): void
++    {
++        $reg = $this->makeRegistration();
++
++        $this->getJson('/api/registrations')->assertStatus(401);
++
++        foreach (['trainer', 'finance'] as $role) {
++            Sanctum::actingAs($this->makeUser($role));
++            $this->getJson('/api/registrations')->assertStatus(403);
++            $this->postJson("/api/registrations/{$reg->id}/approve")->assertStatus(403);
++            $this->postJson("/api/registrations/{$reg->id}/request-revision", ['note' => 'x'])->assertStatus(403);
++        }
++    }
++
++    public function test_approve_marks_verified_and_issues_invoice_from_program_price(): void
++    {
++        $program = $this->makeProgram(750000);
++        $reg = $this->makeRegistration([], $program);
++        $manager = $this->makeUser('management');
++        Sanctum::actingAs($manager);
++
++        $this->postJson("/api/registrations/{$reg->id}/approve")
++            ->assertOk()
++            ->assertJsonPath('data.status', 'terverifikasi')
++            ->assertJsonPath('data.invoice.status', 'unpaid');
++
++        $reg->refresh();
++        $this->assertSame('terverifikasi', $reg->status);
++        $this->assertSame($manager->id, $reg->verified_by);
++        $this->assertNotNull($reg->verified_at);
++
++        $invoice = Invoice::firstOrFail();
++        $this->assertSame($reg->id, $invoice->registration_id);
++        $this->assertEquals(750000, $invoice->amount);
++        $this->assertSame('unpaid', $invoice->status);
++        $this->assertSame(now()->addDays(7)->toDateString(), $invoice->due_date->toDateString());
++        $this->assertSame('INV/'.now()->format('Ym').'/0001', $invoice->number);
++    }
++
++    public function test_invoice_number_increments_within_the_month(): void
++    {
++        $program = $this->makeProgram();
++        $first = $this->makeRegistration([], $program);
++        $second = $this->makeRegistration(['student_name' => 'Siti'], $program);
++        $this->asManagement();
++
++        $this->postJson("/api/registrations/{$first->id}/approve")->assertOk();
++        $this->postJson("/api/registrations/{$second->id}/approve")->assertOk();
++
++        $this->assertSame(
++            ['INV/'.now()->format('Ym').'/0001', 'INV/'.now()->format('Ym').'/0002'],
++            Invoice::orderBy('id')->pluck('number')->all(),
++        );
++    }
++
++    public function test_approve_without_program_is_rejected_and_nothing_changes(): void
++    {
++        $reg = $this->makeRegistration(['program_id' => null]);
++        $this->asManagement();
++
++        $this->postJson("/api/registrations/{$reg->id}/approve")
++            ->assertStatus(422)
++            ->assertJsonValidationErrors('program');
++
++        $this->assertSame('menunggu_verifikasi', $reg->fresh()->status);
++        $this->assertSame(0, Invoice::count());
++    }
++
++    public function test_approve_only_when_waiting_for_verification(): void
++    {
++        $program = $this->makeProgram();
++        $this->asManagement();
++
++        foreach (['draft', 'perlu_revisi', 'terverifikasi'] as $status) {
++            $reg = $this->makeRegistration(['status' => $status], $program);
++            $this->postJson("/api/registrations/{$reg->id}/approve")
++                ->assertStatus(422)
++                ->assertJsonValidationErrors('status');
++        }
++        $this->assertSame(0, Invoice::count());
++    }
++
++    public function test_request_revision_requires_note(): void
++    {
++        $reg = $this->makeRegistration();
++        $this->asManagement();
++
++        $this->postJson("/api/registrations/{$reg->id}/request-revision", ['note' => ''])
++            ->assertStatus(422)
++            ->assertJsonValidationErrors('note');
++        $this->assertSame('menunggu_verifikasi', $reg->fresh()->status);
++    }
++
++    public function test_request_revision_sets_status_and_note(): void
++    {
++        $reg = $this->makeRegistration();
++        $this->asManagement();
++
++        $this->postJson("/api/registrations/{$reg->id}/request-revision", ['note' => 'Nomor HP wali tidak valid'])
++            ->assertOk()
++            ->assertJsonPath('data.status', 'perlu_revisi')
++            ->assertJsonPath('data.revision_note', 'Nomor HP wali tidak valid');
++        $this->assertSame(0, Invoice::count());
++    }
++
++    public function test_request_revision_only_when_waiting_for_verification(): void
++    {
++        $reg = $this->makeRegistration(['status' => 'terverifikasi']);
++        $this->asManagement();
++
++        $this->postJson("/api/registrations/{$reg->id}/request-revision", ['note' => 'x'])
++            ->assertStatus(422)
++            ->assertJsonValidationErrors('status');
++    }
++
++    public function test_revised_registration_can_be_edited_and_resubmitted(): void
++    {
++        $reg = $this->makeRegistration(['status' => 'perlu_revisi', 'revision_note' => 'Perbaiki HP']);
++        $evaluationId = $reg->decision->evaluation_id;
++        $this->asManagement();
++
++        $this->putJson("/api/trial-evaluations/{$evaluationId}/registration", [
++            'student_name' => 'Budi Santoso',
++            'level' => 'beginner',
++            'parent_name' => 'Ibu Budi',
++            'parent_phone' => '081200000000',
++        ])->assertOk();
++        $this->postJson("/api/trial-evaluations/{$evaluationId}/registration/submit")->assertOk();
++
++        $reg->refresh();
++        $this->assertSame('menunggu_verifikasi', $reg->status);
++        $this->assertSame('081200000000', $reg->parent_phone);
++    }
++
++    public function test_verified_registration_cannot_be_edited_or_resubmitted(): void
++    {
++        $reg = $this->makeRegistration(['status' => 'terverifikasi']);
++        $evaluationId = $reg->decision->evaluation_id;
++        $this->asManagement();
++
++        $this->putJson("/api/trial-evaluations/{$evaluationId}/registration", [
++            'student_name' => 'Diubah', 'level' => 'beginner',
++            'parent_name' => 'Ibu', 'parent_phone' => '0812',
++        ])->assertStatus(422);
++        $this->postJson("/api/trial-evaluations/{$evaluationId}/registration/submit")->assertStatus(422);
++
++        $this->assertSame('terverifikasi', $reg->fresh()->status);
++    }
++}

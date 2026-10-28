@@ -50,6 +50,13 @@ class User extends Authenticatable
     {
         return $this->hasMany(Student::class, 'created_by');
     }
+	
+	public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class, 'team_user')
+            ->withPivot('role_in_team')
+            ->withTimestamps();
+    }
 
     /**
      * ID sekolah yang boleh diakses trainer ini — dasar isolasi data.

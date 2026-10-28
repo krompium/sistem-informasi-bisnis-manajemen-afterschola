@@ -66,7 +66,7 @@ class EnrollmentController extends Controller
         $registration = $existing?->registration;
 
         // Pendaftaran yang sudah diajukan verifikasi tidak boleh dibatalkan lewat keputusan.
-        if ($registration && $registration->status !== 'draft' && $data['decision'] !== 'lanjut') {
+        if ($registration && ! in_array($registration->status, ['draft', 'perlu_revisi'], true) && $data['decision'] !== 'lanjut') {
             throw ValidationException::withMessages([
                 'decision' => ['Pendaftaran sudah diajukan untuk verifikasi, keputusan tidak dapat diubah.'],
             ]);
@@ -103,7 +103,7 @@ class EnrollmentController extends Controller
         }
 
         $existing = $decision->registration;
-        if ($existing && $existing->status !== 'draft') {
+        if ($existing && ! in_array($existing->status, ['draft', 'perlu_revisi'], true)) {
             throw ValidationException::withMessages([
                 'status' => ['Pendaftaran sudah diajukan untuk verifikasi dan tidak dapat diubah.'],
             ]);
@@ -139,6 +139,12 @@ class EnrollmentController extends Controller
         if (! $registration) {
             throw ValidationException::withMessages([
                 'registration' => ['Isi data pendaftaran terlebih dahulu.'],
+            ]);
+        }
+
+        if (! in_array($registration->status, ['draft', 'perlu_revisi'], true)) {
+            throw ValidationException::withMessages([
+                'status' => ['Pendaftaran sudah diajukan untuk verifikasi.'],
             ]);
         }
 

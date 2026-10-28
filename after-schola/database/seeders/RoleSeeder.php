@@ -31,6 +31,10 @@ class RoleSeeder extends Seeder
             'manage trial evaluations', // lihat & kelola semua evaluasi trial
             'manage enrollment',        // keputusan lanjut/tidak + pendaftaran resmi
             'manage hot issues',     // buat/ubah/nonaktifkan hot issue (popup notifikasi semua role)
+            'verify registrations',  // verifikasi pendaftaran resmi (setujui / minta revisi)
+            'manage invoices',       // lihat invoice, catat pembayaran, batalkan invoice
+            'confirm payments',      // konfirmasi / tolak pembayaran
+            'view finance reports',  // umur piutang & laporan keuangan
         ];
 
         foreach ($permissions as $permission) {
@@ -39,7 +43,7 @@ class RoleSeeder extends Seeder
 
         $roles = [
             'management' => $permissions, // akses penuh
-            'finance' => ['view attendance', 'export data'],
+            'finance' => ['view attendance', 'export data', 'manage invoices', 'confirm payments', 'view finance reports'],
             'hr' => ['view attendance', 'export data'],
             'trainer' => [
                 'add students',
