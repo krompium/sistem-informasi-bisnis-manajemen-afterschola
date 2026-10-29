@@ -77,9 +77,15 @@ class TaskAttachmentTest extends TestCase
 
         Sanctum::actingAs($dev);
 
-        $file = $content === null
-            ? UploadedFile::fake()->create($name, 10, $mime)
-            : UploadedFile::fake()->createWithContent($name, $content);
+        if ($content === null) {
+            $file = UploadedFile::fake()->create($name, 10, $mime);
+        } else {
+            // File palsu dari fake() melaporkan mime dari NAMA, bukan isi, sehingga tidak bisa
+            // menguji deteksi isi. Pakai UploadedFile asli supaya `mimes` benar-benar membaca isinya.
+            $path = tempnam(sys_get_temp_dir(), 'att');
+            file_put_contents($path, $content);
+            $file = new UploadedFile($path, $name, $mime, null, true);
+        }
 
         $this->postJson("/api/tasks/{$task->id}/attachments", ['file' => $file])
             ->assertUnprocessable()
