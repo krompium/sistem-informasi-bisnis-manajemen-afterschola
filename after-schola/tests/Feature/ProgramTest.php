@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
 use App\Models\Lead;
 use App\Models\Program;
+use App\Models\TrialSlot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\MakesFinanceFixtures;
@@ -147,6 +149,25 @@ class ProgramTest extends TestCase
     {
         $program = $this->makeProgram();
         $this->makeRegistration([], $program); // membuat trial evaluation + registration untuk program ini
+        $this->asManagement();
+
+        $this->deleteJson("/api/programs/{$program->id}")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('program');
+
+        $this->assertDatabaseHas('programs', ['id' => $program->id]);
+    }
+
+    public function test_destroy_is_rejected_when_program_has_trial_slots(): void
+    {
+        $program = $this->makeProgram();
+        TrialSlot::create([
+            'branch_id' => Branch::create(['name' => 'Cabang Bandung', 'code' => 'BDG'])->id,
+            'program_id' => $program->id,
+            'trainer_id' => $this->makeUser('trainer')->id,
+            'starts_at' => now()->addDay(),
+            'capacity' => 5,
+        ]);
         $this->asManagement();
 
         $this->deleteJson("/api/programs/{$program->id}")

@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\StudentAttendanceController;
 use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\TrainerAttendanceController;
 use App\Http\Controllers\Api\TrialEvaluationController;
+use App\Http\Controllers\Api\TrialSlotController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\LeadController;
@@ -202,6 +203,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('attachments/{attachment}/download', [TaskAttachmentController::class, 'download']);
 		Route::apiResource('tasks.dependencies', TaskDependencyController::class)->shallow()->only(['index', 'store', 'destroy']);
         Route::get('projects/{project}/gantt', ProjectGanttController::class);
+    });
+
+    // Slot trial (Modul 2, MGT-20) — scope cabang dijaga query + Policy. `options` harus sebelum {trial_slot}.
+    Route::middleware('permission:manage trial slots')->group(function () {
+        Route::get('/trial-slots/options', [TrialSlotController::class, 'options']);
+        Route::apiResource('trial-slots', TrialSlotController::class);
     });
 
     // Master program (Modul 1)

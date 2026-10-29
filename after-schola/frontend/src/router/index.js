@@ -36,6 +36,7 @@ import ProjectBoardView from '@/views/projects/ProjectBoardView.vue'
 import ProjectCalendarView from '@/views/projects/ProjectCalendarView.vue'
 import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
 import ManagementBranchesView from '@/views/management/BranchesView.vue'
+import ManagementTrialSlotsView from '@/views/management/TrialSlotsView.vue'
 
 // 1) Import, di dekat import view publik lain
 
@@ -136,6 +137,12 @@ const routes = [
         name: 'management.branches',
         component: ManagementBranchesView,
         meta: { title: 'Cabang', icon: 'store' },
+      },
+      {
+        path: 'management/slot-trial',
+        name: 'management.trial-slots',
+        component: ManagementTrialSlotsView,
+        meta: { title: 'Slot Trial', icon: 'event_available' },
       },
       {
         path: 'management/program',
