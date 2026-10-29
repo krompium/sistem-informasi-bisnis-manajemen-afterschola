@@ -35,6 +35,9 @@ import ProjectsView from '@/views/projects/ProjectsView.vue'
 import ProjectBoardView from '@/views/projects/ProjectBoardView.vue'
 import ProjectCalendarView from '@/views/projects/ProjectCalendarView.vue'
 import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
+import ManagementBranchesView from '@/views/management/BranchesView.vue'
+
+// 1) Import, di dekat import view publik lain
 
 const routes = [
   {
@@ -85,7 +88,16 @@ const routes = [
       
       
 	  
-	  // ---- Management ----
+
+      // ---- Orang Tua (portal belum dibangun: Fase 2) ----
+      {
+        path: 'portal',
+        name: 'portal.dashboard',
+        component: PlaceholderView,
+        meta: { title: 'Portal Orang Tua', icon: 'family_restroom' },
+      },
+
+      // ---- Management ----
       { path: 'management', name: 'management.dashboard', component: ManagementDashboardView },
       { path: 'management/sekolah-murid', name: 'management.schools', component: ManagementSchoolsAdminView },
       {
@@ -118,6 +130,12 @@ const routes = [
         name: 'management.users',
         component: ManagementUserManagementView,
         meta: { title: 'Manajemen User', icon: 'manage_accounts' },
+      },
+      {
+        path: 'management/cabang',
+        name: 'management.branches',
+        component: ManagementBranchesView,
+        meta: { title: 'Cabang', icon: 'store' },
       },
       {
         path: 'management/program',
@@ -174,6 +192,7 @@ router.beforeEach(async (to) => {
     if (to.path.startsWith('/management') && !auth.isManagement) return auth.homeRoute
     if (to.path.startsWith('/trainer') && !auth.isTrainer) return auth.homeRoute
 	if (to.path.startsWith('/developer') && !auth.isDeveloper) return auth.homeRoute
+    if (to.path.startsWith('/portal') && !auth.isParent) return auth.homeRoute
   }
 
   return true

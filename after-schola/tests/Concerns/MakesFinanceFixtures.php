@@ -8,6 +8,7 @@ use App\Models\Program;
 use App\Models\Registration;
 use App\Models\TrialEvaluation;
 use App\Models\User;
+use App\Support\FunctionPermissions;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -30,6 +31,10 @@ trait MakesFinanceFixtures
             'is_active' => true,
         ]);
         $user->assignRole($role);
+        // Role management tidak lagi memegang permission fungsi; berikan langsung (Modul 0b).
+        if ($role === 'management') {
+            $user->givePermissionTo(FunctionPermissions::ALL);
+        }
 
         return $user;
     }

@@ -172,6 +172,7 @@ class AbsensiFlowTest extends TestCase
     {
         $trainer = $this->makeUser('trainer');
         $management = $this->makeUser('management');
+        $management->givePermissionTo('manage users'); // permission fungsi, diberikan per user (Modul 0b)
 
         $this->actingAs($trainer, 'sanctum')->getJson('/api/users')->assertStatus(403);
         $this->actingAs($management, 'sanctum')->getJson('/api/users')->assertOk();
