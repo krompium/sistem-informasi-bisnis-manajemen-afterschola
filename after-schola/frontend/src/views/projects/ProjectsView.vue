@@ -6,6 +6,7 @@ import api from '@/lib/api'
 import { apiErrorMessage } from '@/lib/apiError'
 import { formatDateShort, unwrap } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
+import { confirmDialog } from '@/lib/feedback'
 
 const auth = useAuthStore()
 
@@ -124,7 +125,7 @@ async function submit() {
 }
 
 async function remove() {
-  if (!window.confirm(`Hapus proyek "${editing.value.name}"?`)) return
+  if (!(await confirmDialog(`Hapus proyek "${editing.value.name}"?`, { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   saving.value = true
   formError.value = ''
   try {

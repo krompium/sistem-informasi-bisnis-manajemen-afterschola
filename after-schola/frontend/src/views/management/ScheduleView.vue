@@ -7,6 +7,7 @@ import api from '@/lib/api'
 import MonthCalendar from '@/components/MonthCalendar.vue'
 import { formatDate, formatDateShort, initials, isOnsite, modeLabel, sessionStatus, sessionTime, unwrap } from '@/lib/format'
 import { usePolling } from '@/lib/usePolling'
+import { confirmDialog, toast } from '@/lib/feedback'
 
 const router = useRouter()
 
@@ -225,12 +226,12 @@ async function submitForm() {
 }
 
 async function removeSession(s) {
-  if (!window.confirm(`Hapus pertemuan #${s.meeting_no} di ${s.school?.name || 'sekolah'}?`)) return
+  if (!(await confirmDialog(`Hapus pertemuan #${s.meeting_no} di ${s.school?.name || 'sekolah'}?`, { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   try {
     await api.delete(`/sessions/${s.id}`)
     await loadSessions()
   } catch (e) {
-    window.alert('Gagal menghapus pertemuan.')
+    toast.error('Gagal menghapus pertemuan.')
   }
 }
 

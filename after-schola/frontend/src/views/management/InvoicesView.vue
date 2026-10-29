@@ -5,6 +5,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatDate, formatRupiah, unwrap } from '@/lib/format'
+import { confirmDialog, toast } from '@/lib/feedback'
 
 const auth = useAuthStore()
 const loading = ref(true)
@@ -47,7 +48,7 @@ async function load() {
     })
     rows.value = unwrap(data)
   } catch (err) {
-    alert(errMsg(err, 'Gagal memuat invoice.'))
+    toast.error(errMsg(err, 'Gagal memuat invoice.'))
   } finally {
     loading.value = false
   }
@@ -79,13 +80,13 @@ async function submitPay() {
 
 // --- Konfirmasi / tolak pembayaran ---
 async function confirmPayment(p) {
-  if (!confirm('Konfirmasi pembayaran ini? Invoice akan berstatus lunas.')) return
+  if (!(await confirmDialog('Konfirmasi pembayaran ini? Invoice akan berstatus lunas.'))) return
   busyId.value = p.id
   try {
     await api.post(`/payments/${p.id}/confirm`)
     await load()
   } catch (err) {
-    alert(errMsg(err, 'Gagal mengonfirmasi pembayaran.'))
+    toast.error(errMsg(err, 'Gagal mengonfirmasi pembayaran.'))
   } finally {
     busyId.value = null
   }

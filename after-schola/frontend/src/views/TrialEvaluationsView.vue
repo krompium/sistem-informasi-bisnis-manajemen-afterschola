@@ -5,6 +5,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/lib/api'
 import { formatDate, unwrap } from '@/lib/format'
+import { confirmDialog, toast } from '@/lib/feedback'
 
 const loading = ref(true)
 const items = ref([])
@@ -107,12 +108,12 @@ async function submitForm() {
 }
 
 async function removeItem(item) {
-  if (!confirm(`Hapus evaluasi trial "${item.participant_name}"?`)) return
+  if (!(await confirmDialog(`Hapus evaluasi trial "${item.participant_name}"?`, { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   try {
     await api.delete(`/trial-evaluations/${item.id}`)
     await load()
   } catch {
-    alert('Gagal menghapus evaluasi.')
+    toast.error('Gagal menghapus evaluasi.')
   }
 }
 

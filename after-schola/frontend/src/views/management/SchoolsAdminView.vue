@@ -4,6 +4,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import api from '@/lib/api'
 import { initials, unwrap } from '@/lib/format'
+import { confirmDialog, toast } from '@/lib/feedback'
 
 const loading = ref(true)
 const schools = ref([])
@@ -156,13 +157,13 @@ async function submitEditSchool() {
 
 async function deleteSchool() {
   if (!selectedSchool.value) return
-  if (!window.confirm(`Hapus sekolah "${selectedSchool.value.name}"? Cuma bisa kalau belum ada mata pelajaran/murid.`)) return
+  if (!(await confirmDialog(`Hapus sekolah "${selectedSchool.value.name}"? Cuma bisa kalau belum ada mata pelajaran/murid.`, { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   try {
     await api.delete(`/schools/${selectedSchoolId.value}`)
     selectedSchoolId.value = null
     await loadSchools()
   } catch (err) {
-    window.alert(err?.response?.data?.message || 'Gagal menghapus sekolah.')
+    toast.error(err?.response?.data?.message || 'Gagal menghapus sekolah.')
   }
 }
 
@@ -260,7 +261,7 @@ async function toggleActive(classroom) {
 }
 
 async function deleteSubject(classroom) {
-  if (!window.confirm(`Hapus permanen "${classroom.name}"? Cuma bisa kalau belum ada murid/pertemuan yang pakai.`)) return
+  if (!(await confirmDialog(`Hapus permanen "${classroom.name}"? Cuma bisa kalau belum ada murid/pertemuan yang pakai.`, { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   rowBusyId.value = classroom.id
   manageError.value = ''
   try {
@@ -356,14 +357,14 @@ async function submitEditStudent() {
 }
 
 async function deleteStudent(student) {
-  if (!window.confirm(`Hapus murid "${student.name}"? Cuma bisa kalau belum ada riwayat absensi.`)) return
+  if (!(await confirmDialog(`Hapus murid "${student.name}"? Cuma bisa kalau belum ada riwayat absensi.`, { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   studentRowBusyId.value = student.id
   try {
     await api.delete(`/students/${student.id}`)
     await selectSchool(selectedSchoolId.value)
   } catch (err) {
     const res = err?.response
-    window.alert(res?.data?.message || 'Gagal menghapus murid.')
+    toast.error(res?.data?.message || 'Gagal menghapus murid.')
   } finally {
     studentRowBusyId.value = null
   }

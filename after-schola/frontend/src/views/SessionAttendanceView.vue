@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import api from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatDate, formatStamp, initials, isOnsite, modeLabel, sessionTime } from '@/lib/format'
+import { confirmDialog } from '@/lib/feedback'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -168,7 +169,7 @@ async function startSession() {
 async function toggleLock() {
   if (!canLock.value) return
   const target = !isLocked.value
-  if (target && !window.confirm('Kunci pertemuan? Absensi tidak dapat diubah lagi setelah dikunci.'))
+  if (target && !(await confirmDialog('Kunci pertemuan? Absensi tidak dapat diubah lagi setelah dikunci.', { title: 'Kunci pertemuan?', confirmText: 'Ya, kunci' })))
     return
   locking.value = true
   try {
