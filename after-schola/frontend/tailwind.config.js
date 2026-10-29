@@ -61,13 +61,13 @@ export default {
         royal: '#1D4ED8',
 		brandNavy: '#08254f', 
 		brandDeepNavy: '#041735', 
-		brandBlue: '#0c3b7a', \
+		brandBlue: '#0c3b7a',
 		brandSun: '#f8b21b', 
 		brandSunDark: '#e59d07', 
 		brandTeal: '#13a58c', 
 		brandGreen: '#10b981', 
 		brandPurple: '#4f46e5', 
-		brandAccordion: '#3b28cc'
+		brandAccordion: '#3b28cc',
       },
       borderRadius: {
         DEFAULT: '0.25rem',

@@ -33,7 +33,6 @@ import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
 import ManagementBranchesView from '@/views/management/BranchesView.vue'
 
 // 1) Import, di dekat import view publik lain
-import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
 import LandingView from '@/views/public/LandingView.vue'
 
 const routes = [

@@ -1,0 +1,919 @@
+diff --git a/after-schola/app/Http/Controllers/Api/ProgramController.php b/after-schola/app/Http/Controllers/Api/ProgramController.php
+index 094de1a..62b8d79 100644
+--- a/after-schola/app/Http/Controllers/Api/ProgramController.php
++++ b/after-schola/app/Http/Controllers/Api/ProgramController.php
+@@ -15,26 +15,26 @@ class ProgramController extends Controller
+ {
+     public function index()
+     {
+-        return ProgramResource::collection(Program::with('jadwalTrial')->latest()->get());
++        return ProgramResource::collection(Program::with(['jadwalTrial', 'levels', 'rubricCriteria'])->latest()->get());
+     }
+ 
+     public function store(StoreProgramRequest $request)
+     {
+         $program = Program::create($request->validated());
+ 
+-        return (new ProgramResource($program->load('jadwalTrial')))->response()->setStatusCode(201);
++        return (new ProgramResource($program->load(['jadwalTrial', 'levels', 'rubricCriteria'])))->response()->setStatusCode(201);
+     }
+ 
+     public function show(Program $program)
+     {
+-        return new ProgramResource($program->load('jadwalTrial'));
++        return new ProgramResource($program->load(['jadwalTrial', 'levels', 'rubricCriteria']));
+     }
+ 
+     public function update(UpdateProgramRequest $request, Program $program)
+     {
+         $program->update($request->validated());
+ 
+-        return new ProgramResource($program->load('jadwalTrial'));
++        return new ProgramResource($program->load(['jadwalTrial', 'levels', 'rubricCriteria']));
+     }
+ 
+     public function destroy(Program $program)
+diff --git a/after-schola/app/Http/Controllers/Api/ProgramLevelController.php b/after-schola/app/Http/Controllers/Api/ProgramLevelController.php
+new file mode 100644
+index 0000000..0d9054e
+--- /dev/null
++++ b/after-schola/app/Http/Controllers/Api/ProgramLevelController.php
+@@ -0,0 +1,43 @@
++<?php
++
++namespace App\Http\Controllers\Api;
++
++use App\Http\Controllers\Controller;
++use App\Http\Requests\SaveProgramLevelRequest;
++use App\Http\Resources\ProgramLevelResource;
++use App\Models\Program;
++use App\Models\ProgramLevel;
++
++class ProgramLevelController extends Controller
++{
++    public function index(Program $program)
++    {
++        return ProgramLevelResource::collection($program->levels);
++    }
++
++    public function store(SaveProgramLevelRequest $request, Program $program)
++    {
++        $level = $program->levels()->create($request->safe()->merge([
++            'sort_order' => $request->integer('sort_order'),
++        ])->all());
++
++        return (new ProgramLevelResource($level))->response()->setStatusCode(201);
++    }
++
++    public function update(SaveProgramLevelRequest $request, Program $program, ProgramLevel $level)
++    {
++        $level->update($request->safe()->merge([
++            'sort_order' => $request->integer('sort_order', $level->sort_order),
++        ])->all());
++
++        return new ProgramLevelResource($level);
++    }
++
++    // TODO(nanti): tolak bila level sudah dipakai class_groups (Modul 6) — FK restrict di sana.
++    public function destroy(Program $program, ProgramLevel $level)
++    {
++        $level->delete();
++
++        return response()->noContent();
++    }
++}
+diff --git a/after-schola/app/Http/Controllers/Api/RubricCriterionController.php b/after-schola/app/Http/Controllers/Api/RubricCriterionController.php
+new file mode 100644
+index 0000000..e3386e1
+--- /dev/null
++++ b/after-schola/app/Http/Controllers/Api/RubricCriterionController.php
+@@ -0,0 +1,39 @@
++<?php
++
++namespace App\Http\Controllers\Api;
++
++use App\Http\Controllers\Controller;
++use App\Http\Requests\SaveRubricCriterionRequest;
++use App\Http\Resources\RubricCriterionResource;
++use App\Models\Program;
++use App\Models\RubricCriterion;
++
++class RubricCriterionController extends Controller
++{
++    public function index(Program $program)
++    {
++        return RubricCriterionResource::collection($program->rubricCriteria);
++    }
++
++    public function store(SaveRubricCriterionRequest $request, Program $program)
++    {
++        $criterion = $program->rubricCriteria()->create($request->validated());
++
++        return (new RubricCriterionResource($criterion))->response()->setStatusCode(201);
++    }
++
++    public function update(SaveRubricCriterionRequest $request, Program $program, RubricCriterion $rubricCriterion)
++    {
++        $rubricCriterion->update($request->validated());
++
++        return new RubricCriterionResource($rubricCriterion);
++    }
++
++    // TODO(nanti): tolak bila kriteria sudah punya skor evaluasi (Fase 4) — FK restrict di evaluation_scores.
++    public function destroy(Program $program, RubricCriterion $rubricCriterion)
++    {
++        $rubricCriterion->delete();
++
++        return response()->noContent();
++    }
++}
+diff --git a/after-schola/app/Http/Requests/SaveProgramLevelRequest.php b/after-schola/app/Http/Requests/SaveProgramLevelRequest.php
+new file mode 100644
+index 0000000..ea82aa7
+--- /dev/null
++++ b/after-schola/app/Http/Requests/SaveProgramLevelRequest.php
+@@ -0,0 +1,27 @@
++<?php
++
++namespace App\Http\Requests;
++
++use Illuminate\Foundation\Http\FormRequest;
++use Illuminate\Validation\Rule;
++
++class SaveProgramLevelRequest extends FormRequest
++{
++    public function authorize(): bool
++    {
++        return true; // dijaga middleware permission:manage programs
++    }
++
++    public function rules(): array
++    {
++        return [
++            'name' => [
++                'required', 'string', 'max:100',
++                Rule::unique('program_levels', 'name')
++                    ->where('program_id', $this->route('program')->id)
++                    ->ignore($this->route('level')?->id),
++            ],
++            'sort_order' => ['nullable', 'integer', 'min:0'],
++        ];
++    }
++}
+diff --git a/after-schola/app/Http/Requests/SaveRubricCriterionRequest.php b/after-schola/app/Http/Requests/SaveRubricCriterionRequest.php
+new file mode 100644
+index 0000000..5be6b40
+--- /dev/null
++++ b/after-schola/app/Http/Requests/SaveRubricCriterionRequest.php
+@@ -0,0 +1,21 @@
++<?php
++
++namespace App\Http\Requests;
++
++use Illuminate\Foundation\Http\FormRequest;
++
++class SaveRubricCriterionRequest extends FormRequest
++{
++    public function authorize(): bool
++    {
++        return true; // dijaga middleware permission:manage programs
++    }
++
++    public function rules(): array
++    {
++        return [
++            'name' => ['required', 'string', 'max:100'],
++            'max_score' => ['required', 'integer', 'min:1', 'max:1000'],
++        ];
++    }
++}
+diff --git a/after-schola/app/Http/Resources/ProgramLevelResource.php b/after-schola/app/Http/Resources/ProgramLevelResource.php
+new file mode 100644
+index 0000000..4800cc2
+--- /dev/null
++++ b/after-schola/app/Http/Resources/ProgramLevelResource.php
+@@ -0,0 +1,18 @@
++<?php
++
++namespace App\Http\Resources;
++
++use Illuminate\Http\Request;
++use Illuminate\Http\Resources\Json\JsonResource;
++
++class ProgramLevelResource extends JsonResource
++{
++    public function toArray(Request $request): array
++    {
++        return [
++            'id' => $this->id,
++            'name' => $this->name,
++            'sort_order' => $this->sort_order,
++        ];
++    }
++}
+diff --git a/after-schola/app/Http/Resources/ProgramResource.php b/after-schola/app/Http/Resources/ProgramResource.php
+index 77d00d6..23e891a 100644
+--- a/after-schola/app/Http/Resources/ProgramResource.php
++++ b/after-schola/app/Http/Resources/ProgramResource.php
+@@ -23,6 +23,8 @@ public function toArray(Request $request): array
+                 'description' => $this->description,
+                 'price' => $this->price,
+                 'is_active' => $this->is_active,
++                'levels' => ProgramLevelResource::collection($this->whenLoaded('levels')),
++                'rubric_criteria' => RubricCriterionResource::collection($this->whenLoaded('rubricCriteria')),
+                 'jadwal_trial' => ProgramTrialScheduleResource::collection($this->whenLoaded('jadwalTrial')),
+                 'created_at' => $this->created_at,
+                 'updated_at' => $this->updated_at,
+diff --git a/after-schola/app/Http/Resources/RubricCriterionResource.php b/after-schola/app/Http/Resources/RubricCriterionResource.php
+new file mode 100644
+index 0000000..b6b87b0
+--- /dev/null
++++ b/after-schola/app/Http/Resources/RubricCriterionResource.php
+@@ -0,0 +1,18 @@
++<?php
++
++namespace App\Http\Resources;
++
++use Illuminate\Http\Request;
++use Illuminate\Http\Resources\Json\JsonResource;
++
++class RubricCriterionResource extends JsonResource
++{
++    public function toArray(Request $request): array
++    {
++        return [
++            'id' => $this->id,
++            'name' => $this->name,
++            'max_score' => $this->max_score,
++        ];
++    }
++}
+diff --git a/after-schola/app/Models/Program.php b/after-schola/app/Models/Program.php
+index 04730da..00d5150 100644
+--- a/after-schola/app/Models/Program.php
++++ b/after-schola/app/Models/Program.php
+@@ -31,6 +31,16 @@ public function jadwalTrial()
+         return $this->hasMany(ProgramTrialSchedule::class);
+     }
+ 
++    public function levels()
++    {
++        return $this->hasMany(ProgramLevel::class)->orderBy('sort_order')->orderBy('id');
++    }
++
++    public function rubricCriteria()
++    {
++        return $this->hasMany(RubricCriterion::class)->orderBy('id');
++    }
++
+     /** MGT-13: program yang sudah dipakai tidak boleh dihapus, cukup dinonaktifkan. */
+     public function isInUse(): bool
+     {
+diff --git a/after-schola/app/Models/ProgramLevel.php b/after-schola/app/Models/ProgramLevel.php
+new file mode 100644
+index 0000000..59d68e6
+--- /dev/null
++++ b/after-schola/app/Models/ProgramLevel.php
+@@ -0,0 +1,16 @@
++<?php
++
++namespace App\Models;
++
++use Illuminate\Database\Eloquent\Model;
++use Illuminate\Database\Eloquent\Relations\BelongsTo;
++
++class ProgramLevel extends Model
++{
++    protected $fillable = ['name', 'sort_order'];
++
++    public function program(): BelongsTo
++    {
++        return $this->belongsTo(Program::class);
++    }
++}
+diff --git a/after-schola/app/Models/RubricCriterion.php b/after-schola/app/Models/RubricCriterion.php
+new file mode 100644
+index 0000000..819ba12
+--- /dev/null
++++ b/after-schola/app/Models/RubricCriterion.php
+@@ -0,0 +1,18 @@
++<?php
++
++namespace App\Models;
++
++use Illuminate\Database\Eloquent\Model;
++use Illuminate\Database\Eloquent\Relations\BelongsTo;
++
++class RubricCriterion extends Model
++{
++    protected $table = 'rubric_criteria';
++
++    protected $fillable = ['name', 'max_score'];
++
++    public function program(): BelongsTo
++    {
++        return $this->belongsTo(Program::class);
++    }
++}
+diff --git a/after-schola/database/migrations/2026_10_29_000002_create_program_levels_table.php b/after-schola/database/migrations/2026_10_29_000002_create_program_levels_table.php
+new file mode 100644
+index 0000000..8c68c03
+--- /dev/null
++++ b/after-schola/database/migrations/2026_10_29_000002_create_program_levels_table.php
+@@ -0,0 +1,26 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class extends Migration
++{
++    public function up(): void
++    {
++        Schema::create('program_levels', function (Blueprint $table) {
++            $table->id();
++            $table->foreignId('program_id')->constrained('programs')->cascadeOnDelete();
++            $table->string('name', 100);
++            $table->unsignedInteger('sort_order')->default(0);
++            $table->timestamps();
++
++            $table->unique(['program_id', 'name']);
++        });
++    }
++
++    public function down(): void
++    {
++        Schema::dropIfExists('program_levels');
++    }
++};
+diff --git a/after-schola/database/migrations/2026_10_29_000003_create_rubric_criteria_table.php b/after-schola/database/migrations/2026_10_29_000003_create_rubric_criteria_table.php
+new file mode 100644
+index 0000000..22261f5
+--- /dev/null
++++ b/after-schola/database/migrations/2026_10_29_000003_create_rubric_criteria_table.php
+@@ -0,0 +1,24 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class extends Migration
++{
++    public function up(): void
++    {
++        Schema::create('rubric_criteria', function (Blueprint $table) {
++            $table->id();
++            $table->foreignId('program_id')->constrained('programs')->cascadeOnDelete();
++            $table->string('name', 100);
++            $table->unsignedSmallInteger('max_score');
++            $table->timestamps();
++        });
++    }
++
++    public function down(): void
++    {
++        Schema::dropIfExists('rubric_criteria');
++    }
++};
+diff --git a/after-schola/frontend/src/router/index.js b/after-schola/frontend/src/router/index.js
+index 373563a..b6756a5 100644
+--- a/after-schola/frontend/src/router/index.js
++++ b/after-schola/frontend/src/router/index.js
+@@ -25,6 +25,7 @@ import ExpoReportsView from '@/views/ExpoReportsView.vue'
+ import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
+ import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
+ import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
++import ManagementProgramDetailView from '@/views/management/ProgramDetailView.vue'
+ import DeveloperDashboardView from '@/views/developer/DeveloperDashboardView.vue'
+ import ManagementTeamsView from '@/views/management/TeamsView.vue'
+ import ProjectsView from '@/views/projects/ProjectsView.vue'
+@@ -117,6 +118,12 @@ const routes = [
+         name: 'management.programs',
+         component: ManagementProgramView,
+         meta: { title: 'Program & Promosi', icon: 'inventory_2' },
++      },
++      {
++        path: 'management/program/:id',
++        name: 'management.programs.detail',
++        component: ManagementProgramDetailView,
++        meta: { title: 'Detail Program', icon: 'inventory_2' },
+       },
+ 	  { path: 'management/team', name: 'management.teams', component: ManagementTeamsView },
+       { path: 'management/proyek', name: 'management.projects', component: ProjectsView },
+diff --git a/after-schola/frontend/src/views/management/ProgramDetailView.vue b/after-schola/frontend/src/views/management/ProgramDetailView.vue
+new file mode 100644
+index 0000000..07bb920
+--- /dev/null
++++ b/after-schola/frontend/src/views/management/ProgramDetailView.vue
+@@ -0,0 +1,172 @@
++<script setup>
++// Detail program: kelola level (MGT-11) dan kriteria rubrik (MGT-12). Dua daftar CRUD memakai satu pola.
++import { onMounted, reactive, ref } from 'vue'
++import { useRoute } from 'vue-router'
++import api from '@/lib/api'
++
++const route = useRoute()
++const programId = route.params.id
++
++const sections = [
++  {
++    key: 'levels',
++    endpoint: 'levels',
++    title: 'Level',
++    hint: 'Tingkat kemampuan dalam program. Rekomendasi hasil trial dipilih dari daftar ini.',
++    fields: [
++      { name: 'name', label: 'Nama level', type: 'text', placeholder: 'mis. Dasar' },
++      { name: 'sort_order', label: 'Urutan', type: 'number', placeholder: '0' },
++    ],
++  },
++  {
++    key: 'rubric_criteria',
++    endpoint: 'rubric-criteria',
++    title: 'Rubrik penilaian',
++    hint: 'Kriteria yang dinilai trainer pada evaluasi periodik, beserta skor maksimumnya.',
++    fields: [
++      { name: 'name', label: 'Nama kriteria', type: 'text', placeholder: 'mis. Logika' },
++      { name: 'max_score', label: 'Skor maks', type: 'number', placeholder: '10' },
++    ],
++  },
++]
++
++const INPUT =
++  'min-w-0 rounded-lg border border-outline-variant bg-white px-space-sm py-2 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none'
++
++const program = ref(null)
++const loading = ref(true)
++const drafts = reactive({ levels: {}, rubric_criteria: {} })
++const errors = reactive({ levels: '', rubric_criteria: '' })
++
++function errorMessage(e) {
++  const first = Object.values(e?.response?.data?.errors ?? {})[0]?.[0]
++  return first || e?.response?.data?.message || 'Terjadi kesalahan.'
++}
++
++async function load() {
++  try {
++    const { data } = await api.get(`/programs/${programId}`)
++    program.value = data.data ?? data
++  } finally {
++    loading.value = false
++  }
++}
++
++async function run(section, request) {
++  errors[section.key] = ''
++  try {
++    await request()
++    await load()
++  } catch (e) {
++    errors[section.key] = errorMessage(e)
++  }
++}
++
++const url = (section, row) =>
++  `/programs/${programId}/${section.endpoint}` + (row ? `/${row.id}` : '')
++
++function payload(section, source) {
++  return Object.fromEntries(section.fields.map((f) => [f.name, source[f.name] ?? '']))
++}
++
++function add(section) {
++  run(section, async () => {
++    await api.post(url(section), payload(section, drafts[section.key]))
++    drafts[section.key] = {}
++  })
++}
++
++function save(section, row) {
++  run(section, () => api.put(url(section, row), payload(section, row)))
++}
++
++function remove(section, row) {
++  if (!window.confirm(`Hapus "${row.name}"?`)) return
++  run(section, () => api.delete(url(section, row)))
++}
++
++onMounted(load)
++</script>
++
++<template>
++  <div class="flex w-full flex-col gap-space-lg pb-space-3xl">
++    <div class="flex flex-col gap-space-2xs pt-space-xl">
++      <RouterLink
++        :to="{ name: 'management.programs' }"
++        class="inline-flex items-center gap-1 self-start font-label-md text-label-md text-secondary hover:underline"
++      >
++        <span class="material-symbols-outlined text-[16px]">arrow_back</span>
++        Program & Trial
++      </RouterLink>
++      <h1 class="font-headline-xl text-headline-xl font-bold tracking-tight text-on-surface">
++        {{ program?.name ?? 'Detail Program' }}
++      </h1>
++      <p v-if="program" class="font-body-md text-body-md text-on-surface-variant">
++        {{ [program.jenjang, program.tipe].filter(Boolean).join(' • ') }}
++      </p>
++    </div>
++
++    <div v-if="loading" class="h-40 animate-pulse rounded-2xl bg-surface-container"></div>
++
++    <template v-else-if="program">
++      <section
++        v-for="section in sections"
++        :key="section.key"
++        class="rounded-2xl bg-surface-container-lowest p-space-md shadow-sm"
++      >
++        <h2 class="font-headline-md text-headline-md text-on-surface">{{ section.title }}</h2>
++        <p class="font-body-sm text-body-sm text-on-surface-variant">{{ section.hint }}</p>
++
++        <p v-if="errors[section.key]" class="mt-space-sm rounded-lg bg-error-container px-space-sm py-2 font-body-sm text-body-sm text-on-error-container">
++          {{ errors[section.key] }}
++        </p>
++
++        <p v-if="!program[section.key].length" class="py-space-md font-body-md text-body-md text-outline">
++          Belum ada data.
++        </p>
++
++        <div
++          v-for="row in program[section.key]"
++          :key="row.id"
++          class="mt-space-sm flex flex-wrap items-center gap-space-xs"
++        >
++          <input
++            v-for="f in section.fields"
++            :key="f.name"
++            v-model="row[f.name]"
++            :type="f.type"
++            :min="f.type === 'number' ? 0 : undefined"
++            :aria-label="f.label"
++            :class="[INPUT, f.type === 'number' ? 'w-24' : 'flex-1']"
++          />
++          <button class="rounded-lg p-2 text-primary hover:bg-surface-container" title="Simpan" @click="save(section, row)">
++            <span class="material-symbols-outlined text-[20px]">save</span>
++          </button>
++          <button class="rounded-lg p-2 text-error hover:bg-error-container" title="Hapus" @click="remove(section, row)">
++            <span class="material-symbols-outlined text-[20px]">delete</span>
++          </button>
++        </div>
++
++        <div class="mt-space-md flex flex-wrap items-center gap-space-xs border-t border-surface-container pt-space-md">
++          <input
++            v-for="f in section.fields"
++            :key="f.name"
++            v-model="drafts[section.key][f.name]"
++            :type="f.type"
++            :min="f.type === 'number' ? 0 : undefined"
++            :placeholder="f.placeholder"
++            :aria-label="f.label"
++            :class="[INPUT, f.type === 'number' ? 'w-24' : 'flex-1']"
++          />
++          <button
++            class="inline-flex items-center gap-1 rounded-xl bg-primary-container px-space-md py-2 font-label-lg text-label-lg text-on-primary hover:opacity-95"
++            @click="add(section)"
++          >
++            <span class="material-symbols-outlined text-[18px]">add</span>
++            Tambah
++          </button>
++        </div>
++      </section>
++    </template>
++  </div>
++</template>
+diff --git a/after-schola/frontend/src/views/management/ProgramManagementView.vue b/after-schola/frontend/src/views/management/ProgramManagementView.vue
+index 532625c..8540589 100644
+--- a/after-schola/frontend/src/views/management/ProgramManagementView.vue
++++ b/after-schola/frontend/src/views/management/ProgramManagementView.vue
+@@ -220,6 +220,13 @@ onMounted(() => {
+           <button class="rounded-lg p-1.5 text-primary hover:bg-surface-container" :title="p.is_active ? 'Nonaktifkan' : 'Aktifkan'" @click="toggleActive(p)">
+             <span class="material-symbols-outlined text-[18px]">{{ p.is_active ? 'toggle_on' : 'toggle_off' }}</span>
+           </button>
++          <RouterLink
++            class="rounded-lg p-1.5 text-secondary hover:bg-surface-container"
++            title="Level & rubrik"
++            :to="{ name: 'management.programs.detail', params: { id: p.id } }"
++          >
++            <span class="material-symbols-outlined text-[18px]">tune</span>
++          </RouterLink>
+           <button class="rounded-lg p-1.5 text-secondary hover:bg-surface-container" title="Ubah program" @click="openEdit(p)">
+             <span class="material-symbols-outlined text-[18px]">edit</span>
+           </button>
+diff --git a/after-schola/routes/api.php b/after-schola/routes/api.php
+index 8a08f19..a4c7fde 100644
+--- a/after-schola/routes/api.php
++++ b/after-schola/routes/api.php
+@@ -22,6 +22,8 @@
+ use Illuminate\Support\Facades\Route;
+ use App\Http\Controllers\Api\LeadController;
+ use App\Http\Controllers\Api\ProgramController;
++use App\Http\Controllers\Api\ProgramLevelController;
++use App\Http\Controllers\Api\RubricCriterionController;
+ use App\Http\Controllers\Api\ProjectController;
+ use App\Http\Controllers\Api\TeamController;
+ use App\Http\Controllers\Api\TaskController;
+@@ -189,5 +191,17 @@
+         Route::apiResource('programs', ProgramController::class);
+         Route::post('/programs/{program}/jadwal-trial', [ProgramController::class, 'storeJadwalTrial']);
+         Route::delete('/programs/{program}/jadwal-trial/{jadwal}', [ProgramController::class, 'destroyJadwalTrial']);
++
++        Route::scopeBindings()->group(function () {
++            Route::get('/programs/{program}/levels', [ProgramLevelController::class, 'index']);
++            Route::post('/programs/{program}/levels', [ProgramLevelController::class, 'store']);
++            Route::put('/programs/{program}/levels/{level}', [ProgramLevelController::class, 'update']);
++            Route::delete('/programs/{program}/levels/{level}', [ProgramLevelController::class, 'destroy']);
++
++            Route::get('/programs/{program}/rubric-criteria', [RubricCriterionController::class, 'index']);
++            Route::post('/programs/{program}/rubric-criteria', [RubricCriterionController::class, 'store']);
++            Route::put('/programs/{program}/rubric-criteria/{rubricCriterion}', [RubricCriterionController::class, 'update']);
++            Route::delete('/programs/{program}/rubric-criteria/{rubricCriterion}', [RubricCriterionController::class, 'destroy']);
++        });
+     });
+ });
+diff --git a/after-schola/tests/Feature/ProgramLevelTest.php b/after-schola/tests/Feature/ProgramLevelTest.php
+new file mode 100644
+index 0000000..379fc07
+--- /dev/null
++++ b/after-schola/tests/Feature/ProgramLevelTest.php
+@@ -0,0 +1,150 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\Program;
++use App\Models\ProgramLevel;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Laravel\Sanctum\Sanctum;
++use Tests\Concerns\MakesFinanceFixtures;
++use Tests\TestCase;
++
++/**
++ * Modul 1, slice 2: level per program (MGT-11).
++ */
++class ProgramLevelTest extends TestCase
++{
++    use MakesFinanceFixtures, RefreshDatabase;
++
++    private Program $program;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seedRoles();
++        $this->program = $this->makeProgram();
++    }
++
++    private function asManagement(): void
++    {
++        Sanctum::actingAs($this->makeUser('management'));
++    }
++
++    private function url(string $suffix = ''): string
++    {
++        return "/api/programs/{$this->program->id}/levels{$suffix}";
++    }
++
++    public function test_guest_gets_401_and_roles_without_permission_get_403(): void
++    {
++        $level = $this->program->levels()->create(['name' => 'Dasar', 'sort_order' => 1]);
++
++        $this->getJson($this->url())->assertStatus(401);
++
++        foreach (['trainer', 'finance'] as $role) {
++            Sanctum::actingAs($this->makeUser($role));
++            $this->getJson($this->url())->assertStatus(403);
++            $this->postJson($this->url(), ['name' => 'Lanjut'])->assertStatus(403);
++            $this->putJson($this->url("/{$level->id}"), ['name' => 'X'])->assertStatus(403);
++            $this->deleteJson($this->url("/{$level->id}"))->assertStatus(403);
++        }
++
++        $this->assertDatabaseCount('program_levels', 1);
++    }
++
++    public function test_index_lists_only_this_programs_levels_ordered_by_sort_order(): void
++    {
++        $this->program->levels()->create(['name' => 'Lanjut', 'sort_order' => 2]);
++        $this->program->levels()->create(['name' => 'Dasar', 'sort_order' => 1]);
++        $other = Program::create(['name' => 'Lain', 'tipe' => 'online', 'price' => 1, 'is_active' => true]);
++        $other->levels()->create(['name' => 'Level Lain', 'sort_order' => 1]);
++        $this->asManagement();
++
++        $names = collect($this->getJson($this->url())->assertOk()->json('data'))->pluck('name')->all();
++
++        $this->assertSame(['Dasar', 'Lanjut'], $names);
++    }
++
++    public function test_program_resource_embeds_levels_in_order(): void
++    {
++        $this->program->levels()->create(['name' => 'Lanjut', 'sort_order' => 2]);
++        $this->program->levels()->create(['name' => 'Dasar', 'sort_order' => 1]);
++        $this->asManagement();
++
++        $this->getJson("/api/programs/{$this->program->id}")
++            ->assertOk()
++            ->assertJsonPath('data.levels.0.name', 'Dasar')
++            ->assertJsonPath('data.levels.1.name', 'Lanjut');
++    }
++
++    public function test_store_creates_level(): void
++    {
++        $this->asManagement();
++
++        $this->postJson($this->url(), ['name' => 'Dasar', 'sort_order' => 1])
++            ->assertStatus(201)
++            ->assertJsonPath('data.name', 'Dasar')
++            ->assertJsonPath('data.sort_order', 1);
++
++        $this->assertDatabaseHas('program_levels', ['program_id' => $this->program->id, 'name' => 'Dasar']);
++    }
++
++    public function test_store_validates_name_and_uniqueness_per_program(): void
++    {
++        $this->program->levels()->create(['name' => 'Dasar', 'sort_order' => 1]);
++        $this->asManagement();
++
++        $this->postJson($this->url(), [])->assertStatus(422)->assertJsonValidationErrors('name');
++        $this->postJson($this->url(), ['name' => 'Dasar'])->assertStatus(422)->assertJsonValidationErrors('name');
++        $this->postJson($this->url(), ['name' => 'X', 'sort_order' => -1])->assertStatus(422)->assertJsonValidationErrors('sort_order');
++
++        // nama yang sama boleh di program lain
++        $other = Program::create(['name' => 'Lain', 'tipe' => 'online', 'price' => 1, 'is_active' => true]);
++        $this->postJson("/api/programs/{$other->id}/levels", ['name' => 'Dasar'])->assertStatus(201);
++    }
++
++    public function test_update_allows_own_name_but_rejects_sibling_name(): void
++    {
++        $dasar = $this->program->levels()->create(['name' => 'Dasar', 'sort_order' => 1]);
++        $this->program->levels()->create(['name' => 'Lanjut', 'sort_order' => 2]);
++        $this->asManagement();
++
++        $this->putJson($this->url("/{$dasar->id}"), ['name' => 'Dasar', 'sort_order' => 5])
++            ->assertOk()->assertJsonPath('data.sort_order', 5);
++
++        $this->putJson($this->url("/{$dasar->id}"), ['name' => 'Lanjut'])
++            ->assertStatus(422)->assertJsonValidationErrors('name');
++    }
++
++    public function test_destroy_removes_level(): void
++    {
++        $level = $this->program->levels()->create(['name' => 'Dasar', 'sort_order' => 1]);
++        $this->asManagement();
++
++        $this->deleteJson($this->url("/{$level->id}"))->assertStatus(204);
++
++        $this->assertDatabaseMissing('program_levels', ['id' => $level->id]);
++    }
++
++    public function test_level_of_another_program_is_404(): void
++    {
++        $other = Program::create(['name' => 'Lain', 'tipe' => 'online', 'price' => 1, 'is_active' => true]);
++        $foreign = $other->levels()->create(['name' => 'Milik Lain', 'sort_order' => 1]);
++        $this->asManagement();
++
++        $this->putJson($this->url("/{$foreign->id}"), ['name' => 'Dibajak'])->assertStatus(404);
++        $this->deleteJson($this->url("/{$foreign->id}"))->assertStatus(404);
++
++        $this->assertSame('Milik Lain', ProgramLevel::find($foreign->id)->name);
++    }
++
++    public function test_deleting_unused_program_removes_its_levels(): void
++    {
++        $this->program->levels()->create(['name' => 'Dasar', 'sort_order' => 1]);
++        $this->asManagement();
++
++        $this->deleteJson("/api/programs/{$this->program->id}")->assertStatus(204);
++
++        $this->assertDatabaseCount('program_levels', 0);
++    }
++}
+diff --git a/after-schola/tests/Feature/RubricCriterionTest.php b/after-schola/tests/Feature/RubricCriterionTest.php
+new file mode 100644
+index 0000000..e9e24f5
+--- /dev/null
++++ b/after-schola/tests/Feature/RubricCriterionTest.php
+@@ -0,0 +1,126 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\Program;
++use App\Models\RubricCriterion;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Laravel\Sanctum\Sanctum;
++use Tests\Concerns\MakesFinanceFixtures;
++use Tests\TestCase;
++
++/**
++ * Modul 1, slice 2: kriteria rubrik penilaian per program (MGT-12).
++ */
++class RubricCriterionTest extends TestCase
++{
++    use MakesFinanceFixtures, RefreshDatabase;
++
++    private Program $program;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seedRoles();
++        $this->program = $this->makeProgram();
++    }
++
++    private function asManagement(): void
++    {
++        Sanctum::actingAs($this->makeUser('management'));
++    }
++
++    private function url(string $suffix = ''): string
++    {
++        return "/api/programs/{$this->program->id}/rubric-criteria{$suffix}";
++    }
++
++    public function test_guest_gets_401_and_roles_without_permission_get_403(): void
++    {
++        $criterion = $this->program->rubricCriteria()->create(['name' => 'Logika', 'max_score' => 10]);
++
++        $this->getJson($this->url())->assertStatus(401);
++
++        foreach (['trainer', 'finance'] as $role) {
++            Sanctum::actingAs($this->makeUser($role));
++            $this->getJson($this->url())->assertStatus(403);
++            $this->postJson($this->url(), ['name' => 'Kreativitas', 'max_score' => 10])->assertStatus(403);
++            $this->putJson($this->url("/{$criterion->id}"), ['name' => 'X', 'max_score' => 5])->assertStatus(403);
++            $this->deleteJson($this->url("/{$criterion->id}"))->assertStatus(403);
++        }
++
++        $this->assertDatabaseCount('rubric_criteria', 1);
++    }
++
++    public function test_index_lists_only_this_programs_criteria(): void
++    {
++        $this->program->rubricCriteria()->create(['name' => 'Logika', 'max_score' => 10]);
++        $other = Program::create(['name' => 'Lain', 'tipe' => 'online', 'price' => 1, 'is_active' => true]);
++        $other->rubricCriteria()->create(['name' => 'Milik Lain', 'max_score' => 5]);
++        $this->asManagement();
++
++        $names = collect($this->getJson($this->url())->assertOk()->json('data'))->pluck('name')->all();
++
++        $this->assertSame(['Logika'], $names);
++    }
++
++    public function test_program_resource_embeds_rubric_criteria(): void
++    {
++        $this->program->rubricCriteria()->create(['name' => 'Logika', 'max_score' => 10]);
++        $this->asManagement();
++
++        $this->getJson("/api/programs/{$this->program->id}")
++            ->assertOk()
++            ->assertJsonPath('data.rubric_criteria.0.name', 'Logika')
++            ->assertJsonPath('data.rubric_criteria.0.max_score', 10);
++    }
++
++    public function test_store_creates_criterion(): void
++    {
++        $this->asManagement();
++
++        $this->postJson($this->url(), ['name' => 'Logika', 'max_score' => 10])
++            ->assertStatus(201)
++            ->assertJsonPath('data.name', 'Logika')
++            ->assertJsonPath('data.max_score', 10);
++
++        $this->assertDatabaseHas('rubric_criteria', ['program_id' => $this->program->id, 'name' => 'Logika', 'max_score' => 10]);
++    }
++
++    public function test_store_validates_name_and_max_score(): void
++    {
++        $this->asManagement();
++
++        $this->postJson($this->url(), [])->assertStatus(422)->assertJsonValidationErrors(['name', 'max_score']);
++        $this->postJson($this->url(), ['name' => 'X', 'max_score' => 0])->assertStatus(422)->assertJsonValidationErrors('max_score');
++        $this->postJson($this->url(), ['name' => 'X', 'max_score' => 'sepuluh'])->assertStatus(422)->assertJsonValidationErrors('max_score');
++
++        $this->assertDatabaseCount('rubric_criteria', 0);
++    }
++
++    public function test_update_and_destroy(): void
++    {
++        $criterion = $this->program->rubricCriteria()->create(['name' => 'Logika', 'max_score' => 10]);
++        $this->asManagement();
++
++        $this->putJson($this->url("/{$criterion->id}"), ['name' => 'Logika Berpikir', 'max_score' => 20])
++            ->assertOk()
++            ->assertJsonPath('data.name', 'Logika Berpikir')
++            ->assertJsonPath('data.max_score', 20);
++
++        $this->deleteJson($this->url("/{$criterion->id}"))->assertStatus(204);
++        $this->assertDatabaseMissing('rubric_criteria', ['id' => $criterion->id]);
++    }
++
++    public function test_criterion_of_another_program_is_404(): void
++    {
++        $other = Program::create(['name' => 'Lain', 'tipe' => 'online', 'price' => 1, 'is_active' => true]);
++        $foreign = $other->rubricCriteria()->create(['name' => 'Milik Lain', 'max_score' => 5]);
++        $this->asManagement();
++
++        $this->putJson($this->url("/{$foreign->id}"), ['name' => 'Dibajak', 'max_score' => 1])->assertStatus(404);
++        $this->deleteJson($this->url("/{$foreign->id}"))->assertStatus(404);
++
++        $this->assertSame('Milik Lain', RubricCriterion::find($foreign->id)->name);
++    }
++}

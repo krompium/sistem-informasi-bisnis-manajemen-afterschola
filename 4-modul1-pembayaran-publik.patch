@@ -1,0 +1,744 @@
+diff --git a/after-schola/app/Http/Controllers/Api/PaymentSettingController.php b/after-schola/app/Http/Controllers/Api/PaymentSettingController.php
+new file mode 100644
+index 0000000..b3a0996
+--- /dev/null
++++ b/after-schola/app/Http/Controllers/Api/PaymentSettingController.php
+@@ -0,0 +1,33 @@
++<?php
++
++namespace App\Http\Controllers\Api;
++
++use App\Http\Controllers\Controller;
++use App\Http\Resources\PaymentSettingResource;
++use App\Models\PaymentSetting;
++use Illuminate\Http\Request;
++
++class PaymentSettingController extends Controller
++{
++    public function show()
++    {
++        return new PaymentSettingResource(PaymentSetting::current());
++    }
++
++    // Endpoint berdiri sendiri: validate() inline (konvensi §5.2).
++    // TODO(nanti): interval reminder baru dipakai scheduler SYS-04 (sisa Modul 5).
++    public function update(Request $request)
++    {
++        $validated = $request->validate([
++            'due_days' => ['required', 'integer', 'min:1', 'max:90'],
++            'reminder_interval_days' => ['required', 'integer', 'min:1', 'max:30'],
++            'payment_instructions' => ['nullable', 'string', 'max:2000'],
++            'bank_account' => ['nullable', 'string', 'max:500'],
++        ]);
++
++        $setting = PaymentSetting::current();
++        $setting->update($validated);
++
++        return new PaymentSettingResource($setting);
++    }
++}
+diff --git a/after-schola/app/Http/Controllers/Api/ProgramController.php b/after-schola/app/Http/Controllers/Api/ProgramController.php
+index 62b8d79..813ec34 100644
+--- a/after-schola/app/Http/Controllers/Api/ProgramController.php
++++ b/after-schola/app/Http/Controllers/Api/ProgramController.php
+@@ -50,14 +50,22 @@ public function destroy(Program $program)
+         return response()->noContent();
+     }
+ 
+-    // TODO(nanti): diganti GET /api/public/programs di slice 3 Modul 1.
+-    public function indexAktif()
++    // Publik (PUB-01, PUB-02). Tanpa rubrik. TODO(nanti): cabang tersedia (cabang dari Modul 0) dan
++    // slot trial berkapasitas (Modul 2); sementara jadwal_trial mingguan.
++    public function publicIndex()
+     {
+         return ProgramResource::collection(
+-            Program::where('is_active', true)->with('jadwalTrial')->latest()->get()
++            Program::where('is_active', true)->with(['jadwalTrial', 'levels'])->latest()->get()
+         );
+     }
+ 
++    public function publicShow(Program $program)
++    {
++        abort_unless($program->is_active, 404);
++
++        return new ProgramResource($program->load(['jadwalTrial', 'levels']));
++    }
++
+     public function storeJadwalTrial(Request $request, Program $program)
+     {
+         $validated = $request->validate([
+diff --git a/after-schola/app/Http/Controllers/Api/RegistrationController.php b/after-schola/app/Http/Controllers/Api/RegistrationController.php
+index b13f0c9..402780b 100644
+--- a/after-schola/app/Http/Controllers/Api/RegistrationController.php
++++ b/after-schola/app/Http/Controllers/Api/RegistrationController.php
+@@ -5,6 +5,7 @@
+ use App\Http\Controllers\Controller;
+ use App\Http\Resources\RegistrationResource;
+ use App\Models\Invoice;
++use App\Models\PaymentSetting;
+ use App\Models\Registration;
+ use Illuminate\Http\Request;
+ use Illuminate\Support\Facades\DB;
+@@ -18,9 +19,6 @@ class RegistrationController extends Controller
+ {
+     private const WITH = ['decision', 'program', 'activeInvoice'];
+ 
+-    // TODO(nanti): jatuh tempo default diatur Management (PRD MGT-14).
+-    private const DUE_DAYS = 7;
+-
+     public function index(Request $request)
+     {
+         $request->validate([
+@@ -67,7 +65,7 @@ public function approve(Request $request, Registration $registration)
+                 'registration_id' => $registration->id,
+                 'number' => Invoice::nextNumber(),
+                 'amount' => $program->price, // snapshot harga saat terbit
+-                'due_date' => now()->addDays(self::DUE_DAYS)->toDateString(),
++                'due_date' => now()->addDays(PaymentSetting::current()->due_days)->toDateString(),
+                 'status' => 'unpaid',
+                 'issued_at' => now(),
+             ]);
+diff --git a/after-schola/app/Http/Resources/PaymentSettingResource.php b/after-schola/app/Http/Resources/PaymentSettingResource.php
+new file mode 100644
+index 0000000..db178a0
+--- /dev/null
++++ b/after-schola/app/Http/Resources/PaymentSettingResource.php
+@@ -0,0 +1,19 @@
++<?php
++
++namespace App\Http\Resources;
++
++use Illuminate\Http\Request;
++use Illuminate\Http\Resources\Json\JsonResource;
++
++class PaymentSettingResource extends JsonResource
++{
++    public function toArray(Request $request): array
++    {
++        return [
++            'due_days' => $this->due_days,
++            'reminder_interval_days' => $this->reminder_interval_days,
++            'payment_instructions' => $this->payment_instructions,
++            'bank_account' => $this->bank_account,
++        ];
++    }
++}
+diff --git a/after-schola/app/Models/PaymentSetting.php b/after-schola/app/Models/PaymentSetting.php
+new file mode 100644
+index 0000000..ed97995
+--- /dev/null
++++ b/after-schola/app/Models/PaymentSetting.php
+@@ -0,0 +1,17 @@
++<?php
++
++namespace App\Models;
++
++use Illuminate\Database\Eloquent\Model;
++
++class PaymentSetting extends Model
++{
++    protected $fillable = ['due_days', 'reminder_interval_days', 'payment_instructions', 'bank_account'];
++
++    /** Baris tunggal; dibuat dengan default kolom bila belum ada. */
++    public static function current(): self
++    {
++        // fresh(): memuat default kolom dan menghindari wasRecentlyCreated (Resource akan membalas 201).
++        return static::first() ?? static::create([])->fresh();
++    }
++}
+diff --git a/after-schola/database/migrations/2026_10_29_000004_create_payment_settings_table.php b/after-schola/database/migrations/2026_10_29_000004_create_payment_settings_table.php
+new file mode 100644
+index 0000000..8dca0e8
+--- /dev/null
++++ b/after-schola/database/migrations/2026_10_29_000004_create_payment_settings_table.php
+@@ -0,0 +1,26 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++// Satu baris global (D: pengaturan pembayaran tidak per cabang). Lihat PaymentSetting::current().
++return new class extends Migration
++{
++    public function up(): void
++    {
++        Schema::create('payment_settings', function (Blueprint $table) {
++            $table->id();
++            $table->unsignedSmallInteger('due_days')->default(7);
++            $table->unsignedSmallInteger('reminder_interval_days')->default(3);
++            $table->text('payment_instructions')->nullable();
++            $table->text('bank_account')->nullable();
++            $table->timestamps();
++        });
++    }
++
++    public function down(): void
++    {
++        Schema::dropIfExists('payment_settings');
++    }
++};
+diff --git a/after-schola/frontend/src/layouts/AppLayout.vue b/after-schola/frontend/src/layouts/AppLayout.vue
+index 558c0b7..97db38b 100644
+--- a/after-schola/frontend/src/layouts/AppLayout.vue
++++ b/after-schola/frontend/src/layouts/AppLayout.vue
+@@ -28,6 +28,7 @@ const managementNav = [
+   { label: 'Verifikasi Pendaftaran', icon: 'fact_check', to: '/management/verifikasi-pendaftaran' },
+   { label: 'Invoice & Pembayaran', icon: 'receipt_long', to: '/management/invoice' },
+   { label: 'Umur Piutang', icon: 'hourglass_bottom', to: '/management/umur-piutang' },
++  { label: 'Pengaturan Pembayaran', icon: 'payments', to: '/management/pengaturan-pembayaran' },
+   { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue' },
+   { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user' },
+   { label: 'Program & Promosi', icon: 'inventory_2', to: '/management/program' },
+diff --git a/after-schola/frontend/src/router/index.js b/after-schola/frontend/src/router/index.js
+index b6756a5..19e832a 100644
+--- a/after-schola/frontend/src/router/index.js
++++ b/after-schola/frontend/src/router/index.js
+@@ -25,6 +25,9 @@ import ExpoReportsView from '@/views/ExpoReportsView.vue'
+ import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
+ import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
+ import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
++import PublicProgramsView from '@/views/public/PublicProgramsView.vue'
++import PublicProgramDetailView from '@/views/public/PublicProgramDetailView.vue'
++import ManagementPaymentSettingsView from '@/views/management/PaymentSettingsView.vue'
+ import ManagementProgramDetailView from '@/views/management/ProgramDetailView.vue'
+ import DeveloperDashboardView from '@/views/developer/DeveloperDashboardView.vue'
+ import ManagementTeamsView from '@/views/management/TeamsView.vue'
+@@ -52,6 +55,8 @@ const routes = [
+     name: 'public.trial-registration',
+     component: TrialRegistrationView,
+   },
++  { path: '/program', name: 'public.programs', component: PublicProgramsView },
++  { path: '/program/:id', name: 'public.program-detail', component: PublicProgramDetailView },
+   {
+     path: '/',
+     component: AppLayout,
+@@ -106,6 +111,7 @@ const routes = [
+       { path: 'management/verifikasi-pendaftaran', name: 'management.verification', component: ManagementVerificationView },
+       { path: 'management/invoice', name: 'management.invoices', component: ManagementInvoicesView },
+       { path: 'management/umur-piutang', name: 'management.aging', component: ManagementAgingReportView },
++      { path: 'management/pengaturan-pembayaran', name: 'management.payment-settings', component: ManagementPaymentSettingsView },
+       { path: 'management/hot-issue', name: 'management.hot-issues', component: ManagementHotIssuesView },
+       {
+         path: 'management/manajemen-user',
+diff --git a/after-schola/frontend/src/views/management/PaymentSettingsView.vue b/after-schola/frontend/src/views/management/PaymentSettingsView.vue
+new file mode 100644
+index 0000000..46a8f41
+--- /dev/null
++++ b/after-schola/frontend/src/views/management/PaymentSettingsView.vue
+@@ -0,0 +1,101 @@
++<script setup>
++// Pengaturan pembayaran global (MGT-14): jatuh tempo default, interval reminder, instruksi dan rekening.
++import { onMounted, reactive, ref } from 'vue'
++import api from '@/lib/api'
++
++const INPUT =
++  'rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none'
++
++const form = reactive({
++  due_days: 7,
++  reminder_interval_days: 3,
++  payment_instructions: '',
++  bank_account: '',
++})
++const loading = ref(true)
++const saving = ref(false)
++const saved = ref(false)
++const error = ref('')
++
++async function load() {
++  try {
++    const { data } = await api.get('/payment-settings')
++    const d = data.data ?? data
++    Object.assign(form, {
++      due_days: d.due_days,
++      reminder_interval_days: d.reminder_interval_days,
++      payment_instructions: d.payment_instructions ?? '',
++      bank_account: d.bank_account ?? '',
++    })
++  } catch (e) {
++    error.value = 'Gagal memuat pengaturan.'
++  } finally {
++    loading.value = false
++  }
++}
++
++async function submit() {
++  saving.value = true
++  saved.value = false
++  error.value = ''
++  try {
++    await api.put('/payment-settings', { ...form })
++    saved.value = true
++  } catch (e) {
++    const first = Object.values(e?.response?.data?.errors ?? {})[0]?.[0]
++    error.value = first || e?.response?.data?.message || 'Gagal menyimpan pengaturan.'
++  } finally {
++    saving.value = false
++  }
++}
++
++onMounted(load)
++</script>
++
++<template>
++  <div class="flex w-full max-w-2xl flex-col gap-space-lg pb-space-3xl">
++    <div class="flex flex-col gap-space-2xs pt-space-xl">
++      <span class="font-label-sm text-label-sm font-semibold uppercase tracking-widest text-secondary">Keuangan</span>
++      <h1 class="font-headline-xl text-headline-xl font-bold tracking-tight text-on-surface">Pengaturan Pembayaran</h1>
++      <p class="font-body-md text-body-md text-on-surface-variant">
++        Berlaku untuk semua cabang. Jatuh tempo dipakai saat invoice terbit.
++      </p>
++    </div>
++
++    <div v-if="loading" class="h-48 animate-pulse rounded-2xl bg-surface-container"></div>
++
++    <form v-else class="flex flex-col gap-space-md rounded-2xl bg-surface-container-lowest p-space-lg shadow-sm" @submit.prevent="submit">
++      <p v-if="error" class="rounded-lg bg-error-container px-space-sm py-2 font-body-sm text-body-sm text-on-error-container">{{ error }}</p>
++      <p v-if="saved" class="rounded-lg bg-[#D1FAE5] px-space-sm py-2 font-body-sm text-body-sm text-[#065F46]">Pengaturan tersimpan.</p>
++
++      <div class="grid gap-space-md sm:grid-cols-2">
++        <label class="flex flex-col gap-1">
++          <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Jatuh tempo (hari)</span>
++          <input v-model.number="form.due_days" type="number" min="1" max="90" required :class="INPUT" />
++        </label>
++        <label class="flex flex-col gap-1">
++          <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Interval reminder (hari)</span>
++          <input v-model.number="form.reminder_interval_days" type="number" min="1" max="30" required :class="INPUT" />
++        </label>
++      </div>
++
++      <label class="flex flex-col gap-1">
++        <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Rekening tujuan transfer</span>
++        <textarea v-model="form.bank_account" rows="2" maxlength="500" placeholder="mis. BCA 1234567890 a.n. AfterSchola" :class="INPUT"></textarea>
++      </label>
++
++      <label class="flex flex-col gap-1">
++        <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Instruksi pembayaran</span>
++        <textarea v-model="form.payment_instructions" rows="4" maxlength="2000" :class="INPUT"></textarea>
++      </label>
++
++      <button
++        type="submit"
++        :disabled="saving"
++        class="inline-flex items-center justify-center gap-space-xs self-start rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary hover:opacity-95 disabled:opacity-60"
++      >
++        {{ saving ? 'Menyimpan…' : 'Simpan' }}
++      </button>
++    </form>
++  </div>
++</template>
+diff --git a/after-schola/frontend/src/views/public/PublicProgramDetailView.vue b/after-schola/frontend/src/views/public/PublicProgramDetailView.vue
+new file mode 100644
+index 0000000..fc72f2c
+--- /dev/null
++++ b/after-schola/frontend/src/views/public/PublicProgramDetailView.vue
+@@ -0,0 +1,79 @@
++<script setup>
++// Detail program untuk publik (PUB-02). URL /program/:id statis, cocok untuk QR code (PUB-06).
++// TODO(nanti): ganti jadwal trial mingguan dengan slot trial berkapasitas per cabang (Modul 2).
++import { onMounted, ref } from 'vue'
++import { useRoute } from 'vue-router'
++import api from '@/lib/api'
++import { formatRupiah } from '@/lib/format'
++
++const route = useRoute()
++const program = ref(null)
++const loading = ref(true)
++
++onMounted(async () => {
++  try {
++    const { data } = await api.get(`/public/programs/${route.params.id}`)
++    program.value = data.data ?? data
++  } catch (e) {
++    program.value = null // 404: program tidak ada atau tidak aktif
++  } finally {
++    loading.value = false
++  }
++})
++</script>
++
++<template>
++  <div class="min-h-screen bg-slate-50 font-landing">
++    <header class="bg-brandNavy text-white">
++      <div class="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
++        <RouterLink to="/" class="text-lg font-extrabold tracking-tight">AfterSchola</RouterLink>
++        <RouterLink :to="{ name: 'login' }" class="text-sm font-semibold text-white/90 hover:text-brandSun">Masuk</RouterLink>
++      </div>
++    </header>
++
++    <main class="mx-auto max-w-3xl px-4 py-10">
++      <RouterLink :to="{ name: 'public.programs' }" class="text-sm font-semibold text-brandBlue hover:underline">← Semua program</RouterLink>
++
++      <div v-if="loading" class="mt-6 h-64 animate-pulse rounded-2xl bg-slate-200"></div>
++
++      <div v-else-if="!program" class="mt-6 rounded-2xl bg-white p-8 text-center shadow-md">
++        <h1 class="text-xl font-bold text-brandNavy">Program tidak ditemukan</h1>
++        <p class="mt-2 text-sm text-slate-600">Program ini tidak tersedia atau sudah ditutup.</p>
++      </div>
++
++      <article v-else class="mt-6 flex flex-col gap-6 rounded-2xl bg-white p-6 shadow-md sm:p-8">
++        <div>
++          <div class="flex flex-wrap gap-2">
++            <span v-if="program.jenjang" class="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">{{ program.jenjang }}</span>
++            <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold capitalize text-slate-600">{{ program.tipe }}</span>
++          </div>
++          <h1 class="mt-3 text-3xl font-extrabold text-brandNavy">{{ program.name }}</h1>
++          <p class="mt-1 text-lg font-bold text-brandNavy">{{ formatRupiah(program.price) }}</p>
++        </div>
++
++        <p v-if="program.description" class="whitespace-pre-line text-sm leading-relaxed text-slate-700">{{ program.description }}</p>
++
++        <section v-if="program.levels?.length">
++          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Level</h2>
++          <ul class="mt-2 flex flex-wrap gap-2">
++            <li v-for="l in program.levels" :key="l.id" class="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">{{ l.name }}</li>
++          </ul>
++        </section>
++
++        <section v-if="program.jadwal_trial?.length">
++          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Jadwal trial</h2>
++          <ul class="mt-2 space-y-1 text-sm text-slate-700">
++            <li v-for="j in program.jadwal_trial" :key="j.id" class="capitalize">{{ j.hari }}, {{ j.jam_mulai }}–{{ j.jam_selesai }}</li>
++          </ul>
++        </section>
++
++        <RouterLink
++          :to="{ name: 'public.trial-registration', query: { program: program.id } }"
++          class="inline-flex items-center justify-center rounded-full bg-brandSun px-7 py-3 font-bold text-brandDeepNavy shadow-lg hover:bg-brandSunDark"
++        >
++          Daftar Trial Gratis
++        </RouterLink>
++      </article>
++    </main>
++  </div>
++</template>
+diff --git a/after-schola/frontend/src/views/public/PublicProgramsView.vue b/after-schola/frontend/src/views/public/PublicProgramsView.vue
+new file mode 100644
+index 0000000..0439137
+--- /dev/null
++++ b/after-schola/frontend/src/views/public/PublicProgramsView.vue
+@@ -0,0 +1,60 @@
++<script setup>
++// Daftar program aktif untuk publik (PUB-01). Tanpa login.
++import { onMounted, ref } from 'vue'
++import api from '@/lib/api'
++import { formatRupiah, unwrap } from '@/lib/format'
++
++const programs = ref([])
++const loading = ref(true)
++const failed = ref(false)
++
++onMounted(async () => {
++  try {
++    const { data } = await api.get('/public/programs')
++    programs.value = unwrap(data)
++  } catch (e) {
++    failed.value = true
++  } finally {
++    loading.value = false
++  }
++})
++</script>
++
++<template>
++  <div class="min-h-screen bg-slate-50 font-landing">
++    <header class="bg-brandNavy text-white">
++      <div class="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
++        <RouterLink to="/" class="text-lg font-extrabold tracking-tight">AfterSchola</RouterLink>
++        <RouterLink :to="{ name: 'login' }" class="text-sm font-semibold text-white/90 hover:text-brandSun">Masuk</RouterLink>
++      </div>
++    </header>
++
++    <main class="mx-auto max-w-5xl px-4 py-10">
++      <h1 class="text-3xl font-extrabold text-brandNavy">Program Kami</h1>
++      <p class="mt-2 text-sm text-slate-600">Pilih program, lalu coba kelas pertama secara gratis.</p>
++
++      <div v-if="loading" class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
++        <div v-for="i in 3" :key="i" class="h-40 animate-pulse rounded-2xl bg-slate-200"></div>
++      </div>
++      <p v-else-if="failed" class="mt-8 text-sm text-red-700">Program belum dapat dimuat. Coba lagi beberapa saat.</p>
++      <p v-else-if="!programs.length" class="mt-8 text-sm text-slate-600">Belum ada program yang dibuka.</p>
++
++      <div v-else class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
++        <RouterLink
++          v-for="p in programs"
++          :key="p.id"
++          :to="{ name: 'public.program-detail', params: { id: p.id } }"
++          class="flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-md transition-transform hover:-translate-y-1"
++        >
++          <div class="flex flex-wrap gap-2">
++            <span v-if="p.jenjang" class="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">{{ p.jenjang }}</span>
++            <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold capitalize text-slate-600">{{ p.tipe }}</span>
++          </div>
++          <h2 class="text-lg font-bold text-brandNavy">{{ p.name }}</h2>
++          <p v-if="p.description" class="line-clamp-3 text-sm text-slate-600">{{ p.description }}</p>
++          <p class="mt-auto text-base font-extrabold text-brandNavy">{{ formatRupiah(p.price) }}</p>
++        </RouterLink>
++      </div>
++    </main>
++  </div>
++</template>
+diff --git a/after-schola/frontend/src/views/public/TrialRegistrationView.vue b/after-schola/frontend/src/views/public/TrialRegistrationView.vue
+index 740329c..6d0287f 100644
+--- a/after-schola/frontend/src/views/public/TrialRegistrationView.vue
++++ b/after-schola/frontend/src/views/public/TrialRegistrationView.vue
+@@ -2,8 +2,10 @@
+ // Form publik pendaftaran trial (Modul 2 — Pendaftaran Trial & Leads).
+ // Tanpa login. Mengirim ke POST /api/leads (endpoint publik, lihat routes/api.php).
+ import { computed, onMounted, reactive, ref } from 'vue'
++import { useRoute } from 'vue-router'
+ import api from '@/lib/api'
+ 
++const route = useRoute()
+ const loadingPrograms = ref(true)
+ const programs = ref([])
+ 
+@@ -38,8 +40,11 @@ const hariLabel = {
+ async function loadPrograms() {
+   loadingPrograms.value = true
+   try {
+-    const { data } = await api.get('/programs/aktif')
++    const { data } = await api.get('/public/programs')
+     programs.value = data.data ?? data
++    // Datang dari halaman program (/program/:id): program langsung terpilih.
++    const wanted = Number(route.query.program)
++    if (programs.value.some((p) => p.id === wanted)) form.program_id = wanted
+   } catch (err) {
+     // Non-fatal: form tetap bisa dikirim tanpa pilih program.
+     programs.value = []
+diff --git a/after-schola/routes/api.php b/after-schola/routes/api.php
+index a4c7fde..4448497 100644
+--- a/after-schola/routes/api.php
++++ b/after-schola/routes/api.php
+@@ -9,6 +9,7 @@
+ use App\Http\Controllers\Api\FinanceReportController;
+ use App\Http\Controllers\Api\InvoiceController;
+ use App\Http\Controllers\Api\PaymentController;
++use App\Http\Controllers\Api\PaymentSettingController;
+ use App\Http\Controllers\Api\RegistrationController;
+ use App\Http\Controllers\Api\ExpoReportController;
+ use App\Http\Controllers\Api\ExportController;
+@@ -47,7 +48,10 @@
+ Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+ Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+ Route::post('/leads', [LeadController::class, 'store'])->middleware('throttle:5,1');
+-Route::get('/programs/aktif', [ProgramController::class, 'indexAktif']);
++Route::middleware('throttle:60,1')->group(function () {
++    Route::get('/public/programs', [ProgramController::class, 'publicIndex']);
++    Route::get('/public/programs/{program}', [ProgramController::class, 'publicShow']);
++});
+ 
+ // --- Butuh autentikasi (Sanctum) ---
+ Route::middleware('auth:sanctum')->group(function () {
+@@ -142,6 +146,8 @@
+         Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
+         Route::post('/invoices/{invoice}/payments', [PaymentController::class, 'store']);
+         Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'void']);
++        Route::get('/payment-settings', [PaymentSettingController::class, 'show']);
++        Route::put('/payment-settings', [PaymentSettingController::class, 'update']);
+     });
+     Route::middleware('permission:confirm payments')->group(function () {
+         Route::post('/payments/{payment}/confirm', [PaymentController::class, 'confirm']);
+diff --git a/after-schola/tests/Feature/PaymentSettingTest.php b/after-schola/tests/Feature/PaymentSettingTest.php
+new file mode 100644
+index 0000000..57a3c24
+--- /dev/null
++++ b/after-schola/tests/Feature/PaymentSettingTest.php
+@@ -0,0 +1,103 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\Invoice;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Laravel\Sanctum\Sanctum;
++use Tests\Concerns\MakesFinanceFixtures;
++use Tests\TestCase;
++
++/**
++ * Modul 1, slice 3: pengaturan pembayaran global (MGT-14, KEU-09, BR-08).
++ */
++class PaymentSettingTest extends TestCase
++{
++    use MakesFinanceFixtures, RefreshDatabase;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seedRoles();
++    }
++
++    private function validPayload(array $overrides = []): array
++    {
++        return array_merge([
++            'due_days' => 14,
++            'reminder_interval_days' => 2,
++            'payment_instructions' => 'Transfer lalu unggah bukti bayar.',
++            'bank_account' => 'BCA 1234567890 a.n. AfterSchola',
++        ], $overrides);
++    }
++
++    public function test_guest_gets_401_and_roles_without_permission_get_403(): void
++    {
++        $this->getJson('/api/payment-settings')->assertStatus(401);
++
++        foreach (['trainer', 'hr'] as $role) {
++            Sanctum::actingAs($this->makeUser($role));
++            $this->getJson('/api/payment-settings')->assertStatus(403);
++            $this->putJson('/api/payment-settings', $this->validPayload())->assertStatus(403);
++        }
++    }
++
++    public function test_show_returns_defaults_when_nothing_is_saved(): void
++    {
++        Sanctum::actingAs($this->makeUser('management'));
++
++        $this->getJson('/api/payment-settings')
++            ->assertOk()
++            ->assertJsonPath('data.due_days', 7)
++            ->assertJsonPath('data.reminder_interval_days', 3)
++            ->assertJsonPath('data.payment_instructions', null)
++            ->assertJsonPath('data.bank_account', null);
++    }
++
++    public function test_management_and_finance_can_update_and_there_is_always_one_row(): void
++    {
++        Sanctum::actingAs($this->makeUser('management'));
++        $this->putJson('/api/payment-settings', $this->validPayload())
++            ->assertOk()
++            ->assertJsonPath('data.due_days', 14);
++
++        Sanctum::actingAs($this->makeUser('finance'));
++        $this->putJson('/api/payment-settings', $this->validPayload(['due_days' => 10]))->assertOk();
++        $this->getJson('/api/payment-settings')
++            ->assertOk()
++            ->assertJsonPath('data.due_days', 10)
++            ->assertJsonPath('data.bank_account', 'BCA 1234567890 a.n. AfterSchola');
++
++        $this->assertDatabaseCount('payment_settings', 1);
++    }
++
++    public function test_update_validates_input(): void
++    {
++        Sanctum::actingAs($this->makeUser('management'));
++
++        $this->putJson('/api/payment-settings', [])
++            ->assertStatus(422)
++            ->assertJsonValidationErrors(['due_days', 'reminder_interval_days']);
++        $this->putJson('/api/payment-settings', $this->validPayload(['due_days' => 0]))
++            ->assertStatus(422)->assertJsonValidationErrors('due_days');
++        $this->putJson('/api/payment-settings', $this->validPayload(['due_days' => 91]))
++            ->assertStatus(422)->assertJsonValidationErrors('due_days');
++        $this->putJson('/api/payment-settings', $this->validPayload(['reminder_interval_days' => 0]))
++            ->assertStatus(422)->assertJsonValidationErrors('reminder_interval_days');
++        $this->putJson('/api/payment-settings', $this->validPayload(['payment_instructions' => str_repeat('a', 2001)]))
++            ->assertStatus(422)->assertJsonValidationErrors('payment_instructions');
++    }
++
++    public function test_approve_uses_configured_due_days_for_the_invoice(): void
++    {
++        $management = $this->makeUser('management');
++        Sanctum::actingAs($management);
++        $this->putJson('/api/payment-settings', $this->validPayload(['due_days' => 14]))->assertOk();
++
++        $reg = $this->makeRegistration([], $this->makeProgram());
++        $this->postJson("/api/registrations/{$reg->id}/approve")->assertOk();
++
++        $invoice = Invoice::where('registration_id', $reg->id)->firstOrFail();
++        $this->assertSame(now()->addDays(14)->toDateString(), $invoice->due_date->toDateString());
++    }
++}
+diff --git a/after-schola/tests/Feature/ProgramTest.php b/after-schola/tests/Feature/ProgramTest.php
+index b101c58..6f36b03 100644
+--- a/after-schola/tests/Feature/ProgramTest.php
++++ b/after-schola/tests/Feature/ProgramTest.php
+@@ -187,14 +187,4 @@ public function test_trial_schedule_can_be_added_and_removed(): void
+         $this->deleteJson("/api/programs/{$program->id}/jadwal-trial/{$id}")->assertStatus(204);
+         $this->assertDatabaseCount('program_trial_schedules', 0);
+     }
+-
+-    public function test_public_active_list_returns_only_active_programs_with_new_fields(): void
+-    {
+-        $this->makeProgram();
+-        Program::create(['name' => 'Program Arsip', 'tipe' => 'online', 'price' => 1, 'is_active' => false]);
+-
+-        $res = $this->getJson('/api/programs/aktif')->assertOk();
+-
+-        $this->assertSame(['Coding Kids'], collect($res->json('data'))->pluck('name')->all());
+-    }
+ }
+diff --git a/after-schola/tests/Feature/PublicProgramTest.php b/after-schola/tests/Feature/PublicProgramTest.php
+new file mode 100644
+index 0000000..b2975a1
+--- /dev/null
++++ b/after-schola/tests/Feature/PublicProgramTest.php
+@@ -0,0 +1,68 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\Program;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Tests\Concerns\MakesFinanceFixtures;
++use Tests\TestCase;
++
++/**
++ * Modul 1, slice 3: halaman publik program tanpa login (PUB-01, PUB-02).
++ */
++class PublicProgramTest extends TestCase
++{
++    use MakesFinanceFixtures, RefreshDatabase;
++
++    private function makeFullProgram(): Program
++    {
++        $program = $this->makeProgram(750000);
++        $program->levels()->create(['name' => 'Lanjut', 'sort_order' => 2]);
++        $program->levels()->create(['name' => 'Dasar', 'sort_order' => 1]);
++        $program->rubricCriteria()->create(['name' => 'Logika', 'max_score' => 10]);
++        $program->jadwalTrial()->create(['hari' => 'senin', 'jam_mulai' => '15:30', 'jam_selesai' => '16:30']);
++
++        return $program;
++    }
++
++    public function test_list_is_public_and_returns_only_active_programs_with_levels_and_trial_schedule(): void
++    {
++        $this->makeFullProgram();
++        Program::create(['name' => 'Program Arsip', 'tipe' => 'online', 'price' => 1, 'is_active' => false]);
++
++        $res = $this->getJson('/api/public/programs')->assertOk();
++
++        $this->assertSame(['Coding Kids'], collect($res->json('data'))->pluck('name')->all());
++        $res->assertJsonPath('data.0.jenjang', 'SD')
++            ->assertJsonPath('data.0.price', '750000.00')
++            ->assertJsonPath('data.0.levels.0.name', 'Dasar')
++            ->assertJsonPath('data.0.levels.1.name', 'Lanjut')
++            ->assertJsonPath('data.0.jadwal_trial.0.hari', 'senin');
++    }
++
++    public function test_public_payload_does_not_expose_rubric(): void
++    {
++        $program = $this->makeFullProgram();
++
++        $this->getJson('/api/public/programs')->assertOk()->assertJsonMissingPath('data.0.rubric_criteria');
++        $this->getJson("/api/public/programs/{$program->id}")->assertOk()->assertJsonMissingPath('data.rubric_criteria');
++    }
++
++    public function test_detail_of_active_program_is_public(): void
++    {
++        $program = $this->makeFullProgram();
++
++        $this->getJson("/api/public/programs/{$program->id}")
++            ->assertOk()
++            ->assertJsonPath('data.name', 'Coding Kids')
++            ->assertJsonPath('data.levels.0.name', 'Dasar');
++    }
++
++    public function test_detail_of_inactive_or_missing_program_is_404(): void
++    {
++        $inactive = Program::create(['name' => 'Arsip', 'tipe' => 'online', 'price' => 1, 'is_active' => false]);
++
++        $this->getJson("/api/public/programs/{$inactive->id}")->assertStatus(404);
++        $this->getJson('/api/public/programs/999999')->assertStatus(404);
++    }
++}
