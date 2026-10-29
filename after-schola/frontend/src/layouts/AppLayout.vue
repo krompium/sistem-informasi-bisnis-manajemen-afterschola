@@ -199,7 +199,7 @@ async function handleLogout() {
             v-for="item in navItems"
             :key="item.to"
             :to="item.to"
-            class="flex items-center gap-space-sm rounded-xl px-space-md py-space-sm font-label-lg text-label-lg transition-all"
+            class="flex min-h-[44px] items-center gap-space-sm rounded-xl px-space-md py-space-sm font-label-lg text-label-lg transition-all"
             :class="
               isActive(item.to)
                 ? 'bg-primary-container text-on-primary shadow-sm'
@@ -234,7 +234,7 @@ async function handleLogout() {
         <div class="flex items-center gap-space-sm">
           <!-- Hamburger (mobile) -->
           <button
-            class="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low lg:hidden"
+            class="min-h-[44px] min-w-[44px] rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low lg:hidden"
             aria-label="Buka menu"
             @click="sidebarOpen = true"
           >
@@ -258,7 +258,7 @@ async function handleLogout() {
           <NotificationBell v-if="auth.isDeveloper" />
           <div v-else class="relative">
             <button
-              class="relative rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface"
+              class="relative min-h-[44px] min-w-[44px] rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface"
               aria-label="Notifikasi"
               @click="toggleNotif"
             >

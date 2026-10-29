@@ -133,7 +133,7 @@ const inputCls =
         </p>
       </div>
       <button
-        class="inline-flex items-center gap-space-xs self-start rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 lg:self-center"
+        class="inline-flex items-center gap-space-xs self-start rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 lg:self-center min-h-[44px]"
         @click="openCreate"
       >
         <span class="material-symbols-outlined text-[18px]">add</span>
@@ -174,10 +174,10 @@ const inputCls =
             <span v-else-if="recMeta(item.recommendation)" class="rounded-full px-2.5 py-1 font-label-sm text-label-sm font-semibold" :class="recMeta(item.recommendation).cls">
               {{ recMeta(item.recommendation).label }}
             </span>
-            <button class="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low" title="Ubah" @click="openEdit(item)">
+            <button class="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low min-h-[44px] min-w-[44px]" title="Ubah" @click="openEdit(item)">
               <span class="material-symbols-outlined text-[18px]">edit</span>
             </button>
-            <button class="rounded-lg p-2 text-error hover:bg-error-container" title="Hapus" @click="removeItem(item)">
+            <button class="rounded-lg p-2 text-error hover:bg-error-container min-h-[44px] min-w-[44px]" title="Hapus" @click="removeItem(item)">
               <span class="material-symbols-outlined text-[18px]">delete</span>
             </button>
           </div>
@@ -200,7 +200,7 @@ const inputCls =
       <div class="flex max-h-[92vh] w-full max-w-lg flex-col rounded-2xl bg-surface-container-lowest shadow-xl animate-fade-in">
         <div class="flex items-center justify-between border-b border-surface-container p-space-lg">
           <h2 class="font-headline-md text-headline-md font-bold text-on-surface">{{ editingId ? 'Ubah Evaluasi Trial' : 'Buat Evaluasi Trial' }}</h2>
-          <button class="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low" @click="showForm = false">
+          <button class="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low min-h-[44px] min-w-[44px]" @click="showForm = false">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -248,7 +248,7 @@ const inputCls =
                     v-for="n in 5"
                     :key="n"
                     type="button"
-                    class="h-8 w-8 rounded-lg font-label-md text-label-md font-semibold transition-all"
+                    class="h-11 w-11 rounded-lg font-label-md text-label-md font-semibold transition-all min-h-[44px]"
                     :class="form[a.key] === n ? 'bg-primary-container text-on-primary' : 'bg-white text-on-surface-variant hover:bg-surface-container'"
                     @click="form[a.key] = n"
                   >
@@ -288,7 +288,7 @@ const inputCls =
           <button
             type="submit"
             :disabled="saving"
-            class="mt-space-xs inline-flex items-center justify-center rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60"
+            class="mt-space-xs inline-flex items-center justify-center rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60 min-h-[44px]"
           >
             {{ saving ? 'Menyimpan...' : editingId ? 'Simpan Perubahan' : 'Simpan Evaluasi' }}
           </button>
