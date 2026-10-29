@@ -29,7 +29,7 @@ class InvoiceResource extends JsonResource
             'student_name' => $registration?->student_name,
             'parent_name' => $registration?->parent_name,
             'parent_phone' => $registration?->parent_phone,
-            'program_name' => $registration?->program?->nama,
+            'program_name' => $registration?->program?->name,
             'payments' => PaymentResource::collection($this->whenLoaded('payments')),
         ];
     }

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/layouts/AppLayout.vue'
+import LandingPage from '@/views/public/LandingPage.vue'
 import LoginView from '@/views/LoginView.vue'
 import TrainerDashboardView from '@/views/TrainerDashboardView.vue'
 import ManagementDashboardView from '@/views/ManagementDashboardView.vue'
@@ -24,6 +25,10 @@ import ExpoReportsView from '@/views/ExpoReportsView.vue'
 import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
 import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
 import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
+import PublicProgramsView from '@/views/public/PublicProgramsView.vue'
+import PublicProgramDetailView from '@/views/public/PublicProgramDetailView.vue'
+import ManagementPaymentSettingsView from '@/views/management/PaymentSettingsView.vue'
+import ManagementProgramDetailView from '@/views/management/ProgramDetailView.vue'
 import DeveloperDashboardView from '@/views/developer/DeveloperDashboardView.vue'
 import ManagementTeamsView from '@/views/management/TeamsView.vue'
 import ProjectsView from '@/views/projects/ProjectsView.vue'
@@ -32,6 +37,13 @@ import ProjectCalendarView from '@/views/projects/ProjectCalendarView.vue'
 import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
 
 const routes = [
+  {
+    // Gerbang publik. User yang sudah login langsung diarahkan ke dashboard-nya (guard guestOnly).
+    path: '/',
+    name: 'landing',
+    component: LandingPage,
+    meta: { guestOnly: true },
+  },
   {
     path: '/login',
     name: 'login',
@@ -43,13 +55,13 @@ const routes = [
     name: 'public.trial-registration',
     component: TrialRegistrationView,
   },
+  { path: '/program', name: 'public.programs', component: PublicProgramsView },
+  { path: '/program/:id', name: 'public.program-detail', component: PublicProgramDetailView },
   {
     path: '/',
     component: AppLayout,
     meta: { requiresAuth: true },
     children: [
-      { path: '', redirect: () => useAuthStore().homeRoute },
-
       // ---- Trainer ----
       { path: 'trainer', name: 'trainer.dashboard', component: TrainerDashboardView },
       { path: 'trainer/sekolah', name: 'trainer.schools', component: TrainerSchoolsView },
@@ -99,6 +111,7 @@ const routes = [
       { path: 'management/verifikasi-pendaftaran', name: 'management.verification', component: ManagementVerificationView },
       { path: 'management/invoice', name: 'management.invoices', component: ManagementInvoicesView },
       { path: 'management/umur-piutang', name: 'management.aging', component: ManagementAgingReportView },
+      { path: 'management/pengaturan-pembayaran', name: 'management.payment-settings', component: ManagementPaymentSettingsView },
       { path: 'management/hot-issue', name: 'management.hot-issues', component: ManagementHotIssuesView },
       {
         path: 'management/manajemen-user',
@@ -111,6 +124,12 @@ const routes = [
         name: 'management.programs',
         component: ManagementProgramView,
         meta: { title: 'Program & Promosi', icon: 'inventory_2' },
+      },
+      {
+        path: 'management/program/:id',
+        name: 'management.programs.detail',
+        component: ManagementProgramDetailView,
+        meta: { title: 'Detail Program', icon: 'inventory_2' },
       },
 	  { path: 'management/team', name: 'management.teams', component: ManagementTeamsView },
       { path: 'management/proyek', name: 'management.projects', component: ProjectsView },

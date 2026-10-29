@@ -14,11 +14,12 @@ class StoreProgramRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nama' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255'],
+            'jenjang' => ['required', 'in:SD,SMP,SMA'],
             'tipe' => ['required', 'in:online,offline'],
-            'deskripsi' => ['nullable', 'string'],
-            'biaya' => ['required', 'numeric', 'min:0'],
-            'status_aktif' => ['boolean'],
+            'description' => ['nullable', 'string'],
+            'price' => ['required', 'numeric', 'min:0', 'max:9999999999'],
+            'is_active' => ['boolean'],
         ];
     }
 }

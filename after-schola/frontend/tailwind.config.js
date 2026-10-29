@@ -59,6 +59,16 @@ export default {
         // Warna brand kunci (dipakai langsung via bg-navy dsb.)
         navy: '#0B2A5B',
         royal: '#1D4ED8',
+        // Palet landing page (views/public/LandingPage.vue)
+        brandNavy: '#08254f',
+        brandDeepNavy: '#041735',
+        brandBlue: '#0c3b7a',
+        brandSun: '#f8b21b',
+        brandSunDark: '#e59d07',
+        brandTeal: '#13a58c',
+        brandGreen: '#10b981',
+        brandPurple: '#4f46e5',
+        brandAccordion: '#3b28cc',
       },
       borderRadius: {
         DEFAULT: '0.25rem',
@@ -83,6 +93,7 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        landing: ['Poppins', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         'body-sm': ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         'body-md': ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         'body-lg': ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],

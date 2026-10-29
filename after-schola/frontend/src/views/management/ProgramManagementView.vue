@@ -8,6 +8,7 @@ const TIPE_OPTIONS = [
   { value: 'online', label: 'Online' },
   { value: 'offline', label: 'Offline' },
 ]
+const JENJANG_OPTIONS = ['SD', 'SMP', 'SMA']
 const HARI_OPTIONS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu']
 
 const loading = ref(true)
@@ -15,11 +16,12 @@ const programs = ref([])
 
 function emptyForm() {
   return {
-    nama: '',
+    name: '',
+    jenjang: 'SD',
     tipe: 'online',
-    deskripsi: '',
-    biaya: '',
-    status_aktif: true,
+    description: '',
+    price: '',
+    is_active: true,
     jadwal: [], // { hari, jam_mulai, jam_selesai }
   }
 }
@@ -63,11 +65,12 @@ async function submitCreate() {
   formError.value = ''
   try {
     const { data } = await api.post('/programs', {
-      nama: form.nama,
+      name: form.name,
+      jenjang: form.jenjang,
       tipe: form.tipe,
-      deskripsi: form.deskripsi,
-      biaya: form.biaya,
-      status_aktif: form.status_aktif,
+      description: form.description,
+      price: form.price,
+      is_active: form.is_active,
     })
     const newProgram = data?.data ?? data
     for (const j of form.jadwal) {
@@ -91,11 +94,12 @@ async function submitCreate() {
 function openEdit(program) {
   editTarget.value = program
   Object.assign(editForm, {
-    nama: program.nama,
+    name: program.name,
+    jenjang: program.jenjang ?? '',
     tipe: program.tipe,
-    deskripsi: program.deskripsi ?? '',
-    biaya: program.biaya,
-    status_aktif: program.status_aktif,
+    description: program.description ?? '',
+    price: program.price,
+    is_active: program.is_active,
     jadwal: (program.jadwal_trial ?? []).map((j) => ({ ...j })),
   })
   editError.value = ''
@@ -108,11 +112,12 @@ async function submitEdit() {
   editError.value = ''
   try {
     await api.put(`/programs/${editTarget.value.id}`, {
-      nama: editForm.nama,
+      name: editForm.name,
+      jenjang: editForm.jenjang,
       tipe: editForm.tipe,
-      deskripsi: editForm.deskripsi,
-      biaya: editForm.biaya,
-      status_aktif: editForm.status_aktif,
+      description: editForm.description,
+      price: editForm.price,
+      is_active: editForm.is_active,
     })
     showEdit.value = false
     await loadPrograms()
@@ -129,7 +134,7 @@ async function submitEdit() {
 
 async function toggleActive(program) {
   try {
-    await api.put(`/programs/${program.id}`, { status_aktif: !program.status_aktif })
+    await api.put(`/programs/${program.id}`, { is_active: !program.is_active })
     await loadPrograms()
   } catch (e) {
     window.alert('Gagal mengubah status program.')
@@ -137,7 +142,7 @@ async function toggleActive(program) {
 }
 
 async function removeProgram(program) {
-  if (!window.confirm(`Hapus program "${program.nama}"? Tindakan ini tidak bisa dibatalkan.`)) return
+  if (!window.confirm(`Hapus program "${program.name}"? Program yang sudah dipakai tidak bisa dihapus (nonaktifkan saja).`)) return
   try {
     await api.delete(`/programs/${program.id}`)
     await loadPrograms()
@@ -146,7 +151,7 @@ async function removeProgram(program) {
   }
 }
 
-function formatBiaya(v) {
+function formatPrice(v) {
   const n = Number(v || 0)
   return n.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 })
 }
@@ -195,8 +200,8 @@ onMounted(() => {
         class="flex flex-col gap-space-sm border-b border-surface-container px-space-md py-space-sm last:border-0 sm:flex-row sm:items-center"
       >
         <div class="flex flex-col">
-          <span class="font-label-lg text-label-lg font-semibold text-on-surface">{{ p.nama }}</span>
-          <span class="font-body-sm text-body-sm text-on-surface-variant">{{ formatBiaya(p.biaya) }} • {{ p.tipe }}</span>
+          <span class="font-label-lg text-label-lg font-semibold text-on-surface">{{ p.name }}</span>
+          <span class="font-body-sm text-body-sm text-on-surface-variant">{{ formatPrice(p.price) }} • {{ [p.jenjang, p.tipe].filter(Boolean).join(' • ') }}</span>
         </div>
 
         <div class="flex flex-wrap items-center gap-1 sm:ml-space-md">
@@ -210,11 +215,18 @@ onMounted(() => {
         <div class="flex items-center gap-space-xs sm:ml-auto">
           <span
             class="rounded-full px-2 py-0.5 font-label-sm text-label-sm font-semibold"
-            :class="p.status_aktif ? 'bg-[#D1FAE5] text-[#065F46]' : 'bg-surface-container text-outline'"
-          >{{ p.status_aktif ? 'Aktif' : 'Nonaktif' }}</span>
-          <button class="rounded-lg p-1.5 text-primary hover:bg-surface-container" :title="p.status_aktif ? 'Nonaktifkan' : 'Aktifkan'" @click="toggleActive(p)">
-            <span class="material-symbols-outlined text-[18px]">{{ p.status_aktif ? 'toggle_on' : 'toggle_off' }}</span>
+            :class="p.is_active ? 'bg-[#D1FAE5] text-[#065F46]' : 'bg-surface-container text-outline'"
+          >{{ p.is_active ? 'Aktif' : 'Nonaktif' }}</span>
+          <button class="rounded-lg p-1.5 text-primary hover:bg-surface-container" :title="p.is_active ? 'Nonaktifkan' : 'Aktifkan'" @click="toggleActive(p)">
+            <span class="material-symbols-outlined text-[18px]">{{ p.is_active ? 'toggle_on' : 'toggle_off' }}</span>
           </button>
+          <RouterLink
+            class="rounded-lg p-1.5 text-secondary hover:bg-surface-container"
+            title="Level & rubrik"
+            :to="{ name: 'management.programs.detail', params: { id: p.id } }"
+          >
+            <span class="material-symbols-outlined text-[18px]">tune</span>
+          </RouterLink>
           <button class="rounded-lg p-1.5 text-secondary hover:bg-surface-container" title="Ubah program" @click="openEdit(p)">
             <span class="material-symbols-outlined text-[18px]">edit</span>
           </button>
@@ -247,7 +259,15 @@ onMounted(() => {
 
             <label class="flex flex-col gap-1">
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Nama Program</span>
-              <input v-model="form.nama" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+              <input v-model="form.name" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+            </label>
+
+            <label class="flex flex-col gap-1">
+              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Jenjang</span>
+              <select required v-model="form.jenjang" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15">
+                <option value="" disabled>Pilih jenjang</option>
+                <option v-for="j in JENJANG_OPTIONS" :key="j" :value="j">{{ j }}</option>
+              </select>
             </label>
 
             <label class="flex flex-col gap-1">
@@ -259,16 +279,16 @@ onMounted(() => {
 
             <label class="flex flex-col gap-1">
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Deskripsi</span>
-              <textarea v-model="form.deskripsi" rows="3" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"></textarea>
+              <textarea v-model="form.description" rows="3" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"></textarea>
             </label>
 
             <label class="flex flex-col gap-1">
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Biaya (Rp)</span>
-              <input v-model="form.biaya" type="number" min="0" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+              <input v-model="form.price" type="number" min="0" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
             </label>
 
             <label class="flex items-center gap-space-xs">
-              <input type="checkbox" v-model="form.status_aktif" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
+              <input type="checkbox" v-model="form.is_active" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Aktifkan program ini</span>
             </label>
 
@@ -325,7 +345,15 @@ onMounted(() => {
 
             <label class="flex flex-col gap-1">
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Nama Program</span>
-              <input v-model="editForm.nama" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+              <input v-model="editForm.name" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+            </label>
+
+            <label class="flex flex-col gap-1">
+              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Jenjang</span>
+              <select required v-model="editForm.jenjang" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15">
+                <option value="" disabled>Pilih jenjang</option>
+                <option v-for="j in JENJANG_OPTIONS" :key="j" :value="j">{{ j }}</option>
+              </select>
             </label>
 
             <label class="flex flex-col gap-1">
@@ -337,16 +365,16 @@ onMounted(() => {
 
             <label class="flex flex-col gap-1">
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Deskripsi</span>
-              <textarea v-model="editForm.deskripsi" rows="3" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"></textarea>
+              <textarea v-model="editForm.description" rows="3" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"></textarea>
             </label>
 
             <label class="flex flex-col gap-1">
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Biaya (Rp)</span>
-              <input v-model="editForm.biaya" type="number" min="0" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+              <input v-model="editForm.price" type="number" min="0" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
             </label>
 
             <label class="flex items-center gap-space-xs">
-              <input type="checkbox" v-model="editForm.status_aktif" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
+              <input type="checkbox" v-model="editForm.is_active" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Aktifkan program ini</span>
             </label>
 

@@ -271,15 +271,15 @@ class DemoSeeder extends Seeder
     private function seedPrograms(): array
     {
         $defs = [
-            ['Coding Kids', 'offline', 'Dasar pemrograman visual untuk SD-SMP.', 750000, true, [['senin', '15:30', '16:30'], ['rabu', '15:30', '16:30']]],
-            ['Robotik Online', 'online', 'Robotik dasar via kelas daring.', 500000, true, [['sabtu', '09:00', '10:30']]],
-            ['Public Speaking', 'offline', 'Latihan berbicara di depan umum.', 450000, false, [['jumat', '15:00', '16:00']]],
+            ['Coding Kids', 'SD', 'offline', 'Dasar pemrograman visual untuk SD-SMP.', 750000, true, [['senin', '15:30', '16:30'], ['rabu', '15:30', '16:30']]],
+            ['Robotik Online', 'SMP', 'online', 'Robotik dasar via kelas daring.', 500000, true, [['sabtu', '09:00', '10:30']]],
+            ['Public Speaking', 'SMA', 'offline', 'Latihan berbicara di depan umum.', 450000, false, [['jumat', '15:00', '16:00']]],
         ];
         $programs = [];
-        foreach ($defs as [$name, $type, $desc, $fee, $active, $schedules]) {
+        foreach ($defs as [$name, $jenjang, $type, $desc, $fee, $active, $schedules]) {
             $program = Program::updateOrCreate(
-                ['nama' => $name],
-                ['tipe' => $type, 'deskripsi' => $desc, 'biaya' => $fee, 'status_aktif' => $active],
+                ['name' => $name],
+                ['jenjang' => $jenjang, 'tipe' => $type, 'description' => $desc, 'price' => $fee, 'is_active' => $active],
             );
             foreach ($schedules as [$day, $from, $to]) {
                 ProgramTrialSchedule::updateOrCreate(

@@ -17,11 +17,14 @@ class ProgramResource extends JsonResource
         {
             return [
                 'id' => $this->id,
-                'nama' => $this->nama,
+                'name' => $this->name,
+                'jenjang' => $this->jenjang,
                 'tipe' => $this->tipe,
-                'deskripsi' => $this->deskripsi,
-                'biaya' => $this->biaya,
-                'status_aktif' => $this->status_aktif,
+                'description' => $this->description,
+                'price' => $this->price,
+                'is_active' => $this->is_active,
+                'levels' => ProgramLevelResource::collection($this->whenLoaded('levels')),
+                'rubric_criteria' => RubricCriterionResource::collection($this->whenLoaded('rubricCriteria')),
                 'jadwal_trial' => ProgramTrialScheduleResource::collection($this->whenLoaded('jadwalTrial')),
                 'created_at' => $this->created_at,
                 'updated_at' => $this->updated_at,

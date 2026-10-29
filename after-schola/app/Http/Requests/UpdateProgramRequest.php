@@ -15,11 +15,12 @@ class UpdateProgramRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nama' => ['sometimes', 'string', 'max:255'],
+            'name' => ['sometimes', 'string', 'max:255'],
+            'jenjang' => ['sometimes', 'in:SD,SMP,SMA'],
             'tipe' => ['sometimes', 'in:online,offline'],
-            'deskripsi' => ['nullable', 'string'],
-            'biaya' => ['sometimes', 'numeric', 'min:0'],
-            'status_aktif' => ['sometimes', 'boolean'],
+            'description' => ['nullable', 'string'],
+            'price' => ['sometimes', 'numeric', 'min:0', 'max:9999999999'],
+            'is_active' => ['sometimes', 'boolean'],
         ];
     }
 }

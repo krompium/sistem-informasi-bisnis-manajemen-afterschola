@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RegistrationResource;
 use App\Models\Invoice;
+use App\Models\PaymentSetting;
 use App\Models\Registration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,9 +18,6 @@ use Illuminate\Validation\ValidationException;
 class RegistrationController extends Controller
 {
     private const WITH = ['decision', 'program', 'activeInvoice'];
-
-    // TODO(nanti): jatuh tempo default diatur Management (PRD MGT-14).
-    private const DUE_DAYS = 7;
 
     public function index(Request $request)
     {
@@ -66,8 +64,8 @@ class RegistrationController extends Controller
             Invoice::create([
                 'registration_id' => $registration->id,
                 'number' => Invoice::nextNumber(),
-                'amount' => $program->biaya, // snapshot harga saat terbit
-                'due_date' => now()->addDays(self::DUE_DAYS)->toDateString(),
+                'amount' => $program->price, // snapshot harga saat terbit
+                'due_date' => now()->addDays(PaymentSetting::current()->due_days)->toDateString(),
                 'status' => 'unpaid',
                 'issued_at' => now(),
             ]);

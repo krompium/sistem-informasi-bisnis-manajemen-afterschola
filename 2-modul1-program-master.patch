@@ -1,0 +1,836 @@
+diff --git a/after-schola/app/Http/Controllers/Api/ProgramController.php b/after-schola/app/Http/Controllers/Api/ProgramController.php
+index 5f12e99..094de1a 100644
+--- a/after-schola/app/Http/Controllers/Api/ProgramController.php
++++ b/after-schola/app/Http/Controllers/Api/ProgramController.php
+@@ -1,78 +1,80 @@
+ <?php
+ 
+-namespace App\Http\Controllers;
++namespace App\Http\Controllers\Api;
+ 
++use App\Http\Controllers\Controller;
+ use App\Http\Requests\StoreProgramRequest;
+ use App\Http\Requests\UpdateProgramRequest;
+ use App\Http\Resources\ProgramResource;
++use App\Models\Program;
+ use App\Models\ProgramTrialSchedule;
+ use Illuminate\Http\Request;
+-use App\Models\Program;
++use Illuminate\Validation\ValidationException;
+ 
+ class ProgramController extends Controller
+ {
+     public function index()
+     {
+-        $programs = Program::with('jadwalTrial')->latest()->get();
+-
+-        return ProgramResource::collection($programs);
++        return ProgramResource::collection(Program::with('jadwalTrial')->latest()->get());
+     }
+ 
+     public function store(StoreProgramRequest $request)
+     {
+         $program = Program::create($request->validated());
+ 
+-        return new ProgramResource($program);
++        return (new ProgramResource($program->load('jadwalTrial')))->response()->setStatusCode(201);
+     }
+ 
+     public function show(Program $program)
+     {
+-        $program->load('jadwalTrial');
+-
+-        return new ProgramResource($program);
++        return new ProgramResource($program->load('jadwalTrial'));
+     }
+ 
+     public function update(UpdateProgramRequest $request, Program $program)
+     {
+         $program->update($request->validated());
+ 
+-        return new ProgramResource($program);
++        return new ProgramResource($program->load('jadwalTrial'));
+     }
+ 
+     public function destroy(Program $program)
+     {
++        if ($program->isInUse()) {
++            throw ValidationException::withMessages([
++                'program' => ['Program sudah dipakai, nonaktifkan saja.'],
++            ]);
++        }
++
+         $program->delete();
+ 
+-        return response()->json(['message' => 'Program berhasil dihapus']);
++        return response()->noContent();
+     }
+ 
++    // TODO(nanti): diganti GET /api/public/programs di slice 3 Modul 1.
+     public function indexAktif()
+-        {
+-            $programs = Program::where('status_aktif', true)
+-                ->with('jadwalTrial')
+-                ->latest()
+-                ->get();
+-
+-            return ProgramResource::collection($programs);
+-        }
++    {
++        return ProgramResource::collection(
++            Program::where('is_active', true)->with('jadwalTrial')->latest()->get()
++        );
++    }
+ 
+-        public function storeJadwalTrial(Request $request, Program $program)
+-        {
+-            $validated = $request->validate([
+-                'hari' => ['required', 'in:senin,selasa,rabu,kamis,jumat,sabtu,minggu'],
+-                'jam_mulai' => ['required', 'date_format:H:i'],
+-                'jam_selesai' => ['required', 'date_format:H:i', 'after:jam_mulai'],
+-            ]);
++    public function storeJadwalTrial(Request $request, Program $program)
++    {
++        $validated = $request->validate([
++            'hari' => ['required', 'in:senin,selasa,rabu,kamis,jumat,sabtu,minggu'],
++            'jam_mulai' => ['required', 'date_format:H:i'],
++            'jam_selesai' => ['required', 'date_format:H:i', 'after:jam_mulai'],
++        ]);
+ 
+-            $jadwal = $program->jadwalTrial()->create($validated);
++        $jadwal = $program->jadwalTrial()->create($validated);
+ 
+-            return response()->json(['data' => $jadwal], 201);
+-        }
++        return response()->json(['data' => $jadwal], 201);
++    }
+ 
+-        public function destroyJadwalTrial(Program $program, ProgramTrialSchedule $jadwal)
+-        {
+-            $jadwal->delete();
++    public function destroyJadwalTrial(Program $program, ProgramTrialSchedule $jadwal)
++    {
++        $jadwal->delete();
+ 
+-            return response()->json(['message' => 'Jadwal trial berhasil dihapus']);
+-        }
+-}
+\ No newline at end of file
++        return response()->noContent();
++    }
++}
+diff --git a/after-schola/app/Http/Controllers/Api/RegistrationController.php b/after-schola/app/Http/Controllers/Api/RegistrationController.php
+index f318cfb..b13f0c9 100644
+--- a/after-schola/app/Http/Controllers/Api/RegistrationController.php
++++ b/after-schola/app/Http/Controllers/Api/RegistrationController.php
+@@ -66,7 +66,7 @@ public function approve(Request $request, Registration $registration)
+             Invoice::create([
+                 'registration_id' => $registration->id,
+                 'number' => Invoice::nextNumber(),
+-                'amount' => $program->biaya, // snapshot harga saat terbit
++                'amount' => $program->price, // snapshot harga saat terbit
+                 'due_date' => now()->addDays(self::DUE_DAYS)->toDateString(),
+                 'status' => 'unpaid',
+                 'issued_at' => now(),
+diff --git a/after-schola/app/Http/Requests/StoreProgramRequest.php b/after-schola/app/Http/Requests/StoreProgramRequest.php
+index 3b80f21..73dd561 100644
+--- a/after-schola/app/Http/Requests/StoreProgramRequest.php
++++ b/after-schola/app/Http/Requests/StoreProgramRequest.php
+@@ -14,11 +14,12 @@ public function authorize(): bool
+     public function rules(): array
+     {
+         return [
+-            'nama' => ['required', 'string', 'max:255'],
++            'name' => ['required', 'string', 'max:255'],
++            'jenjang' => ['required', 'in:SD,SMP,SMA'],
+             'tipe' => ['required', 'in:online,offline'],
+-            'deskripsi' => ['nullable', 'string'],
+-            'biaya' => ['required', 'numeric', 'min:0'],
+-            'status_aktif' => ['boolean'],
++            'description' => ['nullable', 'string'],
++            'price' => ['required', 'numeric', 'min:0', 'max:9999999999'],
++            'is_active' => ['boolean'],
+         ];
+     }
+ }
+\ No newline at end of file
+diff --git a/after-schola/app/Http/Requests/UpdateProgramRequest.php b/after-schola/app/Http/Requests/UpdateProgramRequest.php
+index 645ef4a..23169f7 100644
+--- a/after-schola/app/Http/Requests/UpdateProgramRequest.php
++++ b/after-schola/app/Http/Requests/UpdateProgramRequest.php
+@@ -15,11 +15,12 @@ public function authorize(): bool
+     public function rules(): array
+     {
+         return [
+-            'nama' => ['sometimes', 'string', 'max:255'],
++            'name' => ['sometimes', 'string', 'max:255'],
++            'jenjang' => ['sometimes', 'in:SD,SMP,SMA'],
+             'tipe' => ['sometimes', 'in:online,offline'],
+-            'deskripsi' => ['nullable', 'string'],
+-            'biaya' => ['sometimes', 'numeric', 'min:0'],
+-            'status_aktif' => ['sometimes', 'boolean'],
++            'description' => ['nullable', 'string'],
++            'price' => ['sometimes', 'numeric', 'min:0', 'max:9999999999'],
++            'is_active' => ['sometimes', 'boolean'],
+         ];
+     }
+ }
+\ No newline at end of file
+diff --git a/after-schola/app/Http/Resources/InvoiceResource.php b/after-schola/app/Http/Resources/InvoiceResource.php
+index 90524a5..e959591 100644
+--- a/after-schola/app/Http/Resources/InvoiceResource.php
++++ b/after-schola/app/Http/Resources/InvoiceResource.php
+@@ -29,7 +29,7 @@ public function toArray(Request $request): array
+             'student_name' => $registration?->student_name,
+             'parent_name' => $registration?->parent_name,
+             'parent_phone' => $registration?->parent_phone,
+-            'program_name' => $registration?->program?->nama,
++            'program_name' => $registration?->program?->name,
+             'payments' => PaymentResource::collection($this->whenLoaded('payments')),
+         ];
+     }
+diff --git a/after-schola/app/Http/Resources/ProgramResource.php b/after-schola/app/Http/Resources/ProgramResource.php
+index b41f373..77d00d6 100644
+--- a/after-schola/app/Http/Resources/ProgramResource.php
++++ b/after-schola/app/Http/Resources/ProgramResource.php
+@@ -17,11 +17,12 @@ public function toArray(Request $request): array
+         {
+             return [
+                 'id' => $this->id,
+-                'nama' => $this->nama,
++                'name' => $this->name,
++                'jenjang' => $this->jenjang,
+                 'tipe' => $this->tipe,
+-                'deskripsi' => $this->deskripsi,
+-                'biaya' => $this->biaya,
+-                'status_aktif' => $this->status_aktif,
++                'description' => $this->description,
++                'price' => $this->price,
++                'is_active' => $this->is_active,
+                 'jadwal_trial' => ProgramTrialScheduleResource::collection($this->whenLoaded('jadwalTrial')),
+                 'created_at' => $this->created_at,
+                 'updated_at' => $this->updated_at,
+diff --git a/after-schola/app/Http/Resources/RegistrationResource.php b/after-schola/app/Http/Resources/RegistrationResource.php
+index 4309a39..5a50f5c 100644
+--- a/after-schola/app/Http/Resources/RegistrationResource.php
++++ b/after-schola/app/Http/Resources/RegistrationResource.php
+@@ -30,8 +30,8 @@ public function toArray(Request $request): array
+             'parent_email' => $this->parent_email,
+             'parent_address' => $this->parent_address,
+             'program_id' => $this->program_id,
+-            'program_name' => $this->program?->nama,
+-            'program_price' => $this->program ? (float) $this->program->biaya : null,
++            'program_name' => $this->program?->name,
++            'program_price' => $this->program ? (float) $this->program->price : null,
+             'invoice' => $invoice ? [
+                 'id' => $invoice->id,
+                 'number' => $invoice->number,
+diff --git a/after-schola/app/Models/Program.php b/after-schola/app/Models/Program.php
+index 998816a..04730da 100644
+--- a/after-schola/app/Models/Program.php
++++ b/after-schola/app/Models/Program.php
+@@ -10,15 +10,32 @@ class Program extends Model
+     use HasFactory;
+ 
+     protected $fillable = [
+-        'nama',
++        'name',
++        'jenjang',
+         'tipe',
+-        'deskripsi',
+-        'biaya',
+-        'status_aktif',
++        'description',
++        'price',
++        'is_active',
+     ];
+ 
++    protected function casts(): array
++    {
++        return [
++            'price' => 'decimal:2',
++            'is_active' => 'boolean',
++        ];
++    }
++
+     public function jadwalTrial()
+     {
+         return $this->hasMany(ProgramTrialSchedule::class);
+     }
+-}
+\ No newline at end of file
++
++    /** MGT-13: program yang sudah dipakai tidak boleh dihapus, cukup dinonaktifkan. */
++    public function isInUse(): bool
++    {
++        return Lead::where('program_id', $this->id)->exists()
++            || TrialEvaluation::where('program_id', $this->id)->exists()
++            || Registration::where('program_id', $this->id)->exists();
++    }
++}
+diff --git a/after-schola/database/migrations/2026_10_29_000001_align_programs_with_prd.php b/after-schola/database/migrations/2026_10_29_000001_align_programs_with_prd.php
+new file mode 100644
+index 0000000..6c50648
+--- /dev/null
++++ b/after-schola/database/migrations/2026_10_29_000001_align_programs_with_prd.php
+@@ -0,0 +1,43 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++// PRD §7 + konvensi §2: identifier Inggris dan jenjang. Kolom `tipe` (online/offline) dipertahankan.
++return new class extends Migration
++{
++    public function up(): void
++    {
++        Schema::table('programs', function (Blueprint $table) {
++            $table->renameColumn('nama', 'name');
++            $table->renameColumn('deskripsi', 'description');
++            $table->renameColumn('biaya', 'price');
++            $table->renameColumn('status_aktif', 'is_active');
++        });
++
++        Schema::table('programs', function (Blueprint $table) {
++            $table->decimal('price', 12, 2)->change();
++            // Nullable karena baris lama belum punya jenjang; wajib diisi lewat Form Request.
++            $table->enum('jenjang', ['SD', 'SMP', 'SMA'])->nullable()->after('name');
++        });
++    }
++
++    public function down(): void
++    {
++        Schema::table('programs', function (Blueprint $table) {
++            $table->dropColumn('jenjang');
++        });
++
++        Schema::table('programs', function (Blueprint $table) {
++            $table->decimal('price', 10, 2)->change();
++        });
++
++        Schema::table('programs', function (Blueprint $table) {
++            $table->renameColumn('name', 'nama');
++            $table->renameColumn('description', 'deskripsi');
++            $table->renameColumn('price', 'biaya');
++            $table->renameColumn('is_active', 'status_aktif');
++        });
++    }
++};
+diff --git a/after-schola/database/seeders/DemoSeeder.php b/after-schola/database/seeders/DemoSeeder.php
+index 47204bd..6f8f74b 100644
+--- a/after-schola/database/seeders/DemoSeeder.php
++++ b/after-schola/database/seeders/DemoSeeder.php
+@@ -271,15 +271,15 @@ private function seedHotIssues(User $admin): void
+     private function seedPrograms(): array
+     {
+         $defs = [
+-            ['Coding Kids', 'offline', 'Dasar pemrograman visual untuk SD-SMP.', 750000, true, [['senin', '15:30', '16:30'], ['rabu', '15:30', '16:30']]],
+-            ['Robotik Online', 'online', 'Robotik dasar via kelas daring.', 500000, true, [['sabtu', '09:00', '10:30']]],
+-            ['Public Speaking', 'offline', 'Latihan berbicara di depan umum.', 450000, false, [['jumat', '15:00', '16:00']]],
++            ['Coding Kids', 'SD', 'offline', 'Dasar pemrograman visual untuk SD-SMP.', 750000, true, [['senin', '15:30', '16:30'], ['rabu', '15:30', '16:30']]],
++            ['Robotik Online', 'SMP', 'online', 'Robotik dasar via kelas daring.', 500000, true, [['sabtu', '09:00', '10:30']]],
++            ['Public Speaking', 'SMA', 'offline', 'Latihan berbicara di depan umum.', 450000, false, [['jumat', '15:00', '16:00']]],
+         ];
+         $programs = [];
+-        foreach ($defs as [$name, $type, $desc, $fee, $active, $schedules]) {
++        foreach ($defs as [$name, $jenjang, $type, $desc, $fee, $active, $schedules]) {
+             $program = Program::updateOrCreate(
+-                ['nama' => $name],
+-                ['tipe' => $type, 'deskripsi' => $desc, 'biaya' => $fee, 'status_aktif' => $active],
++                ['name' => $name],
++                ['jenjang' => $jenjang, 'tipe' => $type, 'description' => $desc, 'price' => $fee, 'is_active' => $active],
+             );
+             foreach ($schedules as [$day, $from, $to]) {
+                 ProgramTrialSchedule::updateOrCreate(
+diff --git a/after-schola/database/seeders/RoleSeeder.php b/after-schola/database/seeders/RoleSeeder.php
+index f08a642..ef028d4 100644
+--- a/after-schola/database/seeders/RoleSeeder.php
++++ b/after-schola/database/seeders/RoleSeeder.php
+@@ -27,6 +27,7 @@ public function run(): void
+             'submit expo reports',   // trainer mengisi laporan ekspo
+             'export data',           // export Excel/PDF
+             'manage users',          // kelola user & role
++            'manage programs',       // CRUD program, level, rubrik, jadwal trial
+             'submit trial evaluations', // trainer mengisi evaluasi trial
+             'manage trial evaluations', // lihat & kelola semua evaluasi trial
+             'manage enrollment',        // keputusan lanjut/tidak + pendaftaran resmi
+diff --git a/after-schola/frontend/src/views/management/ProgramManagementView.vue b/after-schola/frontend/src/views/management/ProgramManagementView.vue
+index d68e4cc..532625c 100644
+--- a/after-schola/frontend/src/views/management/ProgramManagementView.vue
++++ b/after-schola/frontend/src/views/management/ProgramManagementView.vue
+@@ -8,6 +8,7 @@ const TIPE_OPTIONS = [
+   { value: 'online', label: 'Online' },
+   { value: 'offline', label: 'Offline' },
+ ]
++const JENJANG_OPTIONS = ['SD', 'SMP', 'SMA']
+ const HARI_OPTIONS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu']
+ 
+ const loading = ref(true)
+@@ -15,11 +16,12 @@ const programs = ref([])
+ 
+ function emptyForm() {
+   return {
+-    nama: '',
++    name: '',
++    jenjang: 'SD',
+     tipe: 'online',
+-    deskripsi: '',
+-    biaya: '',
+-    status_aktif: true,
++    description: '',
++    price: '',
++    is_active: true,
+     jadwal: [], // { hari, jam_mulai, jam_selesai }
+   }
+ }
+@@ -63,11 +65,12 @@ async function submitCreate() {
+   formError.value = ''
+   try {
+     const { data } = await api.post('/programs', {
+-      nama: form.nama,
++      name: form.name,
++      jenjang: form.jenjang,
+       tipe: form.tipe,
+-      deskripsi: form.deskripsi,
+-      biaya: form.biaya,
+-      status_aktif: form.status_aktif,
++      description: form.description,
++      price: form.price,
++      is_active: form.is_active,
+     })
+     const newProgram = data?.data ?? data
+     for (const j of form.jadwal) {
+@@ -91,11 +94,12 @@ async function submitCreate() {
+ function openEdit(program) {
+   editTarget.value = program
+   Object.assign(editForm, {
+-    nama: program.nama,
++    name: program.name,
++    jenjang: program.jenjang ?? '',
+     tipe: program.tipe,
+-    deskripsi: program.deskripsi ?? '',
+-    biaya: program.biaya,
+-    status_aktif: program.status_aktif,
++    description: program.description ?? '',
++    price: program.price,
++    is_active: program.is_active,
+     jadwal: (program.jadwal_trial ?? []).map((j) => ({ ...j })),
+   })
+   editError.value = ''
+@@ -108,11 +112,12 @@ async function submitEdit() {
+   editError.value = ''
+   try {
+     await api.put(`/programs/${editTarget.value.id}`, {
+-      nama: editForm.nama,
++      name: editForm.name,
++      jenjang: editForm.jenjang,
+       tipe: editForm.tipe,
+-      deskripsi: editForm.deskripsi,
+-      biaya: editForm.biaya,
+-      status_aktif: editForm.status_aktif,
++      description: editForm.description,
++      price: editForm.price,
++      is_active: editForm.is_active,
+     })
+     showEdit.value = false
+     await loadPrograms()
+@@ -129,7 +134,7 @@ async function submitEdit() {
+ 
+ async function toggleActive(program) {
+   try {
+-    await api.put(`/programs/${program.id}`, { status_aktif: !program.status_aktif })
++    await api.put(`/programs/${program.id}`, { is_active: !program.is_active })
+     await loadPrograms()
+   } catch (e) {
+     window.alert('Gagal mengubah status program.')
+@@ -137,7 +142,7 @@ async function toggleActive(program) {
+ }
+ 
+ async function removeProgram(program) {
+-  if (!window.confirm(`Hapus program "${program.nama}"? Tindakan ini tidak bisa dibatalkan.`)) return
++  if (!window.confirm(`Hapus program "${program.name}"? Program yang sudah dipakai tidak bisa dihapus (nonaktifkan saja).`)) return
+   try {
+     await api.delete(`/programs/${program.id}`)
+     await loadPrograms()
+@@ -146,7 +151,7 @@ async function removeProgram(program) {
+   }
+ }
+ 
+-function formatBiaya(v) {
++function formatPrice(v) {
+   const n = Number(v || 0)
+   return n.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 })
+ }
+@@ -195,8 +200,8 @@ onMounted(() => {
+         class="flex flex-col gap-space-sm border-b border-surface-container px-space-md py-space-sm last:border-0 sm:flex-row sm:items-center"
+       >
+         <div class="flex flex-col">
+-          <span class="font-label-lg text-label-lg font-semibold text-on-surface">{{ p.nama }}</span>
+-          <span class="font-body-sm text-body-sm text-on-surface-variant">{{ formatBiaya(p.biaya) }} • {{ p.tipe }}</span>
++          <span class="font-label-lg text-label-lg font-semibold text-on-surface">{{ p.name }}</span>
++          <span class="font-body-sm text-body-sm text-on-surface-variant">{{ formatPrice(p.price) }} • {{ [p.jenjang, p.tipe].filter(Boolean).join(' • ') }}</span>
+         </div>
+ 
+         <div class="flex flex-wrap items-center gap-1 sm:ml-space-md">
+@@ -210,10 +215,10 @@ onMounted(() => {
+         <div class="flex items-center gap-space-xs sm:ml-auto">
+           <span
+             class="rounded-full px-2 py-0.5 font-label-sm text-label-sm font-semibold"
+-            :class="p.status_aktif ? 'bg-[#D1FAE5] text-[#065F46]' : 'bg-surface-container text-outline'"
+-          >{{ p.status_aktif ? 'Aktif' : 'Nonaktif' }}</span>
+-          <button class="rounded-lg p-1.5 text-primary hover:bg-surface-container" :title="p.status_aktif ? 'Nonaktifkan' : 'Aktifkan'" @click="toggleActive(p)">
+-            <span class="material-symbols-outlined text-[18px]">{{ p.status_aktif ? 'toggle_on' : 'toggle_off' }}</span>
++            :class="p.is_active ? 'bg-[#D1FAE5] text-[#065F46]' : 'bg-surface-container text-outline'"
++          >{{ p.is_active ? 'Aktif' : 'Nonaktif' }}</span>
++          <button class="rounded-lg p-1.5 text-primary hover:bg-surface-container" :title="p.is_active ? 'Nonaktifkan' : 'Aktifkan'" @click="toggleActive(p)">
++            <span class="material-symbols-outlined text-[18px]">{{ p.is_active ? 'toggle_on' : 'toggle_off' }}</span>
+           </button>
+           <button class="rounded-lg p-1.5 text-secondary hover:bg-surface-container" title="Ubah program" @click="openEdit(p)">
+             <span class="material-symbols-outlined text-[18px]">edit</span>
+@@ -247,7 +252,15 @@ onMounted(() => {
+ 
+             <label class="flex flex-col gap-1">
+               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Nama Program</span>
+-              <input v-model="form.nama" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
++              <input v-model="form.name" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
++            </label>
++
++            <label class="flex flex-col gap-1">
++              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Jenjang</span>
++              <select required v-model="form.jenjang" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15">
++                <option value="" disabled>Pilih jenjang</option>
++                <option v-for="j in JENJANG_OPTIONS" :key="j" :value="j">{{ j }}</option>
++              </select>
+             </label>
+ 
+             <label class="flex flex-col gap-1">
+@@ -259,16 +272,16 @@ onMounted(() => {
+ 
+             <label class="flex flex-col gap-1">
+               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Deskripsi</span>
+-              <textarea v-model="form.deskripsi" rows="3" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"></textarea>
++              <textarea v-model="form.description" rows="3" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"></textarea>
+             </label>
+ 
+             <label class="flex flex-col gap-1">
+               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Biaya (Rp)</span>
+-              <input v-model="form.biaya" type="number" min="0" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
++              <input v-model="form.price" type="number" min="0" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+             </label>
+ 
+             <label class="flex items-center gap-space-xs">
+-              <input type="checkbox" v-model="form.status_aktif" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
++              <input type="checkbox" v-model="form.is_active" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
+               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Aktifkan program ini</span>
+             </label>
+ 
+@@ -325,7 +338,15 @@ onMounted(() => {
+ 
+             <label class="flex flex-col gap-1">
+               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Nama Program</span>
+-              <input v-model="editForm.nama" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
++              <input v-model="editForm.name" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
++            </label>
++
++            <label class="flex flex-col gap-1">
++              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Jenjang</span>
++              <select required v-model="editForm.jenjang" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15">
++                <option value="" disabled>Pilih jenjang</option>
++                <option v-for="j in JENJANG_OPTIONS" :key="j" :value="j">{{ j }}</option>
++              </select>
+             </label>
+ 
+             <label class="flex flex-col gap-1">
+@@ -337,16 +358,16 @@ onMounted(() => {
+ 
+             <label class="flex flex-col gap-1">
+               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Deskripsi</span>
+-              <textarea v-model="editForm.deskripsi" rows="3" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"></textarea>
++              <textarea v-model="editForm.description" rows="3" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"></textarea>
+             </label>
+ 
+             <label class="flex flex-col gap-1">
+               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Biaya (Rp)</span>
+-              <input v-model="editForm.biaya" type="number" min="0" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
++              <input v-model="editForm.price" type="number" min="0" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+             </label>
+ 
+             <label class="flex items-center gap-space-xs">
+-              <input type="checkbox" v-model="editForm.status_aktif" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
++              <input type="checkbox" v-model="editForm.is_active" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
+               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Aktifkan program ini</span>
+             </label>
+ 
+diff --git a/after-schola/frontend/src/views/public/TrialRegistrationView.vue b/after-schola/frontend/src/views/public/TrialRegistrationView.vue
+index 4b96fac..740329c 100644
+--- a/after-schola/frontend/src/views/public/TrialRegistrationView.vue
++++ b/after-schola/frontend/src/views/public/TrialRegistrationView.vue
+@@ -188,7 +188,7 @@ onMounted(loadPrograms)
+             @change="onProgramChange"
+           >
+             <option value="">{{ loadingPrograms ? 'Memuat…' : 'Belum menentukan' }}</option>
+-            <option v-for="p in programs" :key="p.id" :value="p.id">{{ p.nama }}</option>
++            <option v-for="p in programs" :key="p.id" :value="p.id">{{ p.name }}</option>
+           </select>
+         </label>
+ 
+diff --git a/after-schola/routes/api.php b/after-schola/routes/api.php
+index 5dabfec..8a08f19 100644
+--- a/after-schola/routes/api.php
++++ b/after-schola/routes/api.php
+@@ -21,7 +21,7 @@
+ use App\Http\Controllers\Api\UserController;
+ use Illuminate\Support\Facades\Route;
+ use App\Http\Controllers\Api\LeadController;
+-use App\Http\Controllers\ProgramController;
++use App\Http\Controllers\Api\ProgramController;
+ use App\Http\Controllers\Api\ProjectController;
+ use App\Http\Controllers\Api\TeamController;
+ use App\Http\Controllers\Api\TaskController;
+@@ -184,11 +184,10 @@
+         Route::get('projects/{project}/gantt', ProjectGanttController::class);
+     });
+ 
+-    // Khusus Management - wajib login & role tertentu
+-    Route::middleware(['auth:sanctum', 'role:management'])->group(function () {
+-    Route::apiResource('programs', ProgramController::class);
+-    Route::post('/programs/{program}/jadwal-trial', [ProgramController::class, 'storeJadwalTrial']);
+-    Route::delete('/programs/{program}/jadwal-trial/{jadwal}', [ProgramController::class, 'destroyJadwalTrial']);
++    // Master program (Modul 1)
++    Route::middleware('permission:manage programs')->group(function () {
++        Route::apiResource('programs', ProgramController::class);
++        Route::post('/programs/{program}/jadwal-trial', [ProgramController::class, 'storeJadwalTrial']);
++        Route::delete('/programs/{program}/jadwal-trial/{jadwal}', [ProgramController::class, 'destroyJadwalTrial']);
+     });
+-    
+ });
+diff --git a/after-schola/tests/Concerns/MakesFinanceFixtures.php b/after-schola/tests/Concerns/MakesFinanceFixtures.php
+index 7abcf18..46a342f 100644
+--- a/after-schola/tests/Concerns/MakesFinanceFixtures.php
++++ b/after-schola/tests/Concerns/MakesFinanceFixtures.php
+@@ -34,13 +34,14 @@ protected function makeUser(string $role): User
+         return $user;
+     }
+ 
+-    protected function makeProgram(float $biaya = 500000): Program
++    protected function makeProgram(float $price = 500000): Program
+     {
+         return Program::create([
+-            'nama' => 'Coding Kids',
++            'name' => 'Coding Kids',
++            'jenjang' => 'SD',
+             'tipe' => 'offline',
+-            'biaya' => $biaya,
+-            'status_aktif' => true,
++            'price' => $price,
++            'is_active' => true,
+         ]);
+     }
+ 
+diff --git a/after-schola/tests/Feature/ProgramTest.php b/after-schola/tests/Feature/ProgramTest.php
+new file mode 100644
+index 0000000..b101c58
+--- /dev/null
++++ b/after-schola/tests/Feature/ProgramTest.php
+@@ -0,0 +1,200 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\Lead;
++use App\Models\Program;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Laravel\Sanctum\Sanctum;
++use Tests\Concerns\MakesFinanceFixtures;
++use Tests\TestCase;
++
++/**
++ * Modul 1, slice 1: master program (MGT-10, MGT-13). Program yang sudah dipakai diarsipkan, bukan dihapus.
++ */
++class ProgramTest extends TestCase
++{
++    use MakesFinanceFixtures, RefreshDatabase;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seedRoles();
++    }
++
++    private function asManagement(): void
++    {
++        Sanctum::actingAs($this->makeUser('management'));
++    }
++
++    private function validPayload(array $overrides = []): array
++    {
++        return array_merge([
++            'name' => 'Robotik Dasar',
++            'jenjang' => 'SMP',
++            'tipe' => 'online',
++            'description' => 'Robotik untuk pemula.',
++            'price' => 650000,
++            'is_active' => true,
++        ], $overrides);
++    }
++
++    public function test_guest_gets_401_and_roles_without_permission_get_403(): void
++    {
++        $program = $this->makeProgram();
++
++        $this->getJson('/api/programs')->assertStatus(401);
++
++        foreach (['trainer', 'finance', 'hr'] as $role) {
++            Sanctum::actingAs($this->makeUser($role));
++            $this->getJson('/api/programs')->assertStatus(403);
++            $this->postJson('/api/programs', $this->validPayload())->assertStatus(403);
++            $this->putJson("/api/programs/{$program->id}", ['name' => 'x'])->assertStatus(403);
++            $this->deleteJson("/api/programs/{$program->id}")->assertStatus(403);
++            $this->postJson("/api/programs/{$program->id}/jadwal-trial", [
++                'hari' => 'senin', 'jam_mulai' => '15:00', 'jam_selesai' => '16:00',
++            ])->assertStatus(403);
++        }
++
++        $this->assertDatabaseHas('programs', ['id' => $program->id, 'name' => 'Coding Kids']);
++    }
++
++    public function test_any_user_with_manage_programs_permission_has_access(): void
++    {
++        $user = $this->makeUser('hr');
++        $user->givePermissionTo('manage programs');
++        Sanctum::actingAs($user);
++
++        $this->getJson('/api/programs')->assertOk();
++    }
++
++    public function test_index_lists_programs_with_prd_fields_and_trial_schedules(): void
++    {
++        $program = $this->makeProgram(750000);
++        $program->jadwalTrial()->create(['hari' => 'senin', 'jam_mulai' => '15:30', 'jam_selesai' => '16:30']);
++        $this->asManagement();
++
++        $this->getJson('/api/programs')
++            ->assertOk()
++            ->assertJsonPath('data.0.name', 'Coding Kids')
++            ->assertJsonPath('data.0.jenjang', 'SD')
++            ->assertJsonPath('data.0.tipe', 'offline')
++            ->assertJsonPath('data.0.price', '750000.00')
++            ->assertJsonPath('data.0.is_active', true)
++            ->assertJsonPath('data.0.jadwal_trial.0.hari', 'senin')
++            ->assertJsonMissingPath('data.0.nama');
++    }
++
++    public function test_store_creates_program(): void
++    {
++        $this->asManagement();
++
++        $this->postJson('/api/programs', $this->validPayload())
++            ->assertStatus(201)
++            ->assertJsonPath('data.name', 'Robotik Dasar')
++            ->assertJsonPath('data.jenjang', 'SMP')
++            ->assertJsonPath('data.tipe', 'online')
++            ->assertJsonPath('data.price', '650000.00')
++            ->assertJsonPath('data.is_active', true);
++
++        $this->assertDatabaseHas('programs', ['name' => 'Robotik Dasar', 'jenjang' => 'SMP', 'is_active' => true]);
++    }
++
++    public function test_store_validates_input(): void
++    {
++        $this->asManagement();
++
++        $this->postJson('/api/programs', [])
++            ->assertStatus(422)
++            ->assertJsonValidationErrors(['name', 'jenjang', 'tipe', 'price']);
++
++        $this->postJson('/api/programs', $this->validPayload(['jenjang' => 'TK']))
++            ->assertStatus(422)->assertJsonValidationErrors('jenjang');
++        $this->postJson('/api/programs', $this->validPayload(['tipe' => 'hybrid']))
++            ->assertStatus(422)->assertJsonValidationErrors('tipe');
++        $this->postJson('/api/programs', $this->validPayload(['price' => -1]))
++            ->assertStatus(422)->assertJsonValidationErrors('price');
++
++        $this->assertDatabaseCount('programs', 0);
++    }
++
++    public function test_update_changes_only_sent_fields_and_can_archive(): void
++    {
++        $program = $this->makeProgram();
++        $this->asManagement();
++
++        $this->putJson("/api/programs/{$program->id}", ['price' => 900000, 'is_active' => false])
++            ->assertOk()
++            ->assertJsonPath('data.price', '900000.00')
++            ->assertJsonPath('data.is_active', false)
++            ->assertJsonPath('data.name', 'Coding Kids');
++
++        $this->putJson("/api/programs/{$program->id}", ['jenjang' => 'TK'])
++            ->assertStatus(422)->assertJsonValidationErrors('jenjang');
++    }
++
++    public function test_destroy_removes_unused_program(): void
++    {
++        $program = $this->makeProgram();
++        $this->asManagement();
++
++        $this->deleteJson("/api/programs/{$program->id}")->assertStatus(204);
++
++        $this->assertDatabaseMissing('programs', ['id' => $program->id]);
++    }
++
++    public function test_destroy_is_rejected_when_program_is_used_by_registration_or_trial(): void
++    {
++        $program = $this->makeProgram();
++        $this->makeRegistration([], $program); // membuat trial evaluation + registration untuk program ini
++        $this->asManagement();
++
++        $this->deleteJson("/api/programs/{$program->id}")
++            ->assertStatus(422)
++            ->assertJsonValidationErrors('program');
++
++        $this->assertDatabaseHas('programs', ['id' => $program->id]);
++    }
++
++    public function test_destroy_is_rejected_when_program_is_used_by_lead(): void
++    {
++        $program = $this->makeProgram();
++        Lead::create([
++            'name' => 'Calon Siswa',
++            'education_level' => 'sd',
++            'origin_school' => 'SD Negeri 1',
++            'parent_email' => 'ortu@example.com',
++            'program_id' => $program->id,
++        ]);
++        $this->asManagement();
++
++        $this->deleteJson("/api/programs/{$program->id}")
++            ->assertStatus(422)
++            ->assertJsonValidationErrors('program');
++
++        $this->assertDatabaseHas('programs', ['id' => $program->id]);
++    }
++
++    public function test_trial_schedule_can_be_added_and_removed(): void
++    {
++        $program = $this->makeProgram();
++        $this->asManagement();
++
++        $id = $this->postJson("/api/programs/{$program->id}/jadwal-trial", [
++            'hari' => 'rabu', 'jam_mulai' => '15:30', 'jam_selesai' => '16:30',
++        ])->assertStatus(201)->json('data.id');
++
++        $this->deleteJson("/api/programs/{$program->id}/jadwal-trial/{$id}")->assertStatus(204);
++        $this->assertDatabaseCount('program_trial_schedules', 0);
++    }
++
++    public function test_public_active_list_returns_only_active_programs_with_new_fields(): void
++    {
++        $this->makeProgram();
++        Program::create(['name' => 'Program Arsip', 'tipe' => 'online', 'price' => 1, 'is_active' => false]);
++
++        $res = $this->getJson('/api/programs/aktif')->assertOk();
++
++        $this->assertSame(['Coding Kids'], collect($res->json('data'))->pluck('name')->all());
++    }
++}

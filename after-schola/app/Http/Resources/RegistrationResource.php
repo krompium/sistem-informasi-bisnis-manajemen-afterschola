@@ -30,8 +30,8 @@ class RegistrationResource extends JsonResource
             'parent_email' => $this->parent_email,
             'parent_address' => $this->parent_address,
             'program_id' => $this->program_id,
-            'program_name' => $this->program?->nama,
-            'program_price' => $this->program ? (float) $this->program->biaya : null,
+            'program_name' => $this->program?->name,
+            'program_price' => $this->program ? (float) $this->program->price : null,
             'invoice' => $invoice ? [
                 'id' => $invoice->id,
                 'number' => $invoice->number,

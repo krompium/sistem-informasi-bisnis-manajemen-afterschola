@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\FinanceReportController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\PaymentSettingController;
 use App\Http\Controllers\Api\RegistrationController;
 use App\Http\Controllers\Api\ExpoReportController;
 use App\Http\Controllers\Api\ExportController;
@@ -21,7 +22,9 @@ use App\Http\Controllers\Api\TrialEvaluationController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\LeadController;
-use App\Http\Controllers\ProgramController;
+use App\Http\Controllers\Api\ProgramController;
+use App\Http\Controllers\Api\ProgramLevelController;
+use App\Http\Controllers\Api\RubricCriterionController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\TaskController;
@@ -45,7 +48,10 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 Route::post('/leads', [LeadController::class, 'store'])->middleware('throttle:5,1');
-Route::get('/programs/aktif', [ProgramController::class, 'indexAktif']);
+Route::middleware('throttle:60,1')->group(function () {
+    Route::get('/public/programs', [ProgramController::class, 'publicIndex']);
+    Route::get('/public/programs/{program}', [ProgramController::class, 'publicShow']);
+});
 
 // --- Butuh autentikasi (Sanctum) ---
 Route::middleware('auth:sanctum')->group(function () {
@@ -140,6 +146,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
         Route::post('/invoices/{invoice}/payments', [PaymentController::class, 'store']);
         Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'void']);
+        Route::get('/payment-settings', [PaymentSettingController::class, 'show']);
+        Route::put('/payment-settings', [PaymentSettingController::class, 'update']);
     });
     Route::middleware('permission:confirm payments')->group(function () {
         Route::post('/payments/{payment}/confirm', [PaymentController::class, 'confirm']);
@@ -184,11 +192,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('projects/{project}/gantt', ProjectGanttController::class);
     });
 
-    // Khusus Management - wajib login & role tertentu
-    Route::middleware(['auth:sanctum', 'role:management'])->group(function () {
-    Route::apiResource('programs', ProgramController::class);
-    Route::post('/programs/{program}/jadwal-trial', [ProgramController::class, 'storeJadwalTrial']);
-    Route::delete('/programs/{program}/jadwal-trial/{jadwal}', [ProgramController::class, 'destroyJadwalTrial']);
+    // Master program (Modul 1)
+    Route::middleware('permission:manage programs')->group(function () {
+        Route::apiResource('programs', ProgramController::class);
+        Route::post('/programs/{program}/jadwal-trial', [ProgramController::class, 'storeJadwalTrial']);
+        Route::delete('/programs/{program}/jadwal-trial/{jadwal}', [ProgramController::class, 'destroyJadwalTrial']);
+
+        Route::scopeBindings()->group(function () {
+            Route::get('/programs/{program}/levels', [ProgramLevelController::class, 'index']);
+            Route::post('/programs/{program}/levels', [ProgramLevelController::class, 'store']);
+            Route::put('/programs/{program}/levels/{level}', [ProgramLevelController::class, 'update']);
+            Route::delete('/programs/{program}/levels/{level}', [ProgramLevelController::class, 'destroy']);
+
+            Route::get('/programs/{program}/rubric-criteria', [RubricCriterionController::class, 'index']);
+            Route::post('/programs/{program}/rubric-criteria', [RubricCriterionController::class, 'store']);
+            Route::put('/programs/{program}/rubric-criteria/{rubricCriterion}', [RubricCriterionController::class, 'update']);
+            Route::delete('/programs/{program}/rubric-criteria/{rubricCriterion}', [RubricCriterionController::class, 'destroy']);
+        });
     });
-    
 });

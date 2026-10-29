@@ -34,13 +34,14 @@ trait MakesFinanceFixtures
         return $user;
     }
 
-    protected function makeProgram(float $biaya = 500000): Program
+    protected function makeProgram(float $price = 500000): Program
     {
         return Program::create([
-            'nama' => 'Coding Kids',
+            'name' => 'Coding Kids',
+            'jenjang' => 'SD',
             'tipe' => 'offline',
-            'biaya' => $biaya,
-            'status_aktif' => true,
+            'price' => $price,
+            'is_active' => true,
         ]);
     }
 

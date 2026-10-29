@@ -27,6 +27,7 @@ class RoleSeeder extends Seeder
             'submit expo reports',   // trainer mengisi laporan ekspo
             'export data',           // export Excel/PDF
             'manage users',          // kelola user & role
+            'manage programs',       // CRUD program, level, rubrik, jadwal trial
             'submit trial evaluations', // trainer mengisi evaluasi trial
             'manage trial evaluations', // lihat & kelola semua evaluasi trial
             'manage enrollment',        // keputusan lanjut/tidak + pendaftaran resmi

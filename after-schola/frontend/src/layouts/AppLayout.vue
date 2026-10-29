@@ -28,6 +28,7 @@ const managementNav = [
   { label: 'Verifikasi Pendaftaran', icon: 'fact_check', to: '/management/verifikasi-pendaftaran' },
   { label: 'Invoice & Pembayaran', icon: 'receipt_long', to: '/management/invoice' },
   { label: 'Umur Piutang', icon: 'hourglass_bottom', to: '/management/umur-piutang' },
+  { label: 'Pengaturan Pembayaran', icon: 'payments', to: '/management/pengaturan-pembayaran' },
   { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue' },
   { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user' },
   { label: 'Program & Promosi', icon: 'inventory_2', to: '/management/program' },

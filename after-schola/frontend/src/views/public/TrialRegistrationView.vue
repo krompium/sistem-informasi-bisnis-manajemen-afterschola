@@ -2,8 +2,10 @@
 // Form publik pendaftaran trial (Modul 2 — Pendaftaran Trial & Leads).
 // Tanpa login. Mengirim ke POST /api/leads (endpoint publik, lihat routes/api.php).
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import api from '@/lib/api'
 
+const route = useRoute()
 const loadingPrograms = ref(true)
 const programs = ref([])
 
@@ -38,8 +40,11 @@ const hariLabel = {
 async function loadPrograms() {
   loadingPrograms.value = true
   try {
-    const { data } = await api.get('/programs/aktif')
+    const { data } = await api.get('/public/programs')
     programs.value = data.data ?? data
+    // Datang dari halaman program (/program/:id): program langsung terpilih.
+    const wanted = Number(route.query.program)
+    if (programs.value.some((p) => p.id === wanted)) form.program_id = wanted
   } catch (err) {
     // Non-fatal: form tetap bisa dikirim tanpa pilih program.
     programs.value = []
@@ -188,7 +193,7 @@ onMounted(loadPrograms)
             @change="onProgramChange"
           >
             <option value="">{{ loadingPrograms ? 'Memuat…' : 'Belum menentukan' }}</option>
-            <option v-for="p in programs" :key="p.id" :value="p.id">{{ p.nama }}</option>
+            <option v-for="p in programs" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
 
