@@ -32,7 +32,17 @@ import ProjectCalendarView from '@/views/projects/ProjectCalendarView.vue'
 import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
 import ManagementBranchesView from '@/views/management/BranchesView.vue'
 
+// 1) Import, di dekat import view publik lain
+import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
+import LandingView from '@/views/public/LandingView.vue'
+
 const routes = [
+  {
+    path: '/',
+    name: 'public.landing',
+    component: LandingView,
+    meta: { guestOnly: true },
+  },
   {
     path: '/login',
     name: 'login',
@@ -49,7 +59,7 @@ const routes = [
     component: AppLayout,
     meta: { requiresAuth: true },
     children: [
-      { path: '', redirect: () => useAuthStore().homeRoute },
+      // { path: '', redirect: () => useAuthStore().homeRoute },
 
       // ---- Trainer ----
       { path: 'trainer', name: 'trainer.dashboard', component: TrainerDashboardView },
