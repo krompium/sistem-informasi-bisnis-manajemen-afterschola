@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SaveTrialSlotRequest;
+use App\Http\Resources\PublicTrialSlotResource;
 use App\Http\Resources\TrialSlotResource;
 use App\Models\Branch;
 use App\Models\Program;
 use App\Models\TrialSlot;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 /**
  * CRUD slot trial (permission: manage trial slots; scope cabang lewat query dan Policy).
@@ -20,7 +22,7 @@ class TrialSlotController extends Controller
 
     public function index(Request $request)
     {
-        $query = TrialSlot::visibleTo($request->user())->with(self::WITH);
+        $query = TrialSlot::visibleTo($request->user())->with(self::WITH)->withCount('leads');
 
         if ($request->filled('branch_id')) {
             $query->where('branch_id', $request->integer('branch_id'));
@@ -38,6 +40,27 @@ class TrialSlotController extends Controller
         }
 
         return TrialSlotResource::collection($query->paginate(25));
+    }
+
+    // Publik (PUB-02): slot yang masih bisa dipesan untuk satu program. Tanpa data trainer.
+    public function publicIndex(Request $request)
+    {
+        $request->validate([
+            'program_id' => ['required', 'integer'],
+            'branch_id' => ['nullable', 'integer'],
+        ]);
+
+        $query = TrialSlot::bookable()
+            ->where('program_id', $request->integer('program_id'))
+            ->with(['branch:id,name', 'program:id,name'])
+            ->withCount('leads')
+            ->orderBy('starts_at');
+
+        if ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->integer('branch_id'));
+        }
+
+        return PublicTrialSlotResource::collection($query->paginate(50));
     }
 
     // Pilihan untuk form slot. Sengaja di sini: Marketing tidak punya akses ke /branches, /programs, /users.
@@ -66,26 +89,30 @@ class TrialSlotController extends Controller
     {
         $slot = TrialSlot::create($request->validated());
 
-        return (new TrialSlotResource($slot->load(self::WITH)))->response()->setStatusCode(201);
+        return (new TrialSlotResource($slot->load(self::WITH)->loadCount('leads')))->response()->setStatusCode(201);
     }
 
     public function show(TrialSlot $trialSlot)
     {
         $this->authorize('view', $trialSlot);
 
-        return new TrialSlotResource($trialSlot->load(self::WITH));
+        return new TrialSlotResource($trialSlot->load(self::WITH)->loadCount('leads'));
     }
 
     public function update(SaveTrialSlotRequest $request, TrialSlot $trialSlot)
     {
         $trialSlot->update($request->validated());
 
-        return new TrialSlotResource($trialSlot->load(self::WITH));
+        return new TrialSlotResource($trialSlot->load(self::WITH)->loadCount('leads'));
     }
 
     public function destroy(TrialSlot $trialSlot)
     {
         $this->authorize('delete', $trialSlot);
+
+        if ($trialSlot->leads()->exists()) {
+            throw ValidationException::withMessages(['slot' => ['Slot sudah punya peserta. Tutup pendaftaran slot ini, jangan dihapus.']]);
+        }
 
         $trialSlot->delete();
 

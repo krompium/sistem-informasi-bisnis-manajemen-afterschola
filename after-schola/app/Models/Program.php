@@ -26,11 +26,6 @@ class Program extends Model
         ];
     }
 
-    public function jadwalTrial()
-    {
-        return $this->hasMany(ProgramTrialSchedule::class);
-    }
-
     public function levels()
     {
         return $this->hasMany(ProgramLevel::class)->orderBy('sort_order')->orderBy('id');

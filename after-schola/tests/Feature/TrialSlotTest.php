@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\Lead;
 use App\Models\Program;
 use App\Models\TrialSlot;
 use App\Models\User;
@@ -64,6 +65,22 @@ class TrialSlotTest extends TestCase
         return TrialSlot::create($attributes);
     }
 
+    /** Peserta trial yang sudah memesan slot (leads.trial_slot_id). */
+    private function book(TrialSlot $slot, int $count = 1): void
+    {
+        for ($i = 0; $i < $count; $i++) {
+            Lead::create([
+                'name' => "Calon {$i}",
+                'education_level' => 'sd',
+                'origin_school' => 'SD Negeri 1',
+                'parent_email' => "ortu{$i}@example.com",
+                'program_id' => $slot->program_id,
+                'trial_slot_id' => $slot->id,
+                'status' => 'trial_scheduled',
+            ]);
+        }
+    }
+
     private function payload(array $overrides = []): array
     {
         $payload = array_merge([
@@ -122,6 +139,17 @@ class TrialSlotTest extends TestCase
         $this->assertSame([$this->bdg->id], $trainers[$central->id]['branch_ids']);
     }
 
+    public function test_options_are_also_available_to_lead_managers_for_their_filters(): void
+    {
+        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$this->bdg->id], ['manage leads']));
+
+        $this->getJson('/api/trial-slots/options')
+            ->assertOk()
+            ->assertJsonPath('data.branches.0.name', 'Cabang Bandung');
+        // Pemegang manage leads tetap tidak bisa mengelola slot.
+        $this->getJson('/api/trial-slots')->assertStatus(403);
+    }
+
     public function test_options_for_all_scope_list_every_active_branch(): void
     {
         $jktTrainer = $this->trainerOf($this->jkt);
@@ -151,6 +179,8 @@ class TrialSlotTest extends TestCase
             ->assertJsonPath('data.trainer.id', $trainer->id)
             ->assertJsonPath('data.capacity', 6)
             ->assertJsonPath('data.is_open', true)
+            ->assertJsonPath('data.booked_count', 0)
+            ->assertJsonPath('data.remaining', 6)
             ->assertJsonPath('data.starts_at', $startsAt->toIso8601String());
 
         $this->assertDatabaseHas('trial_slots', [
@@ -320,6 +350,54 @@ class TrialSlotTest extends TestCase
             ->assertJsonPath('data.is_open', false);
 
         $this->assertDatabaseHas('trial_slots', ['id' => $slot->id, 'capacity' => 12, 'is_open' => false]);
+    }
+
+    public function test_slot_reports_booked_count_and_remaining_seats(): void
+    {
+        $slot = $this->makeSlot($this->bdg, ['capacity' => 5]);
+        $this->book($slot, 2);
+        Sanctum::actingAs($this->marketing());
+
+        $this->getJson('/api/trial-slots')
+            ->assertOk()
+            ->assertJsonPath('data.0.booked_count', 2)
+            ->assertJsonPath('data.0.remaining', 3);
+        $this->getJson("/api/trial-slots/{$slot->id}")
+            ->assertOk()
+            ->assertJsonPath('data.booked_count', 2)
+            ->assertJsonPath('data.remaining', 3);
+    }
+
+    public function test_capacity_cannot_be_lowered_below_booked_count(): void
+    {
+        $slot = $this->makeSlot($this->bdg, ['capacity' => 5]);
+        $this->book($slot, 3);
+        Sanctum::actingAs($this->marketing());
+        $withCapacity = fn (int $capacity) => $this->payload([
+            'trainer_id' => $slot->trainer_id,
+            'starts_at' => $slot->starts_at->toIso8601String(),
+            'capacity' => $capacity,
+        ]);
+
+        $this->putJson("/api/trial-slots/{$slot->id}", $withCapacity(2))
+            ->assertStatus(422)->assertJsonValidationErrors('capacity');
+        $this->assertDatabaseHas('trial_slots', ['id' => $slot->id, 'capacity' => 5]);
+
+        $this->putJson("/api/trial-slots/{$slot->id}", $withCapacity(3))
+            ->assertOk()->assertJsonPath('data.remaining', 0);
+    }
+
+    public function test_slot_with_participants_cannot_be_deleted(): void
+    {
+        $slot = $this->makeSlot($this->bdg);
+        $this->book($slot);
+        Sanctum::actingAs($this->marketing());
+
+        $this->deleteJson("/api/trial-slots/{$slot->id}")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('slot');
+
+        $this->assertDatabaseHas('trial_slots', ['id' => $slot->id]);
     }
 
     public function test_destroy_removes_slot(): void

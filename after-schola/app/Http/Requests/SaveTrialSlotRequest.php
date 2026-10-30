@@ -48,7 +48,15 @@ class SaveTrialSlotRequest extends FormRequest
                 },
             ],
             'starts_at' => array_filter(['required', 'date', $creating ? 'after:now' : null]),
-            'capacity' => ['required', 'integer', 'min:1', 'max:100'],
+            'capacity' => [
+                'bail', 'required', 'integer', 'min:1', 'max:100',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $booked = $this->route('trial_slot')?->leads()->count() ?? 0;
+                    if ((int) $value < $booked) {
+                        $fail("Kapasitas tidak boleh kurang dari jumlah peserta ({$booked}).");
+                    }
+                },
+            ],
             'is_open' => ['sometimes', 'boolean'],
         ];
     }

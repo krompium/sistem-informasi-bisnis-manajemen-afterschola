@@ -17,6 +17,8 @@ class TrialSlotResource extends JsonResource
             'starts_at' => $this->starts_at->toIso8601String(),
             'capacity' => $this->capacity,
             'is_open' => $this->is_open,
+            'booked_count' => $this->whenCounted('leads'),
+            'remaining' => $this->whenCounted('leads', fn (int $booked) => max(0, $this->capacity - $booked)),
         ];
     }
 }

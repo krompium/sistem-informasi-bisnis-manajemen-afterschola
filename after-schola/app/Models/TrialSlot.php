@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TrialSlot extends Model
 {
@@ -35,6 +36,22 @@ class TrialSlot extends Model
     public function trainer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'trainer_id');
+    }
+
+    /** Peserta trial: lead yang memesan slot ini (menentukan sisa kursi). */
+    public function leads(): HasMany
+    {
+        return $this->hasMany(Lead::class);
+    }
+
+    /** Slot yang masih bisa dipesan publik: dibuka, belum mulai, masih ada kursi, program dan cabang aktif. */
+    public function scopeBookable(Builder $query): Builder
+    {
+        return $query->where('trial_slots.is_open', true)
+            ->where('trial_slots.starts_at', '>', now())
+            ->whereRaw('trial_slots.capacity > (select count(*) from leads where leads.trial_slot_id = trial_slots.id)')
+            ->whereHas('program', fn (Builder $q) => $q->where('is_active', true))
+            ->whereHas('branch', fn (Builder $q) => $q->where('is_active', true));
     }
 
     /** Slot di cabang yang boleh diakses user: scope 'all' semua, 'assigned' hanya cabangnya (BR-19). */

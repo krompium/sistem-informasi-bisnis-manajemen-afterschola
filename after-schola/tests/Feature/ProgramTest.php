@@ -7,6 +7,7 @@ use App\Models\Lead;
 use App\Models\Program;
 use App\Models\TrialSlot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\MakesFinanceFixtures;
 use Tests\TestCase;
@@ -53,9 +54,6 @@ class ProgramTest extends TestCase
             $this->postJson('/api/programs', $this->validPayload())->assertStatus(403);
             $this->putJson("/api/programs/{$program->id}", ['name' => 'x'])->assertStatus(403);
             $this->deleteJson("/api/programs/{$program->id}")->assertStatus(403);
-            $this->postJson("/api/programs/{$program->id}/jadwal-trial", [
-                'hari' => 'senin', 'jam_mulai' => '15:00', 'jam_selesai' => '16:00',
-            ])->assertStatus(403);
         }
 
         $this->assertDatabaseHas('programs', ['id' => $program->id, 'name' => 'Coding Kids']);
@@ -70,10 +68,9 @@ class ProgramTest extends TestCase
         $this->getJson('/api/programs')->assertOk();
     }
 
-    public function test_index_lists_programs_with_prd_fields_and_trial_schedules(): void
+    public function test_index_lists_programs_with_prd_fields(): void
     {
         $program = $this->makeProgram(750000);
-        $program->jadwalTrial()->create(['hari' => 'senin', 'jam_mulai' => '15:30', 'jam_selesai' => '16:30']);
         $this->asManagement();
 
         $this->getJson('/api/programs')
@@ -83,7 +80,7 @@ class ProgramTest extends TestCase
             ->assertJsonPath('data.0.tipe', 'offline')
             ->assertJsonPath('data.0.price', '750000.00')
             ->assertJsonPath('data.0.is_active', true)
-            ->assertJsonPath('data.0.jadwal_trial.0.hari', 'senin')
+            ->assertJsonMissingPath('data.0.jadwal_trial')
             ->assertJsonMissingPath('data.0.nama');
     }
 
@@ -196,16 +193,16 @@ class ProgramTest extends TestCase
         $this->assertDatabaseHas('programs', ['id' => $program->id]);
     }
 
-    public function test_trial_schedule_can_be_added_and_removed(): void
+    // Jadwal trial mingguan digantikan slot trial berkapasitas (Modul 2, lihat TrialSlotTest).
+    public function test_weekly_trial_schedule_no_longer_exists(): void
     {
         $program = $this->makeProgram();
         $this->asManagement();
 
-        $id = $this->postJson("/api/programs/{$program->id}/jadwal-trial", [
+        $this->assertFalse(Schema::hasTable('program_trial_schedules'));
+        $this->postJson("/api/programs/{$program->id}/jadwal-trial", [
             'hari' => 'rabu', 'jam_mulai' => '15:30', 'jam_selesai' => '16:30',
-        ])->assertStatus(201)->json('data.id');
-
-        $this->deleteJson("/api/programs/{$program->id}/jadwal-trial/{$id}")->assertStatus(204);
-        $this->assertDatabaseCount('program_trial_schedules', 0);
+        ])->assertStatus(404);
+        $this->deleteJson("/api/programs/{$program->id}/jadwal-trial/1")->assertStatus(404);
     }
 }

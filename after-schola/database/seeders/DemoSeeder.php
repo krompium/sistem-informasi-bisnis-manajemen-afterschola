@@ -8,7 +8,6 @@ use App\Models\EnrollmentDecision;
 use App\Models\ExpoReport;
 use App\Models\HotIssue;
 use App\Models\Program;
-use App\Models\ProgramTrialSchedule;
 use App\Models\Registration;
 use App\Models\School;
 use App\Models\Student;
@@ -271,22 +270,16 @@ class DemoSeeder extends Seeder
     private function seedPrograms(): array
     {
         $defs = [
-            ['Coding Kids', 'SD', 'offline', 'Dasar pemrograman visual untuk SD-SMP.', 750000, true, [['senin', '15:30', '16:30'], ['rabu', '15:30', '16:30']]],
-            ['Robotik Online', 'SMP', 'online', 'Robotik dasar via kelas daring.', 500000, true, [['sabtu', '09:00', '10:30']]],
-            ['Public Speaking', 'SMA', 'offline', 'Latihan berbicara di depan umum.', 450000, false, [['jumat', '15:00', '16:00']]],
+            ['Coding Kids', 'SD', 'offline', 'Dasar pemrograman visual untuk SD-SMP.', 750000, true],
+            ['Robotik Online', 'SMP', 'online', 'Robotik dasar via kelas daring.', 500000, true],
+            ['Public Speaking', 'SMA', 'offline', 'Latihan berbicara di depan umum.', 450000, false],
         ];
         $programs = [];
-        foreach ($defs as [$name, $jenjang, $type, $desc, $fee, $active, $schedules]) {
+        foreach ($defs as [$name, $jenjang, $type, $desc, $fee, $active]) {
             $program = Program::updateOrCreate(
                 ['name' => $name],
                 ['jenjang' => $jenjang, 'tipe' => $type, 'description' => $desc, 'price' => $fee, 'is_active' => $active],
             );
-            foreach ($schedules as [$day, $from, $to]) {
-                ProgramTrialSchedule::updateOrCreate(
-                    ['program_id' => $program->id, 'hari' => $day],
-                    ['jam_mulai' => $from . ':00', 'jam_selesai' => $to . ':00'],
-                );
-            }
             $programs[$name] = $program;
         }
 

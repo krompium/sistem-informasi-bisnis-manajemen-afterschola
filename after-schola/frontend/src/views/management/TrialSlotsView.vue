@@ -206,7 +206,7 @@ onMounted(() => {
         </div>
 
         <div class="flex items-center gap-space-xs sm:ml-auto">
-          <span class="rounded-full bg-surface-container px-2 py-0.5 font-label-sm text-label-sm font-semibold text-on-surface-variant">Kapasitas {{ s.capacity }}</span>
+          <span class="rounded-full bg-surface-container px-2 py-0.5 font-label-sm text-label-sm font-semibold text-on-surface-variant">{{ s.booked_count }}/{{ s.capacity }} terisi</span>
           <span
             class="rounded-full px-2 py-0.5 font-label-sm text-label-sm font-semibold"
             :class="s.is_open ? 'bg-[#D1FAE5] text-[#065F46]' : 'bg-surface-container text-outline'"

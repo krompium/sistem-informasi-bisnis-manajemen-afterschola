@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\TrialSlotController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\LeadController;
+use App\Http\Controllers\Api\LeadExportController;
 use App\Http\Controllers\Api\ProgramController;
 use App\Http\Controllers\Api\ProgramLevelController;
 use App\Http\Controllers\Api\RubricCriterionController;
@@ -49,9 +50,10 @@ use App\Http\Controllers\Api\TaskDependencyController;
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
-Route::post('/leads', [LeadController::class, 'store'])->middleware('throttle:5,1');
+Route::post('/public/trial-registrations', [LeadController::class, 'store'])->middleware('throttle:5,1');
 Route::middleware('throttle:60,1')->group(function () {
     Route::get('/public/programs', [ProgramController::class, 'publicIndex']);
+    Route::get('/public/trial-slots', [TrialSlotController::class, 'publicIndex']);
     Route::get('/public/programs/{program}', [ProgramController::class, 'publicShow']);
 });
 
@@ -205,17 +207,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('projects/{project}/gantt', ProjectGanttController::class);
     });
 
-    // Slot trial (Modul 2, MGT-20) — scope cabang dijaga query + Policy. `options` harus sebelum {trial_slot}.
+    // Slot trial (Modul 2, MGT-20) — scope cabang dijaga query + Policy. `options` harus sebelum {trial_slot};
+    // juga dibuka untuk pemegang manage leads karena filter cabang/program di daftar calon memakainya.
+    Route::get('/trial-slots/options', [TrialSlotController::class, 'options'])
+        ->middleware('permission:manage trial slots|manage leads');
     Route::middleware('permission:manage trial slots')->group(function () {
-        Route::get('/trial-slots/options', [TrialSlotController::class, 'options']);
         Route::apiResource('trial-slots', TrialSlotController::class);
+    });
+
+    // Calon dan leads (Modul 2, MGT-21/22) — scope cabang dijaga query + Policy.
+    Route::middleware('permission:manage leads')->group(function () {
+        Route::get('/leads', [LeadController::class, 'index']);
+        Route::put('/leads/{lead}', [LeadController::class, 'update']);
+        Route::get('/exports/leads', LeadExportController::class);
     });
 
     // Master program (Modul 1)
     Route::middleware('permission:manage programs')->group(function () {
         Route::apiResource('programs', ProgramController::class);
-        Route::post('/programs/{program}/jadwal-trial', [ProgramController::class, 'storeJadwalTrial']);
-        Route::delete('/programs/{program}/jadwal-trial/{jadwal}', [ProgramController::class, 'destroyJadwalTrial']);
 
         Route::scopeBindings()->group(function () {
             Route::get('/programs/{program}/levels', [ProgramLevelController::class, 'index']);
