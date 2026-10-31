@@ -8,6 +8,7 @@ import { formatDate, unwrap } from '@/lib/format'
 
 const loading = ref(true)
 const rows = ref([])
+const programs = ref([]) // pilihan paket (program aktif)
 const search = ref('')
 const filterStatus = ref('')
 
@@ -26,7 +27,7 @@ const decisionOptions = [
   { value: 'tidak', label: 'Tidak lanjut', cls: 'bg-error-container text-on-error-container' },
 ]
 const decisionMeta = (v) => decisionOptions.find((d) => d.value === v)
-const levelLabel = (v) => ({ beginner: 'Beginner', intermediate: 'Intermediate' })[v] || '-'
+const levelLabel = (v) => v || '-'
 
 async function load() {
   loading.value = true
@@ -45,7 +46,15 @@ watch([search, filterStatus], () => {
   clearTimeout(timer)
   timer = setTimeout(load, 300)
 })
-onMounted(load)
+onMounted(async () => {
+  load()
+  try {
+    const { data } = await api.get('/public/programs')
+    programs.value = unwrap(data)
+  } catch {
+    programs.value = [] // form tetap bisa disimpan: server memakai program slot trial sebagai default
+  }
+})
 
 function errMsg(err, fallback) {
   return err?.response?.status === 422
@@ -94,22 +103,25 @@ async function submitDecision() {
 // ---------- Pendaftaran resmi ----------
 const showReg = ref(false)
 const rForm = reactive({
-  student_name: '', birth_date: '', origin_school: '', origin_class: '', level: '',
+  student_name: '', birth_date: '', origin_school: '', origin_class: '', level: '', program_id: '',
   parent_name: '', parent_phone: '', parent_email: '', parent_address: '',
 })
 
+// Auto-fill (BR-01): bila belum pernah disimpan, data anak, orang tua, dan paket diambil dari form trial (row.prefill).
 function openRegistration(row) {
   activeRow.value = row
   const r = row.registration
+  const p = row.prefill ?? {}
   Object.assign(rForm, {
-    student_name: r?.student_name ?? row.participant_name ?? '',
+    student_name: r?.student_name ?? p.student_name ?? row.participant_name ?? '',
     birth_date: r?.birth_date ?? '',
-    origin_school: r?.origin_school ?? row.origin_school ?? '',
-    origin_class: r?.origin_class ?? row.origin_class ?? '',
+    origin_school: r?.origin_school ?? p.origin_school ?? '',
+    origin_class: r?.origin_class ?? p.origin_class ?? '',
     level: r?.level ?? row.recommended_level ?? '',
-    parent_name: r?.parent_name ?? '',
-    parent_phone: r?.parent_phone ?? '',
-    parent_email: r?.parent_email ?? '',
+    program_id: r?.program_id ?? p.program_id ?? '',
+    parent_name: r?.parent_name ?? p.parent_name ?? '',
+    parent_phone: r?.parent_phone ?? p.parent_phone ?? '',
+    parent_email: r?.parent_email ?? p.parent_email ?? '',
     parent_address: r?.parent_address ?? '',
   })
   formError.value = ''
@@ -120,7 +132,12 @@ async function submitRegistration() {
   saving.value = true
   formError.value = ''
   try {
-    await api.put(`/trial-evaluations/${activeRow.value.evaluation_id}/registration`, { ...rForm })
+    // Level tidak dikirim: server mengambilnya dari rekomendasi trial.
+    const { level, ...payload } = rForm
+    await api.put(`/trial-evaluations/${activeRow.value.evaluation_id}/registration`, {
+      ...payload,
+      program_id: payload.program_id || null,
+    })
     showReg.value = false
     await load()
   } catch (err) {
@@ -322,6 +339,13 @@ const total = computed(() => rows.value.length)
             <span :class="labelCls">Nama siswa</span>
             <input v-model="rForm.student_name" required :class="inputCls" />
           </label>
+          <label class="flex flex-col gap-1">
+            <span :class="labelCls">Paket program</span>
+            <select v-model="rForm.program_id" :disabled="!programs.length" :class="inputCls">
+              <option v-if="!programs.length" value="">Program trial</option>
+              <option v-for="p in programs" :key="p.id" :value="p.id">{{ p.name }} ({{ p.jenjang }})</option>
+            </select>
+          </label>
           <div class="grid grid-cols-2 gap-space-sm">
             <label class="flex flex-col gap-1">
               <span :class="labelCls">Tanggal lahir</span>
@@ -329,11 +353,7 @@ const total = computed(() => rows.value.length)
             </label>
             <label class="flex flex-col gap-1">
               <span :class="labelCls">Level</span>
-              <select v-model="rForm.level" required :class="inputCls">
-                <option value="" disabled>Pilih...</option>
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-              </select>
+              <input :value="rForm.level || '-'" readonly :class="[inputCls, 'bg-surface-container-low']" />
             </label>
           </div>
           <div class="grid grid-cols-2 gap-space-sm">

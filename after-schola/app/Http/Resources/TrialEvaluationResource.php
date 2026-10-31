@@ -19,6 +19,8 @@ class TrialEvaluationResource extends JsonResource
         return [
             'id' => $this->id,
             'lead_id' => $this->lead_id,
+            'branch_id' => $this->branch_id,
+            'trial_slot_id' => $this->trial_slot_id,
             'program_id' => $this->program_id,
             'participant_name' => $this->participant_name,
             'origin_school' => $this->origin_school,
@@ -32,7 +34,8 @@ class TrialEvaluationResource extends JsonResource
             'average_score' => $scores ? round(array_sum($scores) / count($scores), 1) : null,
             'strengths' => $this->strengths,
             'improvements' => $this->improvements,
-            'recommended_level' => $this->recommended_level,
+            'recommended_level_id' => $this->recommended_level_id,
+            'recommended_level' => $this->whenLoaded('level', fn () => $this->level?->name),
             'recommendation' => $this->recommendation,
             'trainer_id' => $this->trainer_id,
             'trainer_name' => $this->whenLoaded('trainer', fn () => $this->trainer?->name),

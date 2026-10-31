@@ -24,8 +24,18 @@ class EnrollmentResource extends JsonResource
             'origin_class' => $this->origin_class,
             'trial_date' => $this->trial_date?->toDateString(),
             'recommendation' => $this->recommendation,
-            'recommended_level' => $this->recommended_level,
+            'recommended_level' => $this->level?->name,
             'trainer_name' => $this->trainer?->name,
+            // Auto-fill form pendaftaran resmi (BR-01, AC-02): data anak dari lead, orang tua dari akun yang terdaftar saat form trial.
+            'prefill' => [
+                'student_name' => $this->lead?->name ?? $this->participant_name,
+                'origin_school' => $this->lead?->origin_school ?? $this->origin_school,
+                'origin_class' => $this->origin_class,
+                'program_id' => $this->program_id,
+                'parent_name' => $this->lead?->parent?->name,
+                'parent_phone' => $this->lead?->parent?->phone,
+                'parent_email' => $this->lead?->parent?->email ?? $this->lead?->parent_email,
+            ],
             'decision' => $decision ? [
                 'id' => $decision->id,
                 'decision' => $decision->decision,
@@ -36,6 +46,7 @@ class EnrollmentResource extends JsonResource
             'registration' => $reg ? [
                 'id' => $reg->id,
                 'status' => $reg->status,
+                'program_id' => $reg->program_id,
                 'revision_note' => $reg->revision_note,
                 'student_name' => $reg->student_name,
                 'birth_date' => $reg->birth_date?->toDateString(),

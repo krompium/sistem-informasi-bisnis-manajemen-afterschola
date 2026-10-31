@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Lead extends Model
 {
@@ -68,5 +69,11 @@ class Lead extends Model
     public function trialSlot(): BelongsTo
     {
         return $this->belongsTo(TrialSlot::class);
+    }
+
+    /** Evaluasi trial peserta ini (Modul 3); satu per slot, dan satu lead hanya punya satu slot. */
+    public function trialEvaluation(): HasOne
+    {
+        return $this->hasOne(TrialEvaluation::class);
     }
 }

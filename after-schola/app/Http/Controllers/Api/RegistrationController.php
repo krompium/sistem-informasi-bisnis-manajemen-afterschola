@@ -27,7 +27,7 @@ class RegistrationController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = Registration::query()->where('status', '!=', 'draft')->with(self::WITH);
+        $query = Registration::inBranchesOf($request->user())->where('status', '!=', 'draft')->with(self::WITH);
 
         if ($request->filled('status')) {
             $query->where('status', $request->string('status')->toString());
@@ -44,6 +44,7 @@ class RegistrationController extends Controller
 
     public function approve(Request $request, Registration $registration)
     {
+        $this->authorize('verify', $registration);
         $this->ensureWaiting($registration);
 
         $program = $registration->program;
@@ -76,6 +77,7 @@ class RegistrationController extends Controller
 
     public function requestRevision(Request $request, Registration $registration)
     {
+        $this->authorize('verify', $registration); // sebelum validasi: di luar cabang harus 404, bukan 422
         $data = $request->validate([
             'note' => ['required', 'string', 'max:1000'],
         ]);

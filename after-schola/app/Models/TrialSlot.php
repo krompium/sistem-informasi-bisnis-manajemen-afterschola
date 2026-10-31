@@ -59,4 +59,12 @@ class TrialSlot extends Model
     {
         return $user->hasAllBranches() ? $query : $query->whereIn('trial_slots.branch_id', $user->accessibleBranchIds());
     }
+
+    /** Slot yang pesertanya boleh dinilai user: staf evaluasi per cabang, trainer hanya slot miliknya (TRN-04). */
+    public function scopeEvaluableBy(Builder $query, User $user): Builder
+    {
+        return $user->can('manage trial evaluations')
+            ? $query->visibleTo($user)
+            : $query->where('trial_slots.trainer_id', $user->id);
+    }
 }

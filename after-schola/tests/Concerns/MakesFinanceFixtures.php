@@ -29,6 +29,7 @@ trait MakesFinanceFixtures
             'email' => $role.'_'.uniqid().'@test.id',
             'password' => Hash::make('password'),
             'is_active' => true,
+            'branch_scope' => 'all', // fixture Modul 5 tidak membahas cabang; isolasi cabang diuji di test Modul 3-4
         ]);
         $user->assignRole($role);
         // Role management tidak lagi memegang permission fungsi; berikan langsung (Modul 0b).

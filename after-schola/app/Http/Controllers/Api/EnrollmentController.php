@@ -8,22 +8,25 @@ use App\Models\EnrollmentDecision;
 use App\Models\Registration;
 use App\Models\TrialEvaluation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Modul 4 & 5 (bagian pendaftaran): Keputusan lanjut/tidak + Pendaftaran Resmi.
- * Hak akses: permission "manage enrollment" (dipasang di routes).
+ * Hak akses: permission "manage enrollment" (routes) + scope cabang (Policy "enroll" dan query).
+ * Keputusan dicatat staf atas nama orang tua sampai Portal Orang Tua ada (BR-02, ORT-05).
  */
 class EnrollmentController extends Controller
 {
-    private const WITH = ['trainer', 'decision.registration'];
+    private const WITH = ['trainer', 'level', 'lead.parent:id,name,email,phone', 'decision.registration'];
 
     /**
      * Daftar evaluasi (yang hadir) beserta status keputusan & pendaftarannya.
      */
     public function index(Request $request)
     {
-        $query = TrialEvaluation::query()
+        $query = TrialEvaluation::inBranchesOf($request->user())
             ->where('attendance', 'hadir')
             ->with(self::WITH);
 
@@ -49,6 +52,8 @@ class EnrollmentController extends Controller
      */
     public function saveDecision(Request $request, TrialEvaluation $trialEvaluation)
     {
+        $this->authorize('enroll', $trialEvaluation); // sebelum validasi: di luar cabang harus 404, bukan 422
+
         if ($trialEvaluation->attendance !== 'hadir') {
             throw ValidationException::withMessages([
                 'decision' => ['Peserta tidak hadir saat trial, keputusan tidak dapat dicatat.'],
@@ -71,21 +76,29 @@ class EnrollmentController extends Controller
                 'decision' => ['Pendaftaran sudah diajukan untuk verifikasi, keputusan tidak dapat diubah.'],
             ]);
         }
-        // Draft pendaftaran tidak relevan lagi bila keputusan bukan "lanjut".
-        if ($registration && $data['decision'] !== 'lanjut') {
-            $registration->delete();
-        }
-
         if ($data['decision'] !== 'pikir_pikir') {
             $data['follow_up_date'] = null;
         }
         $data['decided_at'] = $data['decided_at'] ?? now()->toDateString();
         $data['decided_by'] = $request->user()->id;
 
-        EnrollmentDecision::updateOrCreate(
-            ['evaluation_id' => $trialEvaluation->id],
-            $data,
-        );
+        DB::transaction(function () use ($data, $registration, $trialEvaluation) {
+            // Draft pendaftaran tidak relevan lagi bila keputusan bukan "lanjut".
+            if ($registration && $data['decision'] !== 'lanjut') {
+                $registration->delete();
+            }
+
+            EnrollmentDecision::updateOrCreate(['evaluation_id' => $trialEvaluation->id], $data);
+
+            // BR-03: tidak lanjut → Leads (data tetap disimpan untuk remarketing). Keputusan lain mengembalikan ke calon.
+            if ($lead = $trialEvaluation->lead) {
+                if ($data['decision'] === 'tidak') {
+                    $lead->update(['status' => 'not_continued']);
+                } elseif ($lead->status === 'not_continued') {
+                    $lead->update(['status' => 'trial_scheduled']);
+                }
+            }
+        });
 
         return new EnrollmentResource($trialEvaluation->fresh(self::WITH));
     }
@@ -95,6 +108,8 @@ class EnrollmentController extends Controller
      */
     public function saveRegistration(Request $request, TrialEvaluation $trialEvaluation)
     {
+        $this->authorize('enroll', $trialEvaluation);
+
         $decision = $trialEvaluation->decision;
         if (! $decision || $decision->decision !== 'lanjut') {
             throw ValidationException::withMessages([
@@ -114,15 +129,19 @@ class EnrollmentController extends Controller
             'birth_date' => ['nullable', 'date', 'before:today'],
             'origin_school' => ['nullable', 'string', 'max:255'],
             'origin_class' => ['nullable', 'string', 'max:50'],
-            'level' => ['required', 'in:beginner,intermediate'],
+            // Pilih paket (ORT-06): default program slot trial; hanya program aktif.
+            'program_id' => ['nullable', 'integer', Rule::exists('programs', 'id')->where('is_active', true)],
             'parent_name' => ['required', 'string', 'max:255'],
             'parent_phone' => ['required', 'string', 'max:30'],
             'parent_email' => ['nullable', 'email', 'max:255'],
             'parent_address' => ['nullable', 'string'],
         ]);
 
+        // Identitas, cabang, dan level berasal dari server (evaluasi trial), bukan dari klien.
+        $data['program_id'] ??= $existing?->program_id ?? $trialEvaluation->program_id;
         $data['lead_id'] = $trialEvaluation->lead_id;
-        $data['program_id'] = $trialEvaluation->program_id;
+        $data['branch_id'] = $trialEvaluation->branch_id;
+        $data['level'] = $trialEvaluation->level?->name ?? $existing?->level; // snapshot nama level rekomendasi
         $data['registered_by'] = $request->user()->id;
 
         Registration::updateOrCreate(['decision_id' => $decision->id], $data);
@@ -135,6 +154,8 @@ class EnrollmentController extends Controller
      */
     public function submitRegistration(TrialEvaluation $trialEvaluation)
     {
+        $this->authorize('enroll', $trialEvaluation);
+
         $registration = $trialEvaluation->decision?->registration;
         if (! $registration) {
             throw ValidationException::withMessages([

@@ -314,7 +314,7 @@ class DemoSeeder extends Seeder
                     'score_collaboration' => $scores[3] ?? null,
                     'strengths' => $scores ? 'Cepat menangkap instruksi dan aktif bertanya.' : null,
                     'improvements' => $scores ? 'Perlu latihan fokus di sesi yang lebih panjang.' : null,
-                    'recommended_level' => $level,
+                    // TODO(nanti): demo funnel masih bentuk lama (tanpa cabang, slot, lead, level program); hanya terlihat scope 'all'.
                     'recommendation' => $reco,
                 ],
             );
