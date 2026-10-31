@@ -5,6 +5,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import api from '@/lib/api'
 import { apiErrorMessage } from '@/lib/apiError'
 import { unwrap } from '@/lib/format'
+import { confirmDialog } from '@/lib/feedback'
 
 const loading = ref(true)
 const errorMessage = ref('')
@@ -105,7 +106,7 @@ async function submit() {
 }
 
 async function remove() {
-  if (!window.confirm(`Hapus team "${editing.value.name}"?`)) return
+  if (!(await confirmDialog(`Hapus team "${editing.value.name}"?`, { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   saving.value = true
   formError.value = ''
   try {

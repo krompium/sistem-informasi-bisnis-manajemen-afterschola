@@ -4,6 +4,7 @@
 import { onMounted, reactive, ref, watch } from 'vue'
 import api from '@/lib/api'
 import { formatRupiah, unwrap } from '@/lib/format'
+import { confirmDialog, toast } from '@/lib/feedback'
 
 const loading = ref(true)
 const rows = ref([])
@@ -34,20 +35,20 @@ async function load() {
     })
     rows.value = unwrap(data)
   } catch (err) {
-    alert(errMsg(err, 'Gagal memuat pendaftaran.'))
+    toast.error(errMsg(err, 'Gagal memuat pendaftaran.'))
   } finally {
     loading.value = false
   }
 }
 
 async function approve(row) {
-  if (!confirm(`Setujui pendaftaran ${row.student_name}? Invoice akan terbit otomatis.`)) return
+  if (!(await confirmDialog(`Setujui pendaftaran ${row.student_name}? Invoice akan terbit otomatis.`))) return
   busyId.value = row.id
   try {
     await api.post(`/registrations/${row.id}/approve`)
     await load()
   } catch (err) {
-    alert(errMsg(err, 'Gagal menyetujui pendaftaran.'))
+    toast.error(errMsg(err, 'Gagal menyetujui pendaftaran.'))
   } finally {
     busyId.value = null
   }

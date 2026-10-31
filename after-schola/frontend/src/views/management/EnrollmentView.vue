@@ -5,6 +5,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/lib/api'
 import { formatDate, unwrap } from '@/lib/format'
+import { confirmDialog, toast } from '@/lib/feedback'
 
 const loading = ref(true)
 const rows = ref([])
@@ -131,12 +132,12 @@ async function submitRegistration() {
 }
 
 async function submitForVerification(row) {
-  if (!confirm(`Ajukan pendaftaran "${row.participant_name}" untuk verifikasi? Data tidak bisa diubah lagi setelahnya.`)) return
+  if (!(await confirmDialog(`Ajukan pendaftaran "${row.participant_name}" untuk verifikasi? Data tidak bisa diubah lagi setelahnya.`))) return
   try {
     await api.post(`/trial-evaluations/${row.evaluation_id}/registration/submit`)
     await load()
   } catch (err) {
-    alert(errMsg(err, 'Gagal mengajukan pendaftaran.'))
+    toast.error(errMsg(err, 'Gagal mengajukan pendaftaran.'))
   }
 }
 

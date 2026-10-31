@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import api from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatDate, formatStamp, initials, isOnsite, modeLabel, sessionTime } from '@/lib/format'
+import { confirmDialog } from '@/lib/feedback'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -168,7 +169,7 @@ async function startSession() {
 async function toggleLock() {
   if (!canLock.value) return
   const target = !isLocked.value
-  if (target && !window.confirm('Kunci pertemuan? Absensi tidak dapat diubah lagi setelah dikunci.'))
+  if (target && !(await confirmDialog('Kunci pertemuan? Absensi tidak dapat diubah lagi setelah dikunci.', { title: 'Kunci pertemuan?', confirmText: 'Ya, kunci' })))
     return
   locking.value = true
   try {
@@ -280,7 +281,7 @@ onMounted(load)
     </div>
 
     <!-- Back -->
-    <RouterLink :to="backPath" class="mb-space-sm inline-flex w-fit items-center gap-1 font-label-md text-label-md font-semibold text-primary hover:underline">
+    <RouterLink :to="backPath" class="mb-space-sm inline-flex w-fit items-center gap-1 font-label-md text-label-md font-semibold text-primary hover:underline min-h-[44px]">
       <span class="material-symbols-outlined text-[18px]">arrow_back</span> {{ auth.isManagement ? 'Kembali ke jadwal' : 'Kembali ke daftar sesi' }}
     </RouterLink>
 
@@ -297,7 +298,7 @@ onMounted(load)
     >
       <span class="material-symbols-outlined">error</span>
       <span class="font-body-md text-body-md">{{ errorMessage }}</span>
-      <button class="ml-auto font-label-md text-label-md font-semibold underline" @click="load">Coba lagi</button>
+      <button class="ml-auto font-label-md text-label-md font-semibold underline min-h-[44px]" @click="load">Coba lagi</button>
     </div>
 
     <template v-else-if="session">
@@ -386,7 +387,7 @@ onMounted(load)
         </div>
         <button
           v-if="canLock"
-          class="ml-auto shrink-0 rounded-xl bg-white/10 px-space-md py-2 font-label-md text-label-md font-semibold text-white transition-colors hover:bg-white/20"
+          class="ml-auto shrink-0 rounded-xl bg-white/10 px-space-md py-2 font-label-md text-label-md font-semibold text-white transition-colors hover:bg-white/20 min-h-[44px]"
           :disabled="locking"
           @click="toggleLock"
         >
@@ -412,7 +413,7 @@ onMounted(load)
         </div>
         <button
           v-if="canStart"
-          class="inline-flex items-center gap-space-xs rounded-xl bg-primary px-space-2xl py-space-sm font-label-lg text-label-lg text-on-primary shadow-md transition-all hover:bg-primary-container active:scale-95 disabled:opacity-60"
+          class="inline-flex items-center gap-space-xs rounded-xl bg-primary px-space-2xl py-space-sm font-label-lg text-label-lg text-on-primary shadow-md transition-all hover:bg-primary-container active:scale-95 disabled:opacity-60 min-h-[44px]"
           :disabled="starting"
           @click="startSession"
         >
@@ -471,7 +472,7 @@ onMounted(load)
               GPS: {{ myAttendance.latitude }}, {{ myAttendance.longitude }}
             </span>
             <span v-if="myAttendance.note" class="font-body-sm text-body-sm text-on-surface-variant">Catatan: {{ myAttendance.note }}</span>
-            <button class="mt-1 w-fit font-label-sm text-label-sm font-semibold text-primary hover:underline" @click="myAttendance = null">
+            <button class="mt-1 w-fit font-label-sm text-label-sm font-semibold text-primary hover:underline min-h-[44px]" @click="myAttendance = null">
               Perbarui check-in
             </button>
           </div>
@@ -494,7 +495,7 @@ onMounted(load)
                 v-for="(m, key) in statusMeta"
                 :key="key"
                 type="button"
-                class="rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold transition-all"
+                class="rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold transition-all min-h-[44px]"
                 :class="checkin.status === key ? 'bg-primary-container text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'"
                 @click="checkin.status = key"
               >
@@ -525,7 +526,7 @@ onMounted(load)
               <div class="flex flex-1 flex-col justify-center gap-space-xs rounded-xl bg-surface-container-low p-space-md">
                 <button
                   type="button"
-                  class="inline-flex w-fit items-center gap-1.5 rounded-lg bg-primary-container px-space-md py-2 font-label-md text-label-md font-semibold text-on-primary transition-all hover:opacity-95 active:scale-95"
+                  class="inline-flex w-fit items-center gap-1.5 rounded-lg bg-primary-container px-space-md py-2 font-label-md text-label-md font-semibold text-on-primary transition-all hover:opacity-95 active:scale-95 min-h-[44px]"
                   :disabled="gpsBusy"
                   @click="captureGps"
                 >
@@ -555,7 +556,7 @@ onMounted(load)
           <button
             type="button"
             :disabled="checkinBusy"
-            class="inline-flex w-fit items-center gap-space-xs rounded-xl bg-primary px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:bg-primary-container active:scale-95 disabled:opacity-60"
+            class="inline-flex w-fit items-center gap-space-xs rounded-xl bg-primary px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:bg-primary-container active:scale-95 disabled:opacity-60 min-h-[44px]"
             @click="submitCheckin"
           >
             <span v-if="checkinBusy" class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
@@ -574,7 +575,7 @@ onMounted(load)
           </div>
           <button
             v-if="canInput"
-            class="inline-flex items-center justify-center gap-space-xs rounded-xl bg-primary-container px-space-md py-2.5 font-label-md text-label-md font-bold text-on-primary shadow-sm transition hover:opacity-95 active:scale-95"
+            class="inline-flex items-center justify-center gap-space-xs rounded-xl bg-primary-container px-space-md py-2.5 font-label-md text-label-md font-bold text-on-primary shadow-sm transition hover:opacity-95 active:scale-95 min-h-[44px]"
             @click="markAllPresent"
           >
             <span class="material-symbols-outlined text-[18px]">done_all</span>
@@ -625,7 +626,7 @@ onMounted(load)
                 <div class="inline-flex gap-1 rounded-xl bg-surface-container-lowest p-1">
                   <button
                     type="button"
-                    class="flex items-center gap-1 rounded-lg px-3 py-1.5 font-label-md text-label-md transition-all"
+                    class="flex items-center gap-1 rounded-lg px-3 py-1.5 font-label-md text-label-md transition-all min-h-[44px]"
                     :class="r.is_present ? 'bg-[#10B981] text-white shadow-sm' : 'text-on-surface-variant hover:text-on-surface'"
                     :disabled="!canInput"
                     @click="setPresent(r, true)"
@@ -635,7 +636,7 @@ onMounted(load)
                   </button>
                   <button
                     type="button"
-                    class="flex items-center gap-1 rounded-lg px-3 py-1.5 font-label-md text-label-md transition-all"
+                    class="flex items-center gap-1 rounded-lg px-3 py-1.5 font-label-md text-label-md transition-all min-h-[44px]"
                     :class="!r.is_present ? 'bg-error text-on-error shadow-sm' : 'text-on-surface-variant hover:text-on-surface'"
                     :disabled="!canInput"
                     @click="setPresent(r, false)"
@@ -645,7 +646,7 @@ onMounted(load)
                 </div>
                 <button
                   type="button"
-                  class="rounded-xl p-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary disabled:opacity-40"
+                  class="rounded-xl p-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary disabled:opacity-40 min-h-[44px] min-w-[44px]"
                   title="Catatan"
                   :disabled="!canInput"
                   @click="r.noteOpen = !r.noteOpen"
@@ -687,7 +688,7 @@ onMounted(load)
         <div class="flex w-full items-center gap-space-sm sm:w-auto">
           <button
             v-if="canInput"
-            class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-surface-container-low px-space-md py-2.5 font-label-lg text-label-lg text-on-surface transition-colors hover:bg-surface-container disabled:opacity-60 sm:flex-initial"
+            class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-surface-container-low px-space-md py-2.5 font-label-lg text-label-lg text-on-surface transition-colors hover:bg-surface-container disabled:opacity-60 sm:flex-initial min-h-[44px]"
             :disabled="saving"
             @click="saveAttendance"
           >
@@ -697,7 +698,7 @@ onMounted(load)
           </button>
           <button
             v-if="canLock"
-            class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-error px-space-lg py-2.5 font-label-lg text-label-lg text-on-error shadow-sm transition-all hover:bg-on-error-container active:scale-95 disabled:opacity-60 sm:flex-initial"
+            class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-error px-space-lg py-2.5 font-label-lg text-label-lg text-on-error shadow-sm transition-all hover:bg-on-error-container active:scale-95 disabled:opacity-60 sm:flex-initial min-h-[44px]"
             :disabled="locking"
             @click="toggleLock"
           >

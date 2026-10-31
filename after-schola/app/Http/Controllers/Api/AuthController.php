@@ -72,9 +72,12 @@ class AuthController extends Controller
     {
         $request->validate(['email' => ['required', 'email']]);
 
-        $status = Password::sendResetLink($request->only('email'));
+        // Respons sama untuk email terdaftar maupun tidak, agar akun tidak bisa ditebak dari luar.
+        Password::sendResetLink($request->only('email'));
 
-        return response()->json(['message' => __($status)], $status === Password::ResetLinkSent ? 200 : 422);
+        return response()->json([
+            'message' => 'Jika email terdaftar, tautan untuk mengatur ulang password sudah dikirim. Cek juga folder spam.',
+        ]);
     }
 
     /**
@@ -97,6 +100,12 @@ class AuthController extends Controller
             }
         );
 
-        return response()->json(['message' => __($status)], $status === Password::PasswordReset ? 200 : 422);
+        if ($status !== Password::PasswordReset) {
+            throw ValidationException::withMessages([
+                'email' => ['Tautan reset tidak valid atau sudah kedaluwarsa. Silakan minta tautan baru.'],
+            ]);
+        }
+
+        return response()->json(['message' => 'Password berhasil diubah. Silakan masuk dengan password baru.']);
     }
 }

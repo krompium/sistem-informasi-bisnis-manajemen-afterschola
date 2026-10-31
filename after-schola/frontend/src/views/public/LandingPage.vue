@@ -2,9 +2,22 @@
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 // Gerbang utama publik: tombol coba gratis -> form trial, Masuk -> login.
-// TODO(nanti): tautan menu Program/Kelas, Tentang Kami, Kebijakan Privasi, dan Syarat Penggunaan
-// masih placeholder (#program / #) karena halamannya belum ada. Kartu program masih statis;
-// bisa diganti GET /api/public/programs setelah slice 3 Modul 1.
+// TODO(nanti): menu Program/Kelas masih anchor #program. Kebijakan Privasi dan Syarat Penggunaan
+// disembunyikan dari footer sampai teks resminya ada (butuh tinjauan legal, NFR-04).
+// Kartu program masih statis; bisa diganti GET /api/public/programs.
+// TODO(nanti): gambar masih hotlink ke googleusercontent (URL sementara dari Stitch).
+// Unduh ke frontend/public/images/ lalu ganti src-nya.
+
+// Menu navigasi untuk HP (menu desktop disembunyikan di bawah md).
+const menuOpen = ref(false)
+
+// Logo juga hotlink; bila gagal dimuat tampilkan nama sebagai cadangan.
+const logoFailed = ref(false)
+
+// Jika gambar eksternal gagal dimuat, sembunyikan gambar; kotak berwarna di belakangnya tetap tampil.
+function onImgError(e) {
+  e.target.style.visibility = 'hidden'
+}
 
 // Batas pendaftaran kompetisi CROC 2026
 const deadline = new Date('2026-11-10T20:00:00+07:00').getTime()
@@ -83,7 +96,8 @@ const faqs = [
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
     <!-- Logo Container -->
     <a aria-label="Beranda AfterSchola" class="flex items-center gap-2 group transition-transform hover:scale-105" href="#">
-    <img alt="Logo AfterSchola" class="h-10 sm:h-12 w-auto object-contain brightness-0 invert" src="https://lh3.googleusercontent.com/aida/AEtjO1UxSKBkKJ1MNN3I94yhMlMnI9BgdsPcuGS0AtwRuNwc4u7YXZhZQpG4igiFjdD6IxOn2hSTJIXT8mkb2QED3JFuYn_3gVwKRR-7qsCGvnTISlbfMlRu94DzEqGy_Xq9HN3bYQS13dBLaVXCYdjUZHj8xICg-wwHhCiMhi4zU-Xl1K8XbAcI6PwdTuHzgnCs9zoAAEDn9tl8xYwhbzSTaCAHF3gYP2NhzYNof4-9Y0cXlA"/>
+    <img v-if="!logoFailed" @error="logoFailed = true" alt="Logo AfterSchola" class="h-10 sm:h-12 w-auto object-contain brightness-0 invert" src="https://lh3.googleusercontent.com/aida/AEtjO1UxSKBkKJ1MNN3I94yhMlMnI9BgdsPcuGS0AtwRuNwc4u7YXZhZQpG4igiFjdD6IxOn2hSTJIXT8mkb2QED3JFuYn_3gVwKRR-7qsCGvnTISlbfMlRu94DzEqGy_Xq9HN3bYQS13dBLaVXCYdjUZHj8xICg-wwHhCiMhi4zU-Xl1K8XbAcI6PwdTuHzgnCs9zoAAEDn9tl8xYwhbzSTaCAHF3gYP2NhzYNof4-9Y0cXlA"/>
+    <span v-else class="text-xl font-extrabold tracking-tight text-white">AfterSchola</span>
     </a>
     <!-- Desktop Menu Items -->
     <nav class="hidden md:flex items-center space-x-8 text-sm font-medium">
@@ -117,19 +131,38 @@ const faqs = [
     </div>
     </nav>
     <!-- CTA Button -->
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-1 sm:gap-4">
     <RouterLink
     :to="{ name: 'login' }"
-    class="inline-flex items-center gap-1.5 text-white/90 hover:text-brandSun text-sm font-semibold transition-colors"
+    aria-label="Masuk"
+    class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 text-white/90 hover:text-brandSun text-sm font-semibold transition-colors"
     >
     <span class="material-symbols-outlined text-lg">login</span>
-    <span>Masuk</span>
+    <span class="hidden sm:inline">Masuk</span>
     </RouterLink>
-    <RouterLink :to="{ name: 'public.trial-registration' }" class="inline-flex items-center gap-2 bg-brandGreen hover:bg-emerald-600 text-white font-semibold text-sm px-6 py-2.5 rounded-full shadow-lg shadow-brandGreen/25 btn-bouncy">
+    <RouterLink :to="{ name: 'public.trial-registration' }" class="inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap bg-brandGreen hover:bg-emerald-600 text-white font-semibold text-sm px-4 sm:px-6 rounded-full shadow-lg shadow-brandGreen/25 btn-bouncy">
     <span>Coba Gratis</span>
     </RouterLink>
+    <button
+    type="button"
+    class="md:hidden inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-white"
+    :aria-expanded="menuOpen"
+    aria-controls="mobile-menu"
+    aria-label="Buka menu"
+    @click="menuOpen = !menuOpen"
+    >
+    <span class="material-symbols-outlined">{{ menuOpen ? 'close' : 'menu' }}</span>
+    </button>
     </div>
     </div>
+    <!-- Menu HP -->
+    <nav v-if="menuOpen" id="mobile-menu" class="md:hidden border-t border-white/10 bg-brandNavy px-4 pb-4 pt-2 text-white" @click="menuOpen = false">
+    <a class="flex min-h-[48px] items-center text-base font-semibold" href="#kompetisi">Kompetisi</a>
+    <a class="flex min-h-[48px] items-center text-base font-semibold" href="#program">Program &amp; Kelas</a>
+    <RouterLink class="flex min-h-[48px] items-center text-base font-semibold" :to="{ name: 'public.programs' }">Semua Program</RouterLink>
+    <a class="flex min-h-[48px] items-center text-base font-semibold" href="#tentang">Tentang Kami</a>
+    <a class="flex min-h-[48px] items-center text-base font-semibold" href="#faq">FAQ</a>
+    </nav>
     </header>
     <!-- END: NavigationBar -->
     <main>
@@ -428,7 +461,7 @@ const faqs = [
     </section>
     <!-- END: PartnerSchoolsSection -->
     <!-- BEGIN: WhyChooseUsSection -->
-    <section class="py-20 bg-white">
+    <section id="tentang" class="py-20 bg-white">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="text-center mb-10">
     <p class="text-xs font-extrabold uppercase tracking-widest text-brandTeal">ALASAN TEPAT UNTUK PENDIDIKAN BERKUALITAS</p>
@@ -524,6 +557,12 @@ const faqs = [
     <p class="text-slate-600 text-xs sm:text-sm mt-2 leading-relaxed">{{ p.desc }}</p>
     </div>
     </div>
+    <div class="mt-10 text-center">
+    <RouterLink :to="{ name: 'public.programs' }" class="inline-flex min-h-[48px] items-center gap-2 rounded-full bg-brandNavy px-8 font-bold text-white shadow-lg hover:bg-brandBlue btn-bouncy">
+    <span>Lihat semua program &amp; harga</span>
+    <span class="material-symbols-outlined">arrow_forward</span>
+    </RouterLink>
+    </div>
     </div>
     </section>
     <!-- END: ProgramsSection -->
@@ -569,18 +608,18 @@ const faqs = [
     <div class="lg:col-span-6 grid grid-cols-2 gap-4">
     <div class="space-y-4">
     <!-- Top Left Image Placeholder -->
-    <div class="overflow-hidden rounded-2xl shadow-md group">
-    <img alt="Anak-anak sedang belajar bersama globe" class="w-full h-48 sm:h-56 object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCB2ashPmopwUv9iG-WzhD82_jX_zYSB1AHQCZTrG6UjfyRinwAS8QVrGt-slbYE0o2NGFl4QD5Yj8q9z4eBM9EcFPqZyQXhxFxR-Jo_QkezNVnPPhokN84XP3KXxlKhmY4MuDpZoxeUPilkXNj81NQGD1RDLEuZbYBzj2D7aGoAR7K9IZ9zETW19iQufvWsRrs5IdtACSu-8Dl5tgDy9KWhGh6mMcQdwhFeAIhBNSB"/>
+    <div class="overflow-hidden rounded-2xl shadow-md group bg-gradient-to-br from-brandSun/40 to-brandTeal/40">
+    <img loading="lazy" @error="onImgError" alt="Anak-anak sedang belajar bersama globe" class="w-full h-48 sm:h-56 object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCB2ashPmopwUv9iG-WzhD82_jX_zYSB1AHQCZTrG6UjfyRinwAS8QVrGt-slbYE0o2NGFl4QD5Yj8q9z4eBM9EcFPqZyQXhxFxR-Jo_QkezNVnPPhokN84XP3KXxlKhmY4MuDpZoxeUPilkXNj81NQGD1RDLEuZbYBzj2D7aGoAR7K9IZ9zETW19iQufvWsRrs5IdtACSu-8Dl5tgDy9KWhGh6mMcQdwhFeAIhBNSB"/>
     </div>
     <!-- Bottom Left Image Placeholder -->
-    <div class="overflow-hidden rounded-2xl shadow-md group">
-    <img alt="Bimbingan tatap muka pengajar profesional" class="w-full h-48 sm:h-56 object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCxr7qwF1iSU7syEa8httUj1sa8hJWySjiy1iZ1nbeyk9OYakd8bD6gcVR6Y_iCvbuHRYyxKuthaVDI75Vryd2WgVbxprrSPNnczg6WKrpHiA8LfewLDodmHFBNjxHAauVBmvI6zYbkm_g_ujIvH5JHYYfA9PXOoymFnH4VupBogSkGBMI65fzdx8w_M3OjPy4nd2Gbe9EV4bxcqq3GjJOiGkcbCqLyJmaJXkBiv3Da"/>
+    <div class="overflow-hidden rounded-2xl shadow-md group bg-gradient-to-br from-brandSun/40 to-brandTeal/40">
+    <img loading="lazy" @error="onImgError" alt="Bimbingan tatap muka pengajar profesional" class="w-full h-48 sm:h-56 object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCxr7qwF1iSU7syEa8httUj1sa8hJWySjiy1iZ1nbeyk9OYakd8bD6gcVR6Y_iCvbuHRYyxKuthaVDI75Vryd2WgVbxprrSPNnczg6WKrpHiA8LfewLDodmHFBNjxHAauVBmvI6zYbkm_g_ujIvH5JHYYfA9PXOoymFnH4VupBogSkGBMI65fzdx8w_M3OjPy4nd2Gbe9EV4bxcqq3GjJOiGkcbCqLyJmaJXkBiv3Da"/>
     </div>
     </div>
     <div class="space-y-4 pt-6">
     <!-- Right Tall Photo Placeholder -->
-    <div class="overflow-hidden rounded-2xl shadow-md group">
-    <img alt="Aktivitas siswa di kelas robotik dan coding" class="w-full h-80 sm:h-96 object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLvSRZgCFjWDqtjoUP6A5wGbnu951QG0CiNLNLg7AiZ11yChwbY0ioUVA3SXr7MhAeMl3KBLZtww8zHKJmmO5kFKRU9QHTyT66NlJO2mGGtvs8pH2ONTl_BQ69K1JGDfAXjNVH3pqi7o-guRcRMcuSz88IZQ6ysh9t5JmuW3nv6ac5X6D2SXUt9e_8E5XCEFn63_Qkc1WzPuVRLTouVD6Ti8VCVrWwUWJOSkz_s3L0"/>
+    <div class="overflow-hidden rounded-2xl shadow-md group bg-gradient-to-br from-brandSun/40 to-brandTeal/40">
+    <img loading="lazy" @error="onImgError" alt="Aktivitas siswa di kelas robotik dan coding" class="w-full h-80 sm:h-96 object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLvSRZgCFjWDqtjoUP6A5wGbnu951QG0CiNLNLg7AiZ11yChwbY0ioUVA3SXr7MhAeMl3KBLZtww8zHKJmmO5kFKRU9QHTyT66NlJO2mGGtvs8pH2ONTl_BQ69K1JGDfAXjNVH3pqi7o-guRcRMcuSz88IZQ6ysh9t5JmuW3nv6ac5X6D2SXUt9e_8E5XCEFn63_Qkc1WzPuVRLTouVD6Ti8VCVrWwUWJOSkz_s3L0"/>
     </div>
     </div>
     </div>
@@ -652,7 +691,8 @@ const faqs = [
     <!-- Office Center info (takes 2 cols on lg) -->
     <div class="lg:col-span-2 space-y-4">
     <a aria-label="AfterSchola Home" class="inline-block transition-transform hover:scale-105" href="#">
-    <img alt="Logo AfterSchola" class="h-10 sm:h-12 w-auto object-contain brightness-0 invert" src="https://lh3.googleusercontent.com/aida/AEtjO1UxSKBkKJ1MNN3I94yhMlMnI9BgdsPcuGS0AtwRuNwc4u7YXZhZQpG4igiFjdD6IxOn2hSTJIXT8mkb2QED3JFuYn_3gVwKRR-7qsCGvnTISlbfMlRu94DzEqGy_Xq9HN3bYQS13dBLaVXCYdjUZHj8xICg-wwHhCiMhi4zU-Xl1K8XbAcI6PwdTuHzgnCs9zoAAEDn9tl8xYwhbzSTaCAHF3gYP2NhzYNof4-9Y0cXlA"/>
+    <img v-if="!logoFailed" @error="logoFailed = true" alt="Logo AfterSchola" class="h-10 sm:h-12 w-auto object-contain brightness-0 invert" src="https://lh3.googleusercontent.com/aida/AEtjO1UxSKBkKJ1MNN3I94yhMlMnI9BgdsPcuGS0AtwRuNwc4u7YXZhZQpG4igiFjdD6IxOn2hSTJIXT8mkb2QED3JFuYn_3gVwKRR-7qsCGvnTISlbfMlRu94DzEqGy_Xq9HN3bYQS13dBLaVXCYdjUZHj8xICg-wwHhCiMhi4zU-Xl1K8XbAcI6PwdTuHzgnCs9zoAAEDn9tl8xYwhbzSTaCAHF3gYP2NhzYNof4-9Y0cXlA"/>
+    <span v-else class="text-xl font-extrabold tracking-tight text-white">AfterSchola</span>
     </a>
     <div class="pt-2">
     <h4 class="text-base font-bold text-brandSun">Office Center</h4>
@@ -683,9 +723,7 @@ const faqs = [
     <div>
     <h4 class="text-sm font-bold uppercase tracking-wider text-brandSun mb-4">Pusat Bantuan</h4>
     <ul class="space-y-2 text-xs sm:text-sm text-slate-300">
-    <li><a class="hover:text-white transition-colors" href="#">Tentang Kami</a></li>
-    <li><a class="hover:text-white transition-colors" href="#">Kebijakan Privasi</a></li>
-    <li><a class="hover:text-white transition-colors" href="#">Syarat Penggunaan</a></li>
+    <li><a class="hover:text-white transition-colors" href="#tentang">Tentang Kami</a></li>
     <li><a class="hover:text-white transition-colors" href="#faq">FAQ</a></li>
     <li><a class="hover:text-white transition-colors" href="https://wa.me/6282338089915?text=Hallo%20After%20Schola%2C%20Minta%20info%20lebih%20lanjut%20untuk%20program%20after%20schola">Hubungi Kami</a></li>
     </ul>

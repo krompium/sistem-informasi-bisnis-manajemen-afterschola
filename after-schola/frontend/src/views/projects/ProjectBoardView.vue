@@ -12,6 +12,7 @@ import TaskActivity from './TaskActivity.vue'
 import TaskAttachments from './TaskAttachments.vue'
 import TaskChecklist from './TaskChecklist.vue'
 import TaskDependencies from './TaskDependencies.vue'
+import { confirmDialog } from '@/lib/feedback'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -190,7 +191,7 @@ async function submit() {
 }
 
 async function remove() {
-  if (!window.confirm(`Hapus task "${editing.value.title}"?`)) return
+  if (!(await confirmDialog(`Hapus task "${editing.value.title}"?`, { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   saving.value = true
   formError.value = ''
   try {

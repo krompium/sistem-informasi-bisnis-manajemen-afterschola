@@ -5,6 +5,7 @@ import { onMounted, reactive, ref } from 'vue'
 import api from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { unwrap } from '@/lib/format'
+import { toast } from '@/lib/feedback'
 
 const auth = useAuthStore()
 
@@ -79,7 +80,7 @@ async function toggleActive(branch) {
     })
     await load()
   } catch (err) {
-    window.alert(errorMessage(err, 'Gagal mengubah status cabang.'))
+    toast.error(errorMessage(err, 'Gagal mengubah status cabang.'))
   }
 }
 

@@ -116,7 +116,7 @@ async function handleSubmit() {
     >
       <!-- Header brand -->
       <div class="flex w-full items-center justify-between">
-        <div class="flex items-center gap-2.5">
+        <RouterLink to="/" class="flex min-h-[44px] items-center gap-2.5" aria-label="Kembali ke beranda AfterSchola">
           <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-container">
             <span class="material-symbols-outlined fill text-[20px] text-white">school</span>
           </div>
@@ -124,24 +124,24 @@ async function handleSubmit() {
             <span class="text-[15px] font-bold tracking-tight text-[#0B2A5B]">AFTER SCHOLA</span>
             <span class="text-[9px] uppercase tracking-[0.2em] text-slate-400">Operational</span>
           </div>
-        </div>
+        </RouterLink>
         <span class="font-label-sm text-label-sm font-semibold text-slate-400">v1.0</span>
       </div>
 
       <!-- Form -->
       <div class="mx-auto my-auto w-full max-w-md py-8">
         <h1 class="font-headline-xl text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-          Login
+          Selamat datang!
         </h1>
-        <p class="mb-8 mt-2 font-body-md text-sm text-slate-500">
-          Masuk untuk mengakses dashboard sesuai peranmu
+        <p class="mb-8 mt-2 font-body-md text-base text-slate-500">
+          Masuk untuk membuka dashboard sesuai peran akun Anda.
         </p>
 
         <form class="space-y-5" @submit.prevent="handleSubmit">
           <!-- Email -->
           <div>
             <label
-              class="mb-2 block font-label-md text-xs font-semibold uppercase tracking-wider text-slate-700"
+              class="mb-2 block font-label-md text-sm font-semibold text-slate-700"
               for="email"
               >Email</label
             >
@@ -152,14 +152,14 @@ async function handleSubmit() {
               required
               autocomplete="email"
               placeholder="nama@afterschola.id"
-              class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              class="w-full rounded-lg border border-slate-300 bg-white min-h-[48px] px-4 py-3 text-base text-slate-800 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
             />
           </div>
 
           <!-- Password -->
           <div>
             <label
-              class="mb-2 block font-label-md text-xs font-semibold uppercase tracking-wider text-slate-700"
+              class="mb-2 block font-label-md text-sm font-semibold text-slate-700"
               for="password"
               >Password</label
             >
@@ -171,12 +171,12 @@ async function handleSubmit() {
                 required
                 autocomplete="current-password"
                 placeholder="••••••••"
-                class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 pr-11 text-sm text-slate-800 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 pr-12 text-base text-slate-800 shadow-sm transition-all placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
               />
               <button
                 type="button"
                 :aria-label="showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
-                class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 transition-colors hover:text-blue-600 focus:outline-none"
+                class="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-400 transition-colors hover:text-blue-600 focus:outline-none"
                 @click="showPassword = !showPassword"
               >
                 <span class="material-symbols-outlined text-[20px]">{{
@@ -197,19 +197,18 @@ async function handleSubmit() {
 
           <!-- Kontrol -->
           <div class="flex items-center justify-between pt-1 text-sm">
-            <label class="flex cursor-pointer select-none items-center gap-2 text-slate-600">
+            <label class="flex min-h-[44px] cursor-pointer select-none items-center gap-2 text-slate-600">
               <input
                 v-model="remember"
                 type="checkbox"
-                class="h-4 w-4 cursor-pointer rounded border-slate-300 text-blue-600 focus:ring-0"
+                class="h-5 w-5 cursor-pointer rounded border-slate-300 text-blue-600 focus:ring-0"
               />
               <span>Ingat saya</span>
             </label>
-            <a
-              href="#"
-              class="font-label-sm font-semibold text-blue-600 transition-colors hover:text-blue-700"
-              @click.prevent
-              >Lupa Password?</a
+            <RouterLink
+              :to="{ name: 'forgot-password' }"
+              class="flex min-h-[44px] items-center font-label-sm font-semibold text-blue-600 transition-colors hover:text-blue-700"
+              >Lupa Password?</RouterLink
             >
           </div>
 
@@ -217,7 +216,7 @@ async function handleSubmit() {
           <button
             type="submit"
             :disabled="auth.loading"
-            class="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-[#1D4ED8] px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:bg-blue-700 hover:shadow-lg active:scale-[0.99] disabled:opacity-60"
+            class="mt-6 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-[#1D4ED8] px-6 py-3.5 text-base font-semibold text-white shadow-md transition-all duration-200 hover:bg-blue-700 hover:shadow-lg active:scale-[0.99] disabled:opacity-60"
           >
             <template v-if="auth.loading">
               <span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
@@ -229,8 +228,11 @@ async function handleSubmit() {
             </template>
           </button>
 
-          <p class="pt-2 text-center font-body-sm text-xs text-slate-400">
-            Sistem mendeteksi peran akun secara otomatis (Trainer / Management)
+          <p class="pt-2 text-center font-body-sm text-sm text-slate-500">
+            Orang tua baru?
+            <RouterLink :to="{ name: 'public.trial-registration' }" class="font-semibold text-blue-600 hover:text-blue-700">
+              Coba kelas gratis dulu
+            </RouterLink>
           </p>
         </form>
       </div>

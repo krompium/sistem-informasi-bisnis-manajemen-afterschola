@@ -97,14 +97,14 @@ onMounted(load)
     <div class="mb-space-md flex items-center">
       <div class="inline-flex rounded-xl bg-surface-container p-1">
         <button
-          class="inline-flex items-center gap-1.5 rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold transition-all"
+          class="inline-flex items-center gap-1.5 rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold transition-all min-h-[44px]"
           :class="viewMode === 'list' ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant'"
           @click="viewMode = 'list'"
         >
           <span class="material-symbols-outlined text-[18px]">view_agenda</span> Daftar
         </button>
         <button
-          class="inline-flex items-center gap-1.5 rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold transition-all"
+          class="inline-flex items-center gap-1.5 rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold transition-all min-h-[44px]"
           :class="viewMode === 'kalender' ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant'"
           @click="viewMode = 'kalender'"
         >
@@ -118,7 +118,7 @@ onMounted(load)
       <button
         v-for="t in tabs"
         :key="t.key"
-        class="inline-flex items-center gap-1.5 rounded-full px-space-md py-2 font-label-md text-label-md font-semibold transition-all"
+        class="inline-flex items-center gap-1.5 rounded-full px-space-md py-2 font-label-md text-label-md font-semibold transition-all min-h-[44px]"
         :class="tab === t.key ? 'bg-primary-container text-on-primary shadow-sm' : 'bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container'"
         @click="tab = t.key"
       >
@@ -138,7 +138,7 @@ onMounted(load)
     >
       <span class="material-symbols-outlined">error</span>
       <span class="font-body-md text-body-md">{{ errorMessage }}</span>
-      <button class="ml-auto font-label-md text-label-md font-semibold underline" @click="load">Muat ulang</button>
+      <button class="ml-auto font-label-md text-label-md font-semibold underline min-h-[44px]" @click="load">Muat ulang</button>
     </div>
 
     <!-- Skeleton -->
@@ -212,7 +212,7 @@ onMounted(load)
         <div class="flex shrink-0 items-center gap-space-sm md:justify-end">
           <button
             v-if="canAbsen(s)"
-            class="inline-flex items-center justify-center gap-space-xs rounded-xl bg-primary px-space-lg py-space-sm font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:bg-primary-container active:scale-95"
+            class="inline-flex items-center justify-center gap-space-xs rounded-xl bg-primary px-space-lg py-space-sm font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:bg-primary-container active:scale-95 min-h-[44px]"
             @click="goAbsensi(s)"
           >
             <span class="material-symbols-outlined text-[20px]">folder_open</span>
@@ -220,7 +220,7 @@ onMounted(load)
           </button>
           <button
             v-else
-            class="inline-flex items-center justify-center gap-space-xs rounded-xl bg-surface-container px-space-lg py-space-sm font-label-lg text-label-lg text-on-surface-variant transition-colors hover:bg-surface-container-high"
+            class="inline-flex items-center justify-center gap-space-xs rounded-xl bg-surface-container px-space-lg py-space-sm font-label-lg text-label-lg text-on-surface-variant transition-colors hover:bg-surface-container-high min-h-[44px]"
             @click="goAbsensi(s)"
           >
             <span class="material-symbols-outlined text-[18px]">visibility</span>
@@ -269,14 +269,14 @@ onMounted(load)
               </span>
               <button
                 v-if="canAbsen(s)"
-                class="inline-flex items-center gap-1 rounded-lg bg-primary px-space-sm py-1.5 font-label-sm text-label-sm font-semibold text-on-primary hover:bg-primary-container"
+                class="inline-flex items-center gap-1 rounded-lg bg-primary px-space-sm py-1.5 font-label-sm text-label-sm font-semibold text-on-primary hover:bg-primary-container min-h-[44px]"
                 @click="goAbsensi(s)"
               >
                 <span class="material-symbols-outlined text-[16px]">folder_open</span> Buka
               </button>
               <button
                 v-else
-                class="rounded-lg p-1.5 text-primary hover:bg-surface-container"
+                class="rounded-lg p-1.5 text-primary hover:bg-surface-container min-h-[44px] min-w-[44px]"
                 title="Lihat"
                 @click="goAbsensi(s)"
               >

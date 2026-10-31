@@ -3,6 +3,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/lib/api'
+import { confirmDialog } from '@/lib/feedback'
 
 const route = useRoute()
 const programId = route.params.id
@@ -80,8 +81,8 @@ function save(section, row) {
   run(section, () => api.put(url(section, row), payload(section, row)))
 }
 
-function remove(section, row) {
-  if (!window.confirm(`Hapus "${row.name}"?`)) return
+async function remove(section, row) {
+  if (!(await confirmDialog(`Hapus "${row.name}"?`, { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   run(section, () => api.delete(url(section, row)))
 }
 

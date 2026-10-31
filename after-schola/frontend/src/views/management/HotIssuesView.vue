@@ -5,6 +5,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import api from '@/lib/api'
 import { formatStamp, unwrap } from '@/lib/format'
+import { confirmDialog } from '@/lib/feedback'
 
 const loading = ref(true)
 const issues = ref([])
@@ -77,7 +78,7 @@ async function toggleActive(issue) {
 }
 
 async function removeIssue(issue) {
-  if (!confirm(`Hapus hot issue "${issue.title}"?`)) return
+  if (!(await confirmDialog(`Hapus hot issue "${issue.title}"?`, { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   await api.delete(`/hot-issues/${issue.id}`)
   await loadIssues()
 }

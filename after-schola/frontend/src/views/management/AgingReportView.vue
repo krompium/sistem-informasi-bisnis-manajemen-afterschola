@@ -3,6 +3,7 @@
 import { onMounted, ref } from 'vue'
 import api from '@/lib/api'
 import { formatDate, formatRupiah } from '@/lib/format'
+import { toast } from '@/lib/feedback'
 
 const loading = ref(true)
 const report = ref(null)
@@ -21,7 +22,7 @@ async function load() {
     const { data } = await api.get('/finance/aging')
     report.value = data.data
   } catch (err) {
-    alert(err.response?.data?.message || 'Gagal memuat umur piutang.')
+    toast.error(err.response?.data?.message || 'Gagal memuat umur piutang.')
   } finally {
     loading.value = false
   }

@@ -129,7 +129,7 @@ usePolling(() => loadDashboard(true), 1000)
     >
       <span class="material-symbols-outlined">error</span>
       <span class="font-body-md text-body-md">{{ errorMessage }}</span>
-      <button class="ml-auto font-label-md text-label-md font-semibold underline" @click="loadDashboard">
+      <button class="ml-auto font-label-md text-label-md font-semibold underline min-h-[44px]" @click="loadDashboard">
         Muat ulang
       </button>
     </div>
@@ -163,7 +163,7 @@ usePolling(() => loadDashboard(true), 1000)
           </div>
         </div>
         <button
-          class="inline-flex w-full shrink-0 items-center justify-center gap-space-xs rounded-xl bg-primary px-space-lg py-space-sm font-label-lg text-label-lg text-on-primary shadow-md transition-all hover:bg-primary-container active:scale-95 md:w-auto"
+          class="inline-flex w-full shrink-0 items-center justify-center gap-space-xs rounded-xl bg-primary px-space-lg py-space-sm font-label-lg text-label-lg text-on-primary shadow-md transition-all hover:bg-primary-container active:scale-95 md:w-auto min-h-[44px]"
           @click="goAbsensi(nextSession)"
         >
           <span>Buka &amp; Check-in</span>
@@ -380,7 +380,7 @@ usePolling(() => loadDashboard(true), 1000)
                 {{ s.is_locked ? 'Terkunci' : 'Belum dikunci' }}
               </span>
               <button
-                class="inline-flex items-center justify-center gap-space-xs rounded-xl bg-primary px-space-lg py-space-sm font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:bg-primary-container active:scale-95"
+                class="inline-flex items-center justify-center gap-space-xs rounded-xl bg-primary px-space-lg py-space-sm font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:bg-primary-container active:scale-95 min-h-[44px]"
                 @click="goAbsensi(s)"
               >
                 <span class="material-symbols-outlined text-[20px]">folder_open</span>
@@ -434,7 +434,7 @@ usePolling(() => loadDashboard(true), 1000)
               </div>
               <RouterLink
                 to="/trainer/jadwal"
-                class="rounded-lg p-1.5 text-secondary transition-colors hover:bg-secondary-fixed/50"
+                class="rounded-lg p-1.5 text-secondary transition-colors hover:bg-secondary-fixed/50 min-h-[44px] min-w-[44px]"
                 title="Lihat jadwal"
               >
                 <span class="material-symbols-outlined text-[18px]">chevron_right</span>

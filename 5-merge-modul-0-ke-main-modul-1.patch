@@ -1,0 +1,2152 @@
+diff --git a/after-schola/app/Http/Controllers/Api/AuthController.php b/after-schola/app/Http/Controllers/Api/AuthController.php
+index ff985f8..8edd829 100644
+--- a/after-schola/app/Http/Controllers/Api/AuthController.php
++++ b/after-schola/app/Http/Controllers/Api/AuthController.php
+@@ -43,7 +43,7 @@ public function login(Request $request): JsonResponse
+ 
+         return response()->json([
+             'token' => $token,
+-            'user' => new UserResource($user->load('assignedSchools')),
++            'user' => new UserResource($user->load('assignedSchools', 'branches')),
+         ]);
+     }
+ 
+@@ -52,7 +52,7 @@ public function login(Request $request): JsonResponse
+      */
+     public function me(Request $request): UserResource
+     {
+-        return new UserResource($request->user()->load('assignedSchools'));
++        return new UserResource($request->user()->load('assignedSchools', 'branches'));
+     }
+ 
+     /**
+diff --git a/after-schola/app/Http/Controllers/Api/BranchController.php b/after-schola/app/Http/Controllers/Api/BranchController.php
+new file mode 100644
+index 0000000..724bef9
+--- /dev/null
++++ b/after-schola/app/Http/Controllers/Api/BranchController.php
+@@ -0,0 +1,42 @@
++<?php
++
++namespace App\Http\Controllers\Api;
++
++use App\Http\Controllers\Controller;
++use App\Http\Requests\SaveBranchRequest;
++use App\Http\Resources\BranchResource;
++use App\Models\Branch;
++use Illuminate\Http\Request;
++
++/**
++ * CRUD cabang (permission: manage branches). Tidak ada DELETE: cabang dinonaktifkan (MGT-04).
++ */
++class BranchController extends Controller
++{
++    public function index(Request $request)
++    {
++        // TODO(nanti): paginasi bila cabang membengkak — saat ini dipakai utuh untuk dropdown.
++        return BranchResource::collection(Branch::visibleTo($request->user())->orderBy('name')->get());
++    }
++
++    public function store(SaveBranchRequest $request)
++    {
++        $branch = Branch::create($request->validated());
++
++        return (new BranchResource($branch->refresh()))->response()->setStatusCode(201);
++    }
++
++    public function show(Branch $branch)
++    {
++        $this->authorize('view', $branch);
++
++        return new BranchResource($branch);
++    }
++
++    public function update(SaveBranchRequest $request, Branch $branch)
++    {
++        $branch->update($request->validated());
++
++        return new BranchResource($branch);
++    }
++}
+diff --git a/after-schola/app/Http/Controllers/Api/UserController.php b/after-schola/app/Http/Controllers/Api/UserController.php
+index 4e18fa6..719d2e5 100644
+--- a/after-schola/app/Http/Controllers/Api/UserController.php
++++ b/after-schola/app/Http/Controllers/Api/UserController.php
+@@ -3,84 +3,73 @@
+ namespace App\Http\Controllers\Api;
+ 
+ use App\Http\Controllers\Controller;
++use App\Http\Requests\SaveUserRequest;
+ use App\Http\Resources\UserResource;
+ use App\Models\User;
+ use Illuminate\Http\Request;
+ use Illuminate\Support\Facades\Hash;
+-use Illuminate\Validation\Rule;
+-use Spatie\Permission\Models\Role;
++use Illuminate\Validation\ValidationException;
+ 
+ /**
+- * Kelola user & role — hanya Management (permission: manage users).
++ * Kelola user internal (permission: manage users), dibatasi scope cabang pelaku.
++ * Tidak ada DELETE: user dinonaktifkan lewat is_active (MGT-04).
+  */
+ class UserController extends Controller
+ {
++    private const WITH = ['roles.permissions', 'permissions', 'branches', 'assignedSchools'];
++
+     public function index(Request $request)
+     {
+-        $query = User::query()->with('assignedSchools');
++        $query = User::visibleTo($request->user())->with(self::WITH);
+ 
+         if ($request->filled('role')) {
+             $query->role($request->string('role')->value());
+         }
+ 
++        // TODO(nanti): paginasi — saat ini utuh karena dipakai dropdown (mis. penugasan trainer).
+         return UserResource::collection($query->orderBy('name')->get());
+     }
+ 
+-    public function store(Request $request)
++    public function store(SaveUserRequest $request)
+     {
+-        $data = $request->validate([
+-            'name' => ['required', 'string', 'max:255'],
+-            'email' => ['required', 'email', 'unique:users,email'],
+-            'password' => ['required', 'string', 'min:8'],
+-            'role' => ['required', Rule::in(Role::pluck('name')->all())],
+-            'is_active' => ['sometimes', 'boolean'],
+-            'school_ids' => ['sometimes', 'array'],
+-            'school_ids.*' => ['integer', 'exists:schools,id'],
+-            'subjects_taught' => ['sometimes', 'array'],
+-            'subjects_taught.*' => ['string', 'max:255'],
+-            'levels_taught' => ['sometimes', 'array'],
+-            'levels_taught.*' => [Rule::in(['beginner', 'intermediate'])],
+-        ]);
++        $data = $request->validated();
+ 
+         $user = User::create([
+             'name' => $data['name'],
+             'email' => $data['email'],
+             'password' => Hash::make($data['password']),
+             'is_active' => $data['is_active'] ?? true,
++            'branch_scope' => $data['branch_scope'],
+             'subjects_taught' => $data['subjects_taught'] ?? [],
+             'levels_taught' => $data['levels_taught'] ?? [],
+         ]);
+         $user->assignRole($data['role']);
++        $user->syncPermissions($data['permissions'] ?? []);
++        $this->syncBranches($user, $request->user(), $data);
+ 
+         if (! empty($data['school_ids']) && $data['role'] === 'trainer') {
+             $user->assignedSchools()->sync($data['school_ids']);
+         }
+ 
+-        return (new UserResource($user->load('assignedSchools')))->response()->setStatusCode(201);
++        return (new UserResource($user->load(self::WITH)))->response()->setStatusCode(201);
+     }
+ 
+     public function show(User $user)
+     {
+-        return new UserResource($user->load('assignedSchools'));
++        $this->authorize('view', $user);
++
++        return new UserResource($user->load(self::WITH));
+     }
+ 
+-    public function update(Request $request, User $user)
++    public function update(SaveUserRequest $request, User $user)
+     {
+-        $data = $request->validate([
+-            'name' => ['sometimes', 'required', 'string', 'max:255'],
+-            'email' => ['sometimes', 'required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+-            'password' => ['sometimes', 'nullable', 'string', 'min:8'],
+-            'role' => ['sometimes', Rule::in(Role::pluck('name')->all())],
+-            'is_active' => ['sometimes', 'boolean'],
+-            'school_ids' => ['sometimes', 'array'],
+-            'school_ids.*' => ['integer', 'exists:schools,id'],
+-            'subjects_taught' => ['sometimes', 'array'],
+-            'subjects_taught.*' => ['string', 'max:255'],
+-            'levels_taught' => ['sometimes', 'array'],
+-            'levels_taught.*' => [Rule::in(['beginner', 'intermediate'])],
+-        ]);
++        $data = $request->validated();
++
++        if (array_key_exists('is_active', $data) && ! $data['is_active'] && $user->is($request->user())) {
++            throw ValidationException::withMessages(['is_active' => ['Tidak bisa menonaktifkan akun sendiri.']]);
++        }
+ 
+-        $user->fill(collect($data)->only(['name', 'email', 'is_active', 'subjects_taught', 'levels_taught'])->all());
++        $user->fill(collect($data)->only(['name', 'email', 'is_active', 'branch_scope', 'subjects_taught', 'levels_taught'])->all());
+         if (! empty($data['password'])) {
+             $user->password = Hash::make($data['password']);
+         }
+@@ -89,21 +78,36 @@ public function update(Request $request, User $user)
+         if (isset($data['role'])) {
+             $user->syncRoles($data['role']);
+         }
++        if (array_key_exists('permissions', $data)) {
++            $user->syncPermissions($data['permissions']);
++        }
+         if (array_key_exists('school_ids', $data)) {
+             $user->assignedSchools()->sync($data['school_ids'] ?? []);
+         }
++        $this->syncBranches($user, $request->user(), $data);
+ 
+-        return new UserResource($user->load('assignedSchools'));
++        // Token yang sudah terbit tetap berlaku sampai dicabut; akun nonaktif harus langsung putus.
++        if ($user->wasChanged('is_active') && ! $user->is_active) {
++            $user->tokens()->delete();
++        }
++
++        return new UserResource($user->load(self::WITH));
+     }
+ 
+-    public function destroy(Request $request, User $user)
++    /**
++     * Cabang di luar jangkauan pelaku tidak ikut berubah (staf cabang hanya "melihat" cabangnya).
++     */
++    private function syncBranches(User $user, User $actor, array $data): void
+     {
+-        if ($user->id === $request->user()->id) {
+-            return response()->json(['message' => 'Tidak bisa menghapus akun sendiri.'], 422);
++        if (($data['branch_scope'] ?? $user->branch_scope) === 'all') {
++            $requested = [];
++        } elseif (array_key_exists('branch_ids', $data)) {
++            $requested = $data['branch_ids'];
++        } else {
++            return;
+         }
+ 
+-        $user->delete();
+-
+-        return response()->json(['message' => 'User dihapus.']);
++        $outside = $user->branches()->pluck('branches.id')->diff($actor->accessibleBranchIds());
++        $user->branches()->sync($outside->merge($requested)->unique()->values()->all());
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/after-schola/app/Http/Requests/SaveBranchRequest.php b/after-schola/app/Http/Requests/SaveBranchRequest.php
+new file mode 100644
+index 0000000..f5e16d1
+--- /dev/null
++++ b/after-schola/app/Http/Requests/SaveBranchRequest.php
+@@ -0,0 +1,35 @@
++<?php
++
++namespace App\Http\Requests;
++
++use App\Models\Branch;
++use Illuminate\Foundation\Http\FormRequest;
++use Illuminate\Support\Facades\Gate;
++use Illuminate\Validation\Rule;
++
++class SaveBranchRequest extends FormRequest
++{
++    // Otorisasi sebelum validasi: cabang di luar scope harus 404, bukan 422.
++    public function authorize(): bool
++    {
++        $branch = $this->route('branch');
++        $branch ? Gate::authorize('update', $branch) : Gate::authorize('create', Branch::class);
++
++        return true;
++    }
++
++    public function rules(): array
++    {
++        return [
++            'name' => ['required', 'string', 'max:255'],
++            'code' => ['required', 'string', 'regex:/^[A-Z0-9]{2,10}$/', Rule::unique('branches', 'code')->ignore($this->route('branch'))],
++            'address' => ['nullable', 'string', 'max:1000'],
++            'is_active' => ['sometimes', 'boolean'],
++        ];
++    }
++
++    public function messages(): array
++    {
++        return ['code.regex' => 'Kode cabang 2-10 karakter huruf kapital atau angka.'];
++    }
++}
+diff --git a/after-schola/app/Http/Requests/SaveUserRequest.php b/after-schola/app/Http/Requests/SaveUserRequest.php
+new file mode 100644
+index 0000000..196ba64
+--- /dev/null
++++ b/after-schola/app/Http/Requests/SaveUserRequest.php
+@@ -0,0 +1,55 @@
++<?php
++
++namespace App\Http\Requests;
++
++use App\Models\User;
++use App\Support\FunctionPermissions;
++use Illuminate\Foundation\Http\FormRequest;
++use Illuminate\Support\Facades\Gate;
++use Illuminate\Validation\Rule;
++use Spatie\Permission\Models\Role;
++
++class SaveUserRequest extends FormRequest
++{
++    // Otorisasi sebelum validasi: user di luar scope harus 404, bukan 422.
++    public function authorize(): bool
++    {
++        $target = $this->route('user');
++        $target ? Gate::authorize('update', $target) : Gate::authorize('create', User::class);
++
++        return true;
++    }
++
++    public function rules(): array
++    {
++        $actor = $this->user();
++        $target = $this->route('user');
++        $required = $target ? 'sometimes' : 'required';
++        // Staf cabang tidak boleh membuat akun pusat atau menaruh user di cabang di luar miliknya.
++        $scopes = $actor->hasAllBranches() ? ['all', 'assigned'] : ['assigned'];
++        $assigned = $this->input('branch_scope', $target?->branch_scope) === 'assigned';
++
++        return [
++            'name' => [$required, 'string', 'max:255'],
++            'email' => [$required, 'email', Rule::unique('users', 'email')->ignore($target)],
++            'password' => $target ? ['sometimes', 'nullable', 'string', 'min:8'] : ['required', 'string', 'min:8'],
++            // Orangtua dibuat lewat form trial (Fase 2), bukan lewat manajemen user internal.
++            'role' => [$required, Rule::in(Role::where('name', '!=', 'parent')->pluck('name')->all())],
++            'is_active' => ['sometimes', 'boolean'],
++            'branch_scope' => [$required, Rule::in($scopes)],
++            // Scope 'assigned' wajib punya cabang; scope 'all' mengabaikan branch_ids.
++            'branch_ids' => $assigned
++                ? [($target && ! $this->has('branch_scope')) ? 'sometimes' : 'required', 'array', 'min:1']
++                : ['sometimes', 'array'],
++            'branch_ids.*' => ['integer', Rule::in($actor->accessibleBranchIds())],
++            'permissions' => ['sometimes', 'array'],
++            'permissions.*' => ['string', Rule::in(FunctionPermissions::ALL)],
++            'school_ids' => ['sometimes', 'array'],
++            'school_ids.*' => ['integer', 'exists:schools,id'],
++            'subjects_taught' => ['sometimes', 'array'],
++            'subjects_taught.*' => ['string', 'max:255'],
++            'levels_taught' => ['sometimes', 'array'],
++            'levels_taught.*' => [Rule::in(['beginner', 'intermediate'])],
++        ];
++    }
++}
+diff --git a/after-schola/app/Http/Resources/BranchResource.php b/after-schola/app/Http/Resources/BranchResource.php
+new file mode 100644
+index 0000000..3e67015
+--- /dev/null
++++ b/after-schola/app/Http/Resources/BranchResource.php
+@@ -0,0 +1,20 @@
++<?php
++
++namespace App\Http\Resources;
++
++use Illuminate\Http\Request;
++use Illuminate\Http\Resources\Json\JsonResource;
++
++class BranchResource extends JsonResource
++{
++    public function toArray(Request $request): array
++    {
++        return [
++            'id' => $this->id,
++            'name' => $this->name,
++            'code' => $this->code,
++            'address' => $this->address,
++            'is_active' => $this->is_active,
++        ];
++    }
++}
+diff --git a/after-schola/app/Http/Resources/UserResource.php b/after-schola/app/Http/Resources/UserResource.php
+index 4021dbb..0a690d8 100644
+--- a/after-schola/app/Http/Resources/UserResource.php
++++ b/after-schola/app/Http/Resources/UserResource.php
+@@ -14,8 +14,12 @@ public function toArray(Request $request): array
+             'name' => $this->name,
+             'email' => $this->email,
+             'is_active' => $this->is_active,
++            'branch_scope' => $this->branch_scope,
++            'branches' => BranchResource::collection($this->whenLoaded('branches')),
+             'roles' => $this->getRoleNames(),
+             'permissions' => $this->getAllPermissions()->pluck('name'),
++            // Permission fungsi yang diberikan langsung ke user ini (bukan dari role).
++            'direct_permissions' => $this->getDirectPermissions()->pluck('name')->values(),
+             'assigned_schools' => SchoolResource::collection($this->whenLoaded('assignedSchools')),
+         ];
+     }
+diff --git a/after-schola/app/Models/Branch.php b/after-schola/app/Models/Branch.php
+new file mode 100644
+index 0000000..fa08baa
+--- /dev/null
++++ b/after-schola/app/Models/Branch.php
+@@ -0,0 +1,30 @@
++<?php
++
++namespace App\Models;
++
++use Illuminate\Database\Eloquent\Builder;
++use Illuminate\Database\Eloquent\Model;
++use Illuminate\Database\Eloquent\Relations\BelongsToMany;
++
++class Branch extends Model
++{
++    protected $fillable = ['name', 'code', 'address', 'is_active'];
++
++    protected function casts(): array
++    {
++        return ['is_active' => 'boolean'];
++    }
++
++    public function users(): BelongsToMany
++    {
++        return $this->belongsToMany(User::class)->withTimestamps();
++    }
++
++    /**
++     * Cabang yang boleh dilihat user: scope 'all' semua, 'assigned' hanya miliknya.
++     */
++    public function scopeVisibleTo(Builder $query, User $user): Builder
++    {
++        return $user->hasAllBranches() ? $query : $query->whereIn('branches.id', $user->accessibleBranchIds());
++    }
++}
+diff --git a/after-schola/app/Models/User.php b/after-schola/app/Models/User.php
+index 07277cf..7d3c445 100644
+--- a/after-schola/app/Models/User.php
++++ b/after-schola/app/Models/User.php
+@@ -6,6 +6,7 @@
+ use Database\Factories\UserFactory;
+ use Illuminate\Database\Eloquent\Attributes\Fillable;
+ use Illuminate\Database\Eloquent\Attributes\Hidden;
++use Illuminate\Database\Eloquent\Builder;
+ use Illuminate\Database\Eloquent\Factories\HasFactory;
+ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+ use Illuminate\Database\Eloquent\Relations\HasMany;
+@@ -14,7 +15,7 @@
+ use Laravel\Sanctum\HasApiTokens;
+ use Spatie\Permission\Traits\HasRoles;
+ 
+-#[Fillable(['name', 'email', 'password', 'is_active', 'subjects_taught', 'levels_taught'])]
++#[Fillable(['name', 'email', 'password', 'is_active', 'branch_scope', 'subjects_taught', 'levels_taught'])]
+ #[Hidden(['password', 'remember_token'])]
+ class User extends Authenticatable
+ {
+@@ -80,4 +81,53 @@ public function handlesSchool(int $schoolId): bool
+ 
+         return in_array($schoolId, $this->assignedSchoolIds(), true);
+     }
++
++    /**
++     * Cabang yang ditugaskan ke user ini (pivot branch_user; bermakna untuk scope 'assigned').
++     */
++    public function branches(): BelongsToMany
++    {
++        return $this->belongsToMany(Branch::class)->withTimestamps();
++    }
++
++    public function hasAllBranches(): bool
++    {
++        return $this->branch_scope === 'all';
++    }
++
++    /**
++     * ID cabang yang boleh diakses user — dasar isolasi data per cabang.
++     *
++     * @return array<int, int>
++     */
++    public function accessibleBranchIds(): array
++    {
++        return $this->hasAllBranches()
++            ? Branch::pluck('id')->all()
++            : $this->branches()->pluck('branches.id')->all();
++    }
++
++    public function handlesBranch(int $branchId): bool
++    {
++        return $this->hasAllBranches() || in_array($branchId, $this->accessibleBranchIds(), true);
++    }
++
++    /**
++     * User internal yang boleh dikelola/dilihat `$viewer` (orang tua tidak pernah termasuk).
++     * Scope 'all' melihat semua; scope 'assigned' hanya dirinya dan user ber-scope 'assigned'
++     * yang berbagi minimal satu cabang (staf cabang tidak boleh menyentuh akun pusat).
++     */
++    public function scopeVisibleTo(Builder $query, User $viewer): Builder
++    {
++        $query->whereDoesntHave('roles', fn ($roles) => $roles->where('name', 'parent'));
++
++        if ($viewer->hasAllBranches()) {
++            return $query;
++        }
++
++        return $query->where(fn ($q) => $q->whereKey($viewer->id)->orWhere(
++            fn ($q) => $q->where('branch_scope', 'assigned')
++                ->whereHas('branches', fn ($b) => $b->whereIn('branches.id', $viewer->accessibleBranchIds())),
++        ));
++    }
+ }
+diff --git a/after-schola/app/Policies/BranchPolicy.php b/after-schola/app/Policies/BranchPolicy.php
+new file mode 100644
+index 0000000..aaad02c
+--- /dev/null
++++ b/after-schola/app/Policies/BranchPolicy.php
+@@ -0,0 +1,29 @@
++<?php
++
++namespace App\Policies;
++
++use App\Models\Branch;
++use App\Models\User;
++use Illuminate\Auth\Access\Response;
++
++/**
++ * Permission 'manage branches' dijaga di route; Policy ini menjaga scope cabang.
++ */
++class BranchPolicy
++{
++    public function view(User $user, Branch $branch): Response
++    {
++        return $user->handlesBranch($branch->id) ? Response::allow() : Response::denyAsNotFound();
++    }
++
++    public function update(User $user, Branch $branch): Response
++    {
++        return $this->view($user, $branch);
++    }
++
++    // Hanya pusat (scope 'all') yang boleh membuka cabang baru.
++    public function create(User $user): bool
++    {
++        return $user->hasAllBranches();
++    }
++}
+diff --git a/after-schola/app/Policies/UserPolicy.php b/after-schola/app/Policies/UserPolicy.php
+new file mode 100644
+index 0000000..e97552b
+--- /dev/null
++++ b/after-schola/app/Policies/UserPolicy.php
+@@ -0,0 +1,30 @@
++<?php
++
++namespace App\Policies;
++
++use App\Models\User;
++use Illuminate\Auth\Access\Response;
++
++/**
++ * Permission 'manage users' dijaga di route; Policy ini menjaga scope cabang.
++ * Aturan visibilitas satu sumber: User::scopeVisibleTo().
++ */
++class UserPolicy
++{
++    public function view(User $actor, User $target): Response
++    {
++        return User::visibleTo($actor)->whereKey($target->id)->exists()
++            ? Response::allow()
++            : Response::denyAsNotFound();
++    }
++
++    public function update(User $actor, User $target): Response
++    {
++        return $this->view($actor, $target);
++    }
++
++    public function create(User $actor): bool
++    {
++        return true;
++    }
++}
+diff --git a/after-schola/app/Support/FunctionPermissions.php b/after-schola/app/Support/FunctionPermissions.php
+new file mode 100644
+index 0000000..f1215ca
+--- /dev/null
++++ b/after-schola/app/Support/FunctionPermissions.php
+@@ -0,0 +1,25 @@
++<?php
++
++namespace App\Support;
++
++/**
++ * Permission per fungsi kerja di dalam role Management/Keuangan (PRD 3.2).
++ * Tidak dimiliki lewat role Management: diberikan per user (MGT-02).
++ */
++class FunctionPermissions
++{
++    public const ALL = [
++        // Marketing
++        'manage programs', 'manage trial slots', 'manage leads',
++        // Admin pendaftaran
++        'verify registrations',
++        // Koordinator program
++        'manage classes', 'manage schedule', 'assign trainers', 'review reports',
++        // Pimpinan
++        'view dashboard', 'view all attendance', 'view finance reports',
++        // Admin sistem
++        'manage users', 'manage branches', 'manage integrations',
++        // Keuangan
++        'confirm payments', 'manage invoices', 'export trainer attendance',
++    ];
++}
+diff --git a/after-schola/database/migrations/2026_10_28_100000_create_branches_table.php b/after-schola/database/migrations/2026_10_28_100000_create_branches_table.php
+new file mode 100644
+index 0000000..a729ef4
+--- /dev/null
++++ b/after-schola/database/migrations/2026_10_28_100000_create_branches_table.php
+@@ -0,0 +1,25 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class extends Migration
++{
++    public function up(): void
++    {
++        Schema::create('branches', function (Blueprint $table) {
++            $table->id();
++            $table->string('name');
++            $table->string('code', 10)->unique();
++            $table->text('address')->nullable();
++            $table->boolean('is_active')->default(true);
++            $table->timestamps();
++        });
++    }
++
++    public function down(): void
++    {
++        Schema::dropIfExists('branches');
++    }
++};
+diff --git a/after-schola/database/migrations/2026_10_28_100100_create_branch_user_table.php b/after-schola/database/migrations/2026_10_28_100100_create_branch_user_table.php
+new file mode 100644
+index 0000000..8a645ae
+--- /dev/null
++++ b/after-schola/database/migrations/2026_10_28_100100_create_branch_user_table.php
+@@ -0,0 +1,26 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class extends Migration
++{
++    public function up(): void
++    {
++        // Cabang yang boleh diakses user ber-scope 'assigned'.
++        Schema::create('branch_user', function (Blueprint $table) {
++            $table->id();
++            $table->foreignId('branch_id')->constrained()->cascadeOnDelete();
++            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
++            $table->timestamps();
++
++            $table->unique(['branch_id', 'user_id']);
++        });
++    }
++
++    public function down(): void
++    {
++        Schema::dropIfExists('branch_user');
++    }
++};
+diff --git a/after-schola/database/migrations/2026_10_28_100200_add_branch_scope_to_users_table.php b/after-schola/database/migrations/2026_10_28_100200_add_branch_scope_to_users_table.php
+new file mode 100644
+index 0000000..26bb9d6
+--- /dev/null
++++ b/after-schola/database/migrations/2026_10_28_100200_add_branch_scope_to_users_table.php
+@@ -0,0 +1,27 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\DB;
++use Illuminate\Support\Facades\Schema;
++
++return new class extends Migration
++{
++    public function up(): void
++    {
++        Schema::table('users', function (Blueprint $table) {
++            // all = pusat (lintas cabang); assigned = hanya cabang di branch_user.
++            $table->enum('branch_scope', ['all', 'assigned'])->default('assigned')->after('is_active');
++        });
++
++        // User yang sudah ada sebelum cabang dikenal tetap tanpa batasan, agar tidak terkunci.
++        DB::table('users')->update(['branch_scope' => 'all']);
++    }
++
++    public function down(): void
++    {
++        Schema::table('users', function (Blueprint $table) {
++            $table->dropColumn('branch_scope');
++        });
++    }
++};
+diff --git a/after-schola/database/migrations/2026_10_28_110000_grant_function_permissions_to_existing_management_users.php b/after-schola/database/migrations/2026_10_28_110000_grant_function_permissions_to_existing_management_users.php
+new file mode 100644
+index 0000000..701ba1b
+--- /dev/null
++++ b/after-schola/database/migrations/2026_10_28_110000_grant_function_permissions_to_existing_management_users.php
+@@ -0,0 +1,37 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Spatie\Permission\Models\Permission;
++use Spatie\Permission\Models\Role;
++use Spatie\Permission\PermissionRegistrar;
++
++return new class extends Migration
++{
++    /**
++     * Permission fungsi yang sebelum Modul 0b diperoleh user management lewat role.
++     * Daftar dibekukan di sini (bukan FunctionPermissions::ALL) agar migrasi tidak berubah di kemudian hari.
++     */
++    private array $held = ['manage users', 'verify registrations', 'manage invoices', 'confirm payments', 'view finance reports', 'manage branches', 'manage programs'];
++
++    public function up(): void
++    {
++        $role = Role::where('name', 'management')->where('guard_name', 'web')->first();
++        if (! $role) {
++            return; // database baru: belum ada role/user
++        }
++
++        // Role management tidak lagi memegang permission ini (RoleSeeder). Pindahkan ke user yang ada
++        // supaya tidak ada yang kehilangan akses (terutama manage users) saat deploy.
++        foreach ($this->held as $name) {
++            Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
++        }
++        $role->users->each(fn ($user) => $user->givePermissionTo($this->held));
++
++        app(PermissionRegistrar::class)->forgetCachedPermissions();
++    }
++
++    public function down(): void
++    {
++        // Tidak ada yang dibalik: permission langsung tidak berbahaya bila dibiarkan.
++    }
++};
+diff --git a/after-schola/database/seeders/DatabaseSeeder.php b/after-schola/database/seeders/DatabaseSeeder.php
+index 99f094c..f0c1ab6 100644
+--- a/after-schola/database/seeders/DatabaseSeeder.php
++++ b/after-schola/database/seeders/DatabaseSeeder.php
+@@ -2,9 +2,11 @@
+ 
+ namespace Database\Seeders;
+ 
++use App\Models\Branch;
+ use App\Models\Classroom;
+ use App\Models\School;
+ use App\Models\User;
++use App\Support\FunctionPermissions;
+ use Illuminate\Database\Seeder;
+ use Illuminate\Support\Facades\Hash;
+ 
+@@ -20,9 +22,10 @@ public function run(): void
+         // Akun Management (admin tertinggi).
+         $admin = User::firstOrCreate(
+             ['email' => 'admin@afterschola.id'],
+-            ['name' => 'Admin Schola', 'password' => Hash::make('password'), 'is_active' => true],
++            ['name' => 'Admin Schola', 'password' => Hash::make('password'), 'is_active' => true, 'branch_scope' => 'all'],
+         );
+         $admin->syncRoles('management');
++        $admin->givePermissionTo(FunctionPermissions::ALL); // admin tertinggi: semua fungsi
+ 
+         // Akun Trainer contoh.
+         $trainer = User::firstOrCreate(
+@@ -31,6 +34,10 @@ public function run(): void
+         );
+         $trainer->syncRoles('trainer');
+ 
++        // Cabang contoh; trainer (scope 'assigned') ditempatkan di sana.
++        $branch = Branch::firstOrCreate(['code' => 'UTM'], ['name' => 'Cabang Utama']);
++        $trainer->branches()->syncWithoutDetaching([$branch->id]);
++
+         // Data master contoh + penugasan trainer, agar API bisa langsung dicoba.
+         $school = School::firstOrCreate(
+             ['name' => 'SMP Contoh 1'],
+diff --git a/after-schola/database/seeders/RoleSeeder.php b/after-schola/database/seeders/RoleSeeder.php
+index ef028d4..45edff1 100644
+--- a/after-schola/database/seeders/RoleSeeder.php
++++ b/after-schola/database/seeders/RoleSeeder.php
+@@ -2,6 +2,7 @@
+ 
+ namespace Database\Seeders;
+ 
++use App\Support\FunctionPermissions;
+ use Illuminate\Database\Seeder;
+ use Spatie\Permission\Models\Permission;
+ use Spatie\Permission\Models\Role;
+@@ -14,7 +15,8 @@ public function run(): void
+         // Reset cache spatie agar perubahan langsung terpakai.
+         app(PermissionRegistrar::class)->forgetCachedPermissions();
+ 
+-        $permissions = [
++        // Permission lama (absensi sekolah, trial, pendaftaran interim). Role management memegang semuanya.
++        $legacyPermissions = [
+             'manage schools',        // CRUD sekolah + penugasan trainer
+             'manage classrooms',     // CRUD level per sekolah
+             'manage students',       // CRUD murid penuh
+@@ -26,25 +28,20 @@ public function run(): void
+             'manage expo reports',   // lihat & rekap semua laporan ekspo
+             'submit expo reports',   // trainer mengisi laporan ekspo
+             'export data',           // export Excel/PDF
+-            'manage users',          // kelola user & role
+-            'manage programs',       // CRUD program, level, rubrik, jadwal trial
+             'submit trial evaluations', // trainer mengisi evaluasi trial
+             'manage trial evaluations', // lihat & kelola semua evaluasi trial
+             'manage enrollment',        // keputusan lanjut/tidak + pendaftaran resmi
+             'manage hot issues',     // buat/ubah/nonaktifkan hot issue (popup notifikasi semua role)
+-            'verify registrations',  // verifikasi pendaftaran resmi (setujui / minta revisi)
+-            'manage invoices',       // lihat invoice, catat pembayaran, batalkan invoice
+-            'confirm payments',      // konfirmasi / tolak pembayaran
+-            'view finance reports',  // umur piutang & laporan keuangan
+         ];
+ 
+-        foreach ($permissions as $permission) {
++        // Permission fungsi (PRD 3.2): diberikan per user, bukan lewat role management.
++        foreach (array_merge($legacyPermissions, FunctionPermissions::ALL) as $permission) {
+             Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
+         }
+ 
+         $roles = [
+-            'management' => $permissions, // akses penuh
+-            'finance' => ['view attendance', 'export data', 'manage invoices', 'confirm payments', 'view finance reports'],
++            'management' => $legacyPermissions, // permission fungsi (FunctionPermissions) diberikan per user
++            'finance' => ['view attendance', 'export data', 'manage invoices', 'confirm payments', 'view finance reports', 'export trainer attendance'],
+             'hr' => ['view attendance', 'export data'],
+             'trainer' => [
+                 'add students',
+@@ -54,6 +51,7 @@ public function run(): void
+                 'submit trial evaluations',
+                 'export data',
+             ],
++            'parent' => [], // Orangtua: akses lewat kepemilikan anak (students.parent_id), bukan permission
+             'developer' => [], // modul manajemen proyek (fase 3), belum ada di absensi
+         ];
+ 
+diff --git a/after-schola/frontend/src/layouts/AppLayout.vue b/after-schola/frontend/src/layouts/AppLayout.vue
+index 97db38b..e07c3ed 100644
+--- a/after-schola/frontend/src/layouts/AppLayout.vue
++++ b/after-schola/frontend/src/layouts/AppLayout.vue
+@@ -25,12 +25,13 @@ const managementNav = [
+   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/management/laporan-ekspo' },
+   { label: 'Evaluasi Trial', icon: 'rate_review', to: '/management/evaluasi-trial' },
+   { label: 'Keputusan & Pendaftaran', icon: 'how_to_reg', to: '/management/keputusan-pendaftaran' },
+-  { label: 'Verifikasi Pendaftaran', icon: 'fact_check', to: '/management/verifikasi-pendaftaran' },
+-  { label: 'Invoice & Pembayaran', icon: 'receipt_long', to: '/management/invoice' },
+-  { label: 'Umur Piutang', icon: 'hourglass_bottom', to: '/management/umur-piutang' },
+-  { label: 'Pengaturan Pembayaran', icon: 'payments', to: '/management/pengaturan-pembayaran' },
+-  { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue' },
+-  { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user' },
++  { label: 'Verifikasi Pendaftaran', icon: 'fact_check', to: '/management/verifikasi-pendaftaran', perm: 'verify registrations' },
++  { label: 'Invoice & Pembayaran', icon: 'receipt_long', to: '/management/invoice', perm: 'manage invoices' },
++  { label: 'Umur Piutang', icon: 'hourglass_bottom', to: '/management/umur-piutang', perm: 'view finance reports' },
++  { label: 'Pengaturan Pembayaran', icon: 'payments', to: '/management/pengaturan-pembayaran', perm: 'manage invoices' },
++  { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue', perm: 'manage hot issues' },
++  { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user', perm: 'manage users' },
++  { label: 'Cabang', icon: 'store', to: '/management/cabang', perm: 'manage branches' },
+   { label: 'Program & Promosi', icon: 'inventory_2', to: '/management/program' },
+   { label: 'Team', icon: 'groups', to: '/management/team' },
+   { label: 'Proyek & Task', icon: 'view_kanban', to: '/management/proyek' },
+@@ -52,9 +53,13 @@ const developerNav = [
+   { label: 'Kalender', icon: 'calendar_month', to: '/developer/kalender' },
+ ]
+ 
++const parentNav = [{ label: 'Beranda', icon: 'family_restroom', to: '/portal' }]
++
++// Item bertanda `perm` hanya tampil bila user punya permission itu (backend tetap otoritas).
+ const navItems = computed(() => {
+-  if (auth.isManagement) return managementNav
+-  return auth.isDeveloper ? developerNav : trainerNav
++  if (auth.isManagement) return managementNav.filter((i) => !i.perm || auth.can(i.perm))
++  if (auth.isDeveloper) return developerNav
++  return auth.isParent ? parentNav : trainerNav
+ })
+ 
+ const roleBadge = computed(() => {
+@@ -62,6 +67,7 @@ const roleBadge = computed(() => {
+     return { text: 'Management', cls: 'bg-secondary-container text-on-secondary-container' }
+   }
+   if (auth.isDeveloper) return { text: 'Developer', cls: 'bg-primary-fixed text-primary' }
++  if (auth.isParent) return { text: 'Orang Tua', cls: 'bg-primary-fixed text-primary' }
+   return { text: 'Trainer', cls: 'bg-tertiary-fixed text-on-tertiary-fixed' }
+ })
+ 
+@@ -79,7 +85,7 @@ const initials = computed(() => {
+ 
+ function isActive(to) {
+   // Dashboard cocok persis; menu lain menyorot juga pada sub-rute (mis. /trainer/absensi/5).
+-  if (to === '/trainer' || to === '/management' || to === '/developer') return route.path === to
++  if (to === '/trainer' || to === '/management' || to === '/developer' || to === '/portal') return route.path === to
+   return route.path === to || route.path.startsWith(to + '/')
+ }
+ 
+diff --git a/after-schola/frontend/src/router/index.js b/after-schola/frontend/src/router/index.js
+index 19e832a..ab79334 100644
+--- a/after-schola/frontend/src/router/index.js
++++ b/after-schola/frontend/src/router/index.js
+@@ -35,6 +35,9 @@ import ProjectsView from '@/views/projects/ProjectsView.vue'
+ import ProjectBoardView from '@/views/projects/ProjectBoardView.vue'
+ import ProjectCalendarView from '@/views/projects/ProjectCalendarView.vue'
+ import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
++import ManagementBranchesView from '@/views/management/BranchesView.vue'
++
++// 1) Import, di dekat import view publik lain
+ 
+ const routes = [
+   {
+@@ -85,7 +88,16 @@ const routes = [
+       
+       
+ 	  
+-	  // ---- Management ----
++
++      // ---- Orang Tua (portal belum dibangun: Fase 2) ----
++      {
++        path: 'portal',
++        name: 'portal.dashboard',
++        component: PlaceholderView,
++        meta: { title: 'Portal Orang Tua', icon: 'family_restroom' },
++      },
++
++      // ---- Management ----
+       { path: 'management', name: 'management.dashboard', component: ManagementDashboardView },
+       { path: 'management/sekolah-murid', name: 'management.schools', component: ManagementSchoolsAdminView },
+       {
+@@ -119,6 +131,12 @@ const routes = [
+         component: ManagementUserManagementView,
+         meta: { title: 'Manajemen User', icon: 'manage_accounts' },
+       },
++      {
++        path: 'management/cabang',
++        name: 'management.branches',
++        component: ManagementBranchesView,
++        meta: { title: 'Cabang', icon: 'store' },
++      },
+       {
+         path: 'management/program',
+         name: 'management.programs',
+@@ -174,6 +192,7 @@ router.beforeEach(async (to) => {
+     if (to.path.startsWith('/management') && !auth.isManagement) return auth.homeRoute
+     if (to.path.startsWith('/trainer') && !auth.isTrainer) return auth.homeRoute
+ 	if (to.path.startsWith('/developer') && !auth.isDeveloper) return auth.homeRoute
++    if (to.path.startsWith('/portal') && !auth.isParent) return auth.homeRoute
+   }
+ 
+   return true
+diff --git a/after-schola/frontend/src/stores/auth.js b/after-schola/frontend/src/stores/auth.js
+index 119f8a7..21c68b4 100644
+--- a/after-schola/frontend/src/stores/auth.js
++++ b/after-schola/frontend/src/stores/auth.js
+@@ -14,6 +14,9 @@ export const useAuthStore = defineStore('auth', {
+     isManagement: (state) => (state.user?.roles ?? []).includes('management'),
+     isTrainer: (state) => (state.user?.roles ?? []).includes('trainer'),
+ 	isDeveloper: (state) => (state.user?.roles ?? []).includes('developer'),
++    isParent: (state) => (state.user?.roles ?? []).includes('parent'),
++    // Scope 'all' = pusat (lintas cabang); selain itu hanya cabang di user.branches.
++    hasAllBranches: (state) => state.user?.branch_scope === 'all',
+     permissions: (state) => state.user?.permissions ?? [],
+     // Cek permission tunggal (backend tetap otoritas final).
+     can: (state) => (perm) => (state.user?.permissions ?? []).includes(perm),
+@@ -21,7 +24,8 @@ export const useAuthStore = defineStore('auth', {
+     // Dashboard tujuan sesuai peran. Management diprioritaskan bila punya dua peran.
+     homeRoute() {
+       if (this.isManagement) return '/management'
+-      return this.isDeveloper ? '/developer' : '/trainer'
++      if (this.isDeveloper) return '/developer'
++      return this.isParent ? '/portal' : '/trainer'
+     },
+   },
+ 
+diff --git a/after-schola/frontend/src/views/management/BranchesView.vue b/after-schola/frontend/src/views/management/BranchesView.vue
+new file mode 100644
+index 0000000..98879bd
+--- /dev/null
++++ b/after-schola/frontend/src/views/management/BranchesView.vue
+@@ -0,0 +1,198 @@
++<script setup>
++// Cabang (permission: manage branches) — daftar, tambah (hanya pusat/scope 'all'),
++// ubah, dan nonaktifkan. Cabang tidak dihapus: dinonaktifkan lewat is_active.
++import { onMounted, reactive, ref } from 'vue'
++import api from '@/lib/api'
++import { useAuthStore } from '@/stores/auth'
++import { unwrap } from '@/lib/format'
++
++const auth = useAuthStore()
++
++const loading = ref(true)
++const branches = ref([])
++const loadError = ref('')
++
++const showForm = ref(false)
++const editing = ref(null) // null = tambah baru
++const saving = ref(false)
++const formError = ref('')
++const form = reactive({ name: '', code: '', address: '' })
++
++async function load() {
++  loading.value = true
++  loadError.value = ''
++  try {
++    const { data } = await api.get('/branches')
++    branches.value = unwrap(data)
++  } catch (err) {
++    loadError.value = err?.response?.status === 403 ? 'Anda tidak berwenang melihat cabang.' : 'Gagal memuat cabang.'
++  } finally {
++    loading.value = false
++  }
++}
++
++function openForm(branch = null) {
++  editing.value = branch
++  Object.assign(form, {
++    name: branch?.name ?? '',
++    code: branch?.code ?? '',
++    address: branch?.address ?? '',
++  })
++  formError.value = ''
++  showForm.value = true
++}
++
++function errorMessage(err, fallback) {
++  const res = err?.response
++  if (res?.status === 422) return Object.values(res.data?.errors ?? {}).flat().join(' ') || 'Data tidak valid.'
++  if (res?.status === 403) return 'Anda tidak berwenang melakukan ini.'
++  if (res?.status === 404) return 'Cabang tidak ditemukan atau di luar cakupan Anda.'
++  return fallback
++}
++
++async function submit() {
++  saving.value = true
++  formError.value = ''
++  try {
++    const payload = { name: form.name, code: form.code.toUpperCase(), address: form.address || null }
++    if (editing.value) {
++      await api.put(`/branches/${editing.value.id}`, payload)
++    } else {
++      await api.post('/branches', payload)
++    }
++    showForm.value = false
++    await load()
++  } catch (err) {
++    formError.value = errorMessage(err, 'Gagal menyimpan cabang.')
++  } finally {
++    saving.value = false
++  }
++}
++
++async function toggleActive(branch) {
++  try {
++    await api.put(`/branches/${branch.id}`, {
++      name: branch.name,
++      code: branch.code,
++      address: branch.address,
++      is_active: !branch.is_active,
++    })
++    await load()
++  } catch (err) {
++    window.alert(errorMessage(err, 'Gagal mengubah status cabang.'))
++  }
++}
++
++onMounted(load)
++</script>
++
++<template>
++  <div class="flex w-full flex-col pb-space-3xl">
++    <div class="flex flex-col justify-between gap-space-md py-space-xl lg:flex-row lg:items-center">
++      <div class="flex flex-col gap-space-2xs">
++        <span class="font-label-sm text-label-sm font-semibold uppercase tracking-widest text-secondary">Fondasi • Cabang</span>
++        <h1 class="font-headline-xl text-headline-xl font-bold tracking-tight text-on-surface">Cabang</h1>
++        <p class="font-body-md text-body-md text-on-surface-variant">
++          Lokasi operasional After Schola. Cabang menjadi batas data dan akses.
++        </p>
++      </div>
++      <button
++        v-if="auth.hasAllBranches"
++        class="inline-flex items-center gap-space-xs self-start rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 lg:self-center"
++        @click="openForm()"
++      >
++        <span class="material-symbols-outlined text-[18px]">add_business</span>
++        <span>Tambah Cabang</span>
++      </button>
++    </div>
++
++    <div v-if="loading" class="space-y-space-sm">
++      <div v-for="i in 3" :key="i" class="h-14 animate-pulse rounded-xl bg-surface-container"></div>
++    </div>
++
++    <div v-else-if="loadError" class="rounded-2xl bg-error-container px-space-lg py-space-md font-body-md text-body-md text-on-error-container">
++      {{ loadError }}
++    </div>
++
++    <div v-else-if="!branches.length" class="rounded-2xl bg-surface-container-lowest px-space-lg py-space-2xl text-center">
++      <span class="material-symbols-outlined text-[36px] text-outline">store</span>
++      <p class="mt-space-sm font-headline-sm text-headline-sm text-on-surface">Belum ada cabang</p>
++    </div>
++
++    <div v-else class="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm">
++      <div
++        v-for="b in branches"
++        :key="b.id"
++        class="flex flex-col gap-space-sm border-b border-surface-container px-space-md py-space-sm last:border-0 sm:flex-row sm:items-center"
++      >
++        <div class="flex items-center gap-space-sm">
++          <span class="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-lg bg-primary-fixed px-2 text-[12px] font-bold text-primary">{{ b.code }}</span>
++          <div class="flex flex-col">
++            <span class="font-label-lg text-label-lg font-semibold text-on-surface">{{ b.name }}</span>
++            <span class="font-body-sm text-body-sm text-on-surface-variant">{{ b.address || 'Alamat belum diisi' }}</span>
++          </div>
++        </div>
++
++        <div class="flex items-center gap-space-xs sm:ml-auto">
++          <span
++            class="rounded-full px-2 py-0.5 font-label-sm text-label-sm font-semibold"
++            :class="b.is_active ? 'bg-[#D1FAE5] text-[#065F46]' : 'bg-surface-container text-outline'"
++          >{{ b.is_active ? 'Aktif' : 'Nonaktif' }}</span>
++          <button class="rounded-lg p-1.5 text-primary hover:bg-surface-container" :title="b.is_active ? 'Nonaktifkan' : 'Aktifkan'" @click="toggleActive(b)">
++            <span class="material-symbols-outlined text-[18px]">{{ b.is_active ? 'toggle_on' : 'toggle_off' }}</span>
++          </button>
++          <button class="rounded-lg p-1.5 text-secondary hover:bg-surface-container" title="Ubah cabang" @click="openForm(b)">
++            <span class="material-symbols-outlined text-[18px]">edit</span>
++          </button>
++        </div>
++      </div>
++    </div>
++
++    <!-- Modal tambah / ubah cabang -->
++    <div
++      v-if="showForm"
++      class="fixed inset-0 z-50 flex items-center justify-center bg-[#0B2A5B]/40 p-4 backdrop-blur-sm"
++      @click.self="showForm = false"
++    >
++      <div class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-surface-container-lowest shadow-xl animate-fade-in">
++        <div class="flex items-center justify-between border-b border-surface-container p-space-lg">
++          <h2 class="font-headline-md text-headline-md font-bold text-on-surface">{{ editing ? 'Ubah Cabang' : 'Tambah Cabang' }}</h2>
++          <button class="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low" @click="showForm = false">
++            <span class="material-symbols-outlined">close</span>
++          </button>
++        </div>
++
++        <form class="flex-1 overflow-y-auto p-space-lg" @submit.prevent="submit">
++          <div class="flex flex-col gap-space-md">
++            <div v-if="formError" class="flex items-center gap-space-xs rounded-lg bg-error-container px-space-sm py-space-xs font-body-sm text-body-sm text-on-error-container">
++              <span class="material-symbols-outlined text-[18px]">error</span>{{ formError }}
++            </div>
++
++            <label class="flex flex-col gap-1">
++              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Nama</span>
++              <input v-model="form.name" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
++            </label>
++
++            <label class="flex flex-col gap-1">
++              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Kode <span class="font-normal text-outline">(2-10 huruf kapital/angka, dipakai di nomor invoice)</span></span>
++              <input v-model="form.code" required maxlength="10" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md uppercase text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
++            </label>
++
++            <label class="flex flex-col gap-1">
++              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Alamat <span class="font-normal text-outline">(opsional)</span></span>
++              <textarea v-model="form.address" rows="2" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15"></textarea>
++            </label>
++          </div>
++
++          <div class="mt-space-lg flex items-center justify-end gap-space-sm">
++            <button type="button" class="rounded-xl px-space-md py-2.5 font-label-lg text-label-lg text-on-surface hover:bg-surface-container" @click="showForm = false">Batal</button>
++            <button type="submit" :disabled="saving" class="inline-flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60">
++              <span v-if="saving" class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
++              Simpan
++            </button>
++          </div>
++        </form>
++      </div>
++    </div>
++  </div>
++</template>
+diff --git a/after-schola/frontend/src/views/management/UserAccessFields.vue b/after-schola/frontend/src/views/management/UserAccessFields.vue
+new file mode 100644
+index 0000000..3c876e0
+--- /dev/null
++++ b/after-schola/frontend/src/views/management/UserAccessFields.vue
+@@ -0,0 +1,78 @@
++<script setup>
++// Bagian "akses" pada form user: scope cabang, pilihan cabang, dan permission fungsi (MGT-02).
++// Dipakai form tambah dan form ubah di UserManagementView.
++defineProps({
++  branches: { type: Array, default: () => [] }, // cabang yang boleh dipilih pelaku
++  canSetAll: { type: Boolean, default: false }, // hanya pusat (scope 'all') yang boleh memberi scope 'all'
++  showPermissions: { type: Boolean, default: false }, // permission fungsi hanya untuk role Management
++})
++
++const scope = defineModel('scope', { default: 'assigned' })
++const branchIds = defineModel('branchIds', { default: () => [] })
++const permissions = defineModel('permissions', { default: () => [] })
++
++// Pengelompokan mengikuti PRD 3.2. Nama permission harus sama dengan FunctionPermissions::ALL di backend;
++// backend menolak (422) nama yang tidak dikenal.
++const FUNCTIONS = [
++  { label: 'Marketing', perms: ['manage programs', 'manage trial slots', 'manage leads'] },
++  { label: 'Admin pendaftaran', perms: ['verify registrations'] },
++  { label: 'Koordinator program', perms: ['manage classes', 'manage schedule', 'assign trainers', 'review reports'] },
++  { label: 'Pimpinan', perms: ['view dashboard', 'view all attendance', 'view finance reports'] },
++  { label: 'Admin sistem', perms: ['manage users', 'manage branches', 'manage integrations'] },
++  { label: 'Keuangan', perms: ['confirm payments', 'manage invoices', 'view finance reports', 'export trainer attendance'] },
++]
++
++const segment = (active) =>
++  active ? 'bg-primary-container text-on-primary shadow-sm' : 'text-on-surface-variant'
++</script>
++
++<template>
++  <div class="flex flex-col gap-space-md">
++    <div class="flex flex-col gap-1">
++      <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Cakupan Cabang</span>
++      <div class="inline-flex rounded-xl bg-surface-container-low p-1">
++        <button
++          type="button"
++          class="flex flex-1 items-center justify-center rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold transition-all"
++          :class="segment(scope === 'assigned')"
++          @click="scope = 'assigned'"
++        >
++          Cabang tertentu
++        </button>
++        <button
++          v-if="canSetAll"
++          type="button"
++          class="flex flex-1 items-center justify-center rounded-lg px-space-md py-2 font-label-md text-label-md font-semibold transition-all"
++          :class="segment(scope === 'all')"
++          @click="scope = 'all'"
++        >
++          Semua cabang (pusat)
++        </button>
++      </div>
++    </div>
++
++    <div v-if="scope === 'assigned'" class="flex flex-col gap-1">
++      <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Cabang <span class="font-normal text-outline">(minimal satu)</span></span>
++      <div class="flex flex-col gap-1 rounded-lg border border-outline-variant bg-white p-space-sm">
++        <label v-for="b in branches" :key="b.id" class="flex items-center gap-space-sm py-1">
++          <input v-model="branchIds" type="checkbox" :value="b.id" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
++          <span class="font-body-md text-body-md text-on-surface">{{ b.name }} <span class="text-outline">({{ b.code }})</span></span>
++        </label>
++        <p v-if="!branches.length" class="font-body-sm text-body-sm text-outline">Belum ada cabang yang bisa dipilih.</p>
++      </div>
++    </div>
++
++    <div v-if="showPermissions" class="flex flex-col gap-1">
++      <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Fungsi Kerja <span class="font-normal text-outline">(permission per user)</span></span>
++      <div class="flex flex-col gap-space-sm rounded-lg border border-outline-variant bg-white p-space-sm">
++        <div v-for="f in FUNCTIONS" :key="f.label" class="flex flex-col gap-1">
++          <span class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">{{ f.label }}</span>
++          <label v-for="p in f.perms" :key="p" class="flex items-center gap-space-sm py-0.5">
++            <input v-model="permissions" type="checkbox" :value="p" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
++            <span class="font-body-md text-body-md text-on-surface">{{ p }}</span>
++          </label>
++        </div>
++      </div>
++    </div>
++  </div>
++</template>
+diff --git a/after-schola/frontend/src/views/management/UserManagementView.vue b/after-schola/frontend/src/views/management/UserManagementView.vue
+index 8b7a1a9..3f457eb 100644
+--- a/after-schola/frontend/src/views/management/UserManagementView.vue
++++ b/after-schola/frontend/src/views/management/UserManagementView.vue
+@@ -3,7 +3,11 @@
+ // dengan kemampuan mengajar: mata pelajaran & level yang dikuasai).
+ import { computed, onMounted, reactive, ref } from 'vue'
+ import api from '@/lib/api'
++import { useAuthStore } from '@/stores/auth'
+ import { initials, unwrap } from '@/lib/format'
++import UserAccessFields from './UserAccessFields.vue'
++
++const auth = useAuthStore()
+ 
+ const ROLES = [
+   { value: 'management', label: 'Management' },
+@@ -21,6 +25,7 @@ const loading = ref(true)
+ const users = ref([])
+ const schools = ref([])
+ const subjectCatalog = ref([])
++const branches = ref([]) // cabang yang boleh dipilih pelaku (backend sudah memfilter per scope)
+ 
+ const showCreate = ref(false)
+ const saving = ref(false)
+@@ -30,6 +35,9 @@ const form = reactive({
+   email: '',
+   password: '',
+   role: 'trainer',
++  branch_scope: 'assigned',
++  branch_ids: [],
++  permissions: [],
+   school_ids: [],
+   subjects_taught: [],
+   levels_taught: [],
+@@ -45,6 +53,9 @@ const editForm = reactive({
+   email: '',
+   password: '',
+   role: 'trainer',
++  branch_scope: 'assigned',
++  branch_ids: [],
++  permissions: [],
+   school_ids: [],
+   subjects_taught: [],
+   levels_taught: [],
+@@ -70,6 +81,21 @@ async function loadRefData() {
+   } catch (e) {
+     // non-fatal, form tetap bisa dipakai tanpa opsi ini
+   }
++  try {
++    const { data } = await api.get('/branches')
++    branches.value = unwrap(data)
++  } catch (e) {
++    // non-fatal: tanpa daftar cabang, user ber-scope 'assigned' tidak bisa disimpan
++  }
++}
++
++// Payload bagian akses; permission fungsi hanya untuk Management (role lain dikosongkan).
++function accessPayload(f) {
++  return {
++    branch_scope: f.branch_scope,
++    branch_ids: f.branch_scope === 'assigned' ? f.branch_ids : [],
++    permissions: f.role === 'management' ? f.permissions : [],
++  }
+ }
+ 
+ function openCreate() {
+@@ -78,6 +104,9 @@ function openCreate() {
+     email: '',
+     password: '',
+     role: 'trainer',
++    branch_scope: 'assigned',
++    branch_ids: [],
++    permissions: [],
+     school_ids: [],
+     subjects_taught: [],
+     levels_taught: [],
+@@ -95,6 +124,7 @@ async function submitCreate() {
+       email: form.email,
+       password: form.password,
+       role: form.role,
++      ...accessPayload(form),
+     }
+     if (form.role === 'trainer') {
+       payload.school_ids = form.school_ids
+@@ -125,6 +155,10 @@ function openEdit(user) {
+     email: user.email,
+     password: '',
+     role: (user.roles ?? [])[0] ?? 'trainer',
++    branch_scope: user.branch_scope ?? 'assigned',
++    // Hanya cabang yang bisa dipilih pelaku; sisanya dipertahankan backend.
++    branch_ids: (user.branches ?? []).map((b) => b.id).filter((id) => branches.value.some((b) => b.id === id)),
++    permissions: user.direct_permissions ?? [],
+     school_ids: (user.assignedSchools ?? user.assigned_schools ?? user.schools ?? []).map((s) => s.id),
+     subjects_taught: user.subjects_taught ?? [],
+     levels_taught: user.levels_taught ?? [],
+@@ -142,6 +176,7 @@ async function submitEdit() {
+       name: editForm.name,
+       email: editForm.email,
+       role: editForm.role,
++      ...accessPayload(editForm),
+     }
+     if (editForm.password) {
+       payload.password = editForm.password
+@@ -169,18 +204,8 @@ async function toggleActive(user) {
+   try {
+     await api.put(`/users/${user.id}`, { is_active: !user.is_active })
+     await loadUsers()
+-  } catch (e) {
+-    window.alert('Gagal mengubah status user.')
+-  }
+-}
+-
+-async function removeUser(user) {
+-  if (!window.confirm(`Hapus akun "${user.name}"? Tindakan ini tidak bisa dibatalkan.`)) return
+-  try {
+-    await api.delete(`/users/${user.id}`)
+-    await loadUsers()
+   } catch (err) {
+-    window.alert(err?.response?.data?.message || 'Gagal menghapus user.')
++    window.alert(err?.response?.data?.errors?.is_active?.[0] || 'Gagal mengubah status user.')
+   }
+ }
+ 
+@@ -238,6 +263,8 @@ onMounted(() => {
+ 
+         <div class="flex flex-wrap items-center gap-1 sm:ml-space-md">
+           <span v-for="r in u.roles ?? []" :key="r" class="rounded-full bg-primary-fixed px-2 py-0.5 font-label-sm text-label-sm font-semibold capitalize text-primary">{{ roleLabel(r) }}</span>
++          <span class="rounded-full bg-surface-container px-2 py-0.5 font-label-sm text-label-sm text-on-surface-variant" :title="'Cakupan cabang'">{{ u.branch_scope === 'all' ? 'Semua cabang' : (u.branches ?? []).map((b) => b.code).join(', ') || 'Tanpa cabang' }}</span>
++          <span v-if="(u.direct_permissions ?? []).length" class="rounded-full bg-secondary-container px-2 py-0.5 font-label-sm text-label-sm text-on-secondary-container" :title="u.direct_permissions.join(', ')">{{ u.direct_permissions.length }} fungsi</span>
+           <span v-for="sub in u.subjects_taught ?? []" :key="sub" class="rounded-full bg-surface-container px-2 py-0.5 font-label-sm text-label-sm text-on-surface-variant">{{ sub }}</span>
+           <span v-for="lvl in u.levels_taught ?? []" :key="lvl" class="rounded-full bg-surface-container px-2 py-0.5 font-label-sm text-label-sm capitalize text-on-surface-variant">{{ lvl }}</span>
+         </div>
+@@ -253,9 +280,6 @@ onMounted(() => {
+           <button class="rounded-lg p-1.5 text-secondary hover:bg-surface-container" title="Ubah user" @click="openEdit(u)">
+             <span class="material-symbols-outlined text-[18px]">edit</span>
+           </button>
+-          <button class="rounded-lg p-1.5 text-error hover:bg-error-container" title="Hapus" @click="removeUser(u)">
+-            <span class="material-symbols-outlined text-[18px]">delete</span>
+-          </button>
+         </div>
+       </div>
+     </div>
+@@ -302,6 +326,15 @@ onMounted(() => {
+               </select>
+             </label>
+ 
++            <UserAccessFields
++              v-model:scope="form.branch_scope"
++              v-model:branch-ids="form.branch_ids"
++              v-model:permissions="form.permissions"
++              :branches="branches"
++              :can-set-all="auth.hasAllBranches"
++              :show-permissions="form.role === 'management'"
++            />
++
+             <!-- Khusus Trainer -->
+             <template v-if="form.role === 'trainer'">
+               <div class="flex flex-col gap-1">
+@@ -401,6 +434,15 @@ onMounted(() => {
+               </select>
+             </label>
+ 
++            <UserAccessFields
++              v-model:scope="editForm.branch_scope"
++              v-model:branch-ids="editForm.branch_ids"
++              v-model:permissions="editForm.permissions"
++              :branches="branches"
++              :can-set-all="auth.hasAllBranches"
++              :show-permissions="editForm.role === 'management'"
++            />
++
+             <!-- Khusus Trainer -->
+             <template v-if="editForm.role === 'trainer'">
+               <div class="flex flex-col gap-1">
+diff --git a/after-schola/routes/api.php b/after-schola/routes/api.php
+index 4448497..595e652 100644
+--- a/after-schola/routes/api.php
++++ b/after-schola/routes/api.php
+@@ -2,6 +2,7 @@
+ 
+ use App\Http\Controllers\Api\AttendanceImportController;
+ use App\Http\Controllers\Api\AuthController;
++use App\Http\Controllers\Api\BranchController;
+ use App\Http\Controllers\Api\ClassroomController;
+ use App\Http\Controllers\Api\ClassSessionController;
+ use App\Http\Controllers\Api\DashboardController;
+@@ -156,12 +157,23 @@
+     Route::get('/finance/aging', [FinanceReportController::class, 'aging'])->middleware('permission:view finance reports');
+ 
+     // Kelola user & role — hanya Management
++    // Daftar user juga dipakai dropdown di halaman Management lain (trainer, developer): terbuka
++    // untuk role management, tetap dibatasi scope cabang. Tulis/detail butuh manage users.
++    Route::get('/users', [UserController::class, 'index'])->middleware('role_or_permission:management|manage users');
+     Route::middleware('permission:manage users')->group(function () {
+-        Route::get('/users', [UserController::class, 'index']);
+         Route::post('/users', [UserController::class, 'store']);
+         Route::get('/users/{user}', [UserController::class, 'show']);
+         Route::match(['put', 'patch'], '/users/{user}', [UserController::class, 'update']);
+-        Route::delete('/users/{user}', [UserController::class, 'destroy']);
++        // Tidak ada DELETE: user dinonaktifkan lewat is_active (MGT-04).
++    });
++
++    // Cabang — hanya pusat membuat; tidak ada DELETE (nonaktifkan lewat is_active).
++    // Daftar cabang juga dibaca form user (manage users) untuk memilih cabang.
++    Route::get('/branches', [BranchController::class, 'index'])->middleware('permission:manage branches|manage users');
++    Route::middleware('permission:manage branches')->group(function () {
++        Route::post('/branches', [BranchController::class, 'store']);
++        Route::get('/branches/{branch}', [BranchController::class, 'show']);
++        Route::match(['put', 'patch'], '/branches/{branch}', [BranchController::class, 'update']);
+     });
+ 
+     // Hot Issue — popup notifikasi yang tampil setelah login di semua role dashboard.
+diff --git a/after-schola/tests/Concerns/MakesBranchFixtures.php b/after-schola/tests/Concerns/MakesBranchFixtures.php
+new file mode 100644
+index 0000000..22b956f
+--- /dev/null
++++ b/after-schola/tests/Concerns/MakesBranchFixtures.php
+@@ -0,0 +1,57 @@
++<?php
++
++namespace Tests\Concerns;
++
++use App\Models\Branch;
++use App\Models\User;
++use App\Support\FunctionPermissions;
++use Database\Seeders\RoleSeeder;
++use Illuminate\Support\Facades\Hash;
++
++/**
++ * Fixture bersama untuk test Modul 0 (cabang, scope cabang, user).
++ */
++trait MakesBranchFixtures
++{
++    protected function seedRoles(): void
++    {
++        $this->seed(RoleSeeder::class);
++    }
++
++    protected function makeBranch(string $name = 'Cabang Bandung', string $code = 'BDG', array $overrides = []): Branch
++    {
++        return Branch::create(array_merge(['name' => $name, 'code' => $code, 'is_active' => true], $overrides));
++    }
++
++    /**
++     * @param  array<int, int>  $branchIds  hanya bermakna untuk scope 'assigned'
++     * @param  array<int, string>  $permissions  permission langsung (di luar permission role)
++     */
++    protected function makeStaff(string $role, string $scope = 'assigned', array $branchIds = [], array $permissions = []): User
++    {
++        $user = User::create([
++            'name' => ucfirst($role),
++            'email' => $role.'_'.uniqid().'@test.id',
++            'password' => Hash::make('password'),
++            'is_active' => true,
++            'branch_scope' => $scope,
++        ]);
++        $user->assignRole($role);
++        $user->branches()->sync($branchIds);
++        if ($permissions) {
++            $user->givePermissionTo($permissions);
++        }
++
++        return $user;
++    }
++
++    /**
++     * Management dengan semua permission fungsi (setara admin sistem + semua fungsi).
++     *
++     * @param  array<int, int>  $branchIds
++     */
++    protected function makeAdmin(string $scope = 'all', array $branchIds = []): User
++    {
++        return $this->makeStaff('management', $scope, $branchIds, FunctionPermissions::ALL);
++    }
++}
+diff --git a/after-schola/tests/Concerns/MakesFinanceFixtures.php b/after-schola/tests/Concerns/MakesFinanceFixtures.php
+index 46a342f..4961eb7 100644
+--- a/after-schola/tests/Concerns/MakesFinanceFixtures.php
++++ b/after-schola/tests/Concerns/MakesFinanceFixtures.php
+@@ -8,6 +8,7 @@
+ use App\Models\Registration;
+ use App\Models\TrialEvaluation;
+ use App\Models\User;
++use App\Support\FunctionPermissions;
+ use Database\Seeders\RoleSeeder;
+ use Illuminate\Support\Facades\Hash;
+ 
+@@ -30,6 +31,10 @@ protected function makeUser(string $role): User
+             'is_active' => true,
+         ]);
+         $user->assignRole($role);
++        // Role management tidak lagi memegang permission fungsi; berikan langsung (Modul 0b).
++        if ($role === 'management') {
++            $user->givePermissionTo(FunctionPermissions::ALL);
++        }
+ 
+         return $user;
+     }
+diff --git a/after-schola/tests/Feature/AbsensiFlowTest.php b/after-schola/tests/Feature/AbsensiFlowTest.php
+index 6956019..37a8bd9 100644
+--- a/after-schola/tests/Feature/AbsensiFlowTest.php
++++ b/after-schola/tests/Feature/AbsensiFlowTest.php
+@@ -172,6 +172,7 @@ public function test_only_management_can_manage_users(): void
+     {
+         $trainer = $this->makeUser('trainer');
+         $management = $this->makeUser('management');
++        $management->givePermissionTo('manage users'); // permission fungsi, diberikan per user (Modul 0b)
+ 
+         $this->actingAs($trainer, 'sanctum')->getJson('/api/users')->assertStatus(403);
+         $this->actingAs($management, 'sanctum')->getJson('/api/users')->assertOk();
+diff --git a/after-schola/tests/Feature/BranchTest.php b/after-schola/tests/Feature/BranchTest.php
+new file mode 100644
+index 0000000..d72771e
+--- /dev/null
++++ b/after-schola/tests/Feature/BranchTest.php
+@@ -0,0 +1,136 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\Branch;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Laravel\Sanctum\Sanctum;
++use Tests\Concerns\MakesBranchFixtures;
++use Tests\TestCase;
++
++class BranchTest extends TestCase
++{
++    use MakesBranchFixtures, RefreshDatabase;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seedRoles();
++    }
++
++    public function test_guest_gets_401(): void
++    {
++        $this->getJson('/api/branches')->assertStatus(401);
++    }
++
++    public function test_user_without_manage_branches_permission_gets_403(): void
++    {
++        foreach (['trainer', 'finance', 'parent'] as $role) {
++            Sanctum::actingAs($this->makeStaff($role, 'all'));
++            $this->getJson('/api/branches')->assertStatus(403);
++            $this->postJson('/api/branches', ['name' => 'X', 'code' => 'XXX'])->assertStatus(403);
++        }
++    }
++
++    public function test_management_without_function_permission_gets_403_but_users_admin_can_list(): void
++    {
++        $bdg = $this->makeBranch();
++        Sanctum::actingAs($this->makeStaff('management', 'all'));
++        $this->getJson('/api/branches')->assertStatus(403);
++
++        // Form user perlu daftar cabang: manage users cukup untuk membaca, bukan menulis.
++        Sanctum::actingAs($this->makeStaff('management', 'all', [], ['manage users']));
++        $this->getJson('/api/branches')->assertOk()->assertJsonCount(1, 'data');
++        $this->getJson("/api/branches/{$bdg->id}")->assertStatus(403);
++        $this->postJson('/api/branches', ['name' => 'X', 'code' => 'XXX'])->assertStatus(403);
++    }
++
++    public function test_all_scope_lists_every_branch(): void
++    {
++        $this->makeBranch('Cabang Bandung', 'BDG');
++        $this->makeBranch('Cabang Jakarta', 'JKT');
++        Sanctum::actingAs($this->makeStaff('management', 'all', [], ['manage branches']));
++
++        $this->getJson('/api/branches')->assertOk()->assertJsonCount(2, 'data');
++    }
++
++    public function test_assigned_scope_lists_only_own_branches(): void
++    {
++        $bdg = $this->makeBranch('Cabang Bandung', 'BDG');
++        $this->makeBranch('Cabang Jakarta', 'JKT');
++        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id], ['manage branches']));
++
++        $this->getJson('/api/branches')->assertOk()
++            ->assertJsonCount(1, 'data')
++            ->assertJsonPath('data.0.code', 'BDG');
++    }
++
++    public function test_all_scope_can_create_branch(): void
++    {
++        Sanctum::actingAs($this->makeStaff('management', 'all', [], ['manage branches']));
++
++        $this->postJson('/api/branches', ['name' => 'Cabang Bandung', 'code' => 'BDG', 'address' => 'Jl. Braga 1'])
++            ->assertStatus(201)
++            ->assertJsonPath('data.code', 'BDG')
++            ->assertJsonPath('data.is_active', true);
++
++        $this->assertDatabaseHas('branches', ['code' => 'BDG', 'name' => 'Cabang Bandung']);
++    }
++
++    public function test_assigned_scope_cannot_create_branch(): void
++    {
++        $bdg = $this->makeBranch();
++        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id], ['manage branches']));
++
++        $this->postJson('/api/branches', ['name' => 'Cabang Baru', 'code' => 'NEW'])->assertStatus(403);
++        $this->assertDatabaseMissing('branches', ['code' => 'NEW']);
++    }
++
++    public function test_create_validates_name_and_unique_code_format(): void
++    {
++        $this->makeBranch('Cabang Bandung', 'BDG');
++        Sanctum::actingAs($this->makeStaff('management', 'all', [], ['manage branches']));
++
++        $this->postJson('/api/branches', ['code' => 'JKT'])->assertStatus(422)->assertJsonValidationErrors('name');
++        $this->postJson('/api/branches', ['name' => 'Dobel', 'code' => 'BDG'])->assertStatus(422)->assertJsonValidationErrors('code');
++        $this->postJson('/api/branches', ['name' => 'Salah Format', 'code' => 'jk t!'])->assertStatus(422)->assertJsonValidationErrors('code');
++    }
++
++    public function test_show_and_update_in_scope(): void
++    {
++        $bdg = $this->makeBranch();
++        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id], ['manage branches']));
++
++        $this->getJson("/api/branches/{$bdg->id}")->assertOk()->assertJsonPath('data.name', 'Cabang Bandung');
++        $this->putJson("/api/branches/{$bdg->id}", ['name' => 'Cabang Bandung Pusat', 'code' => 'BDG'])
++            ->assertOk()
++            ->assertJsonPath('data.name', 'Cabang Bandung Pusat');
++    }
++
++    public function test_out_of_scope_branch_returns_404_not_403(): void
++    {
++        $bdg = $this->makeBranch('Cabang Bandung', 'BDG');
++        $jkt = $this->makeBranch('Cabang Jakarta', 'JKT');
++        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$bdg->id], ['manage branches']));
++
++        $this->getJson("/api/branches/{$jkt->id}")->assertStatus(404);
++        // Payload kosong tetap 404 (bukan 422) agar keberadaan cabang tidak bocor.
++        $this->putJson("/api/branches/{$jkt->id}", [])->assertStatus(404);
++        $this->putJson("/api/branches/{$jkt->id}", ['name' => 'Hack', 'code' => 'JKT'])->assertStatus(404);
++        $this->assertDatabaseHas('branches', ['id' => $jkt->id, 'name' => 'Cabang Jakarta']);
++    }
++
++    public function test_branch_can_be_deactivated_and_is_never_deleted(): void
++    {
++        $bdg = $this->makeBranch();
++        Sanctum::actingAs($this->makeStaff('management', 'all', [], ['manage branches']));
++
++        $this->putJson("/api/branches/{$bdg->id}", ['name' => $bdg->name, 'code' => $bdg->code, 'is_active' => false])
++            ->assertOk()
++            ->assertJsonPath('data.is_active', false);
++
++        // MGT-04: entitas tidak dihapus permanen — tidak ada endpoint DELETE.
++        $this->deleteJson("/api/branches/{$bdg->id}")->assertStatus(405);
++        $this->assertSame(1, Branch::count());
++    }
++}
+diff --git a/after-schola/tests/Feature/FunctionPermissionTest.php b/after-schola/tests/Feature/FunctionPermissionTest.php
+new file mode 100644
+index 0000000..e2be8d5
+--- /dev/null
++++ b/after-schola/tests/Feature/FunctionPermissionTest.php
+@@ -0,0 +1,97 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\User;
++use App\Support\FunctionPermissions;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Support\Facades\Hash;
++use Laravel\Sanctum\Sanctum;
++use Spatie\Permission\Models\Permission;
++use Spatie\Permission\Models\Role;
++use Tests\Concerns\MakesBranchFixtures;
++use Tests\TestCase;
++
++class FunctionPermissionTest extends TestCase
++{
++    use MakesBranchFixtures, RefreshDatabase;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seedRoles();
++    }
++
++    public function test_seeder_creates_every_function_permission_from_prd(): void
++    {
++        $expected = [
++            'manage programs', 'manage trial slots', 'manage leads', 'verify registrations',
++            'manage classes', 'manage schedule', 'assign trainers', 'review reports',
++            'view dashboard', 'view all attendance', 'view finance reports',
++            'manage users', 'manage branches', 'manage integrations',
++            'confirm payments', 'manage invoices', 'export trainer attendance',
++        ];
++
++        $this->assertEqualsCanonicalizing($expected, FunctionPermissions::ALL);
++        foreach ($expected as $name) {
++            $this->assertTrue(Permission::where('name', $name)->exists(), "permission '{$name}' belum di-seed");
++        }
++    }
++
++    public function test_management_role_holds_no_function_permission(): void
++    {
++        $held = Role::findByName('management')->permissions->pluck('name')->all();
++
++        $this->assertSame([], array_values(array_intersect($held, FunctionPermissions::ALL)));
++    }
++
++    public function test_finance_role_holds_finance_function_permissions(): void
++    {
++        $held = Role::findByName('finance')->permissions->pluck('name')->all();
++
++        foreach (['confirm payments', 'manage invoices', 'view finance reports', 'export trainer attendance'] as $name) {
++            $this->assertContains($name, $held);
++        }
++    }
++
++    public function test_management_user_without_function_permission_is_forbidden(): void
++    {
++        $target = $this->makeStaff('trainer', 'all');
++        Sanctum::actingAs($this->makeStaff('management', 'all'));
++
++        // Kelola user (tulis/baca detail) butuh manage users; daftar user terbuka untuk dropdown (lihat UserManagementTest).
++        $this->postJson('/api/users', ['name' => 'X'])->assertStatus(403);
++        $this->getJson("/api/users/{$target->id}")->assertStatus(403);
++        $this->putJson("/api/users/{$target->id}", ['name' => 'X'])->assertStatus(403);
++        $this->getJson('/api/branches')->assertStatus(403);
++        $this->getJson('/api/finance/aging')->assertStatus(403);
++    }
++
++    public function test_direct_function_permission_grants_exactly_that_function(): void
++    {
++        Sanctum::actingAs($this->makeStaff('management', 'all', [], ['manage users']));
++
++        $this->getJson('/api/users')->assertOk();
++        $this->getJson('/api/branches')->assertOk(); // dropdown cabang untuk form user
++        $this->postJson('/api/branches', ['name' => 'Baru', 'code' => 'NEW'])->assertStatus(403);
++        $this->getJson('/api/finance/aging')->assertStatus(403);
++    }
++
++    public function test_existing_management_users_keep_access_after_migration(): void
++    {
++        // Kondisi sebelum Modul 0b: role management memegang permission fungsi lewat role.
++        $legacy = ['manage users', 'verify registrations', 'manage invoices', 'confirm payments', 'view finance reports', 'manage branches', 'manage programs'];
++        Role::findByName('management')->givePermissionTo($legacy);
++        $user = User::create(['name' => 'Lama', 'email' => 'lama@test.id', 'password' => Hash::make('password'), 'is_active' => true]);
++        $user->assignRole('management');
++        $trainer = $this->makeStaff('trainer');
++
++        (require database_path('migrations/2026_10_28_110000_grant_function_permissions_to_existing_management_users.php'))->up();
++
++        $this->seedRoles(); // role management dibersihkan dari permission fungsi
++        $user = $user->fresh();
++        $this->assertEqualsCanonicalizing($legacy, $user->getDirectPermissions()->pluck('name')->all());
++        $this->assertTrue($user->can('manage users'));
++        $this->assertSame([], $trainer->fresh()->getDirectPermissions()->pluck('name')->all());
++    }
++}
+diff --git a/after-schola/tests/Feature/ParentRoleTest.php b/after-schola/tests/Feature/ParentRoleTest.php
+new file mode 100644
+index 0000000..918dd26
+--- /dev/null
++++ b/after-schola/tests/Feature/ParentRoleTest.php
+@@ -0,0 +1,58 @@
++<?php
++
++namespace Tests\Feature;
++
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Laravel\Sanctum\Sanctum;
++use Spatie\Permission\Models\Role;
++use Tests\Concerns\MakesBranchFixtures;
++use Tests\TestCase;
++
++class ParentRoleTest extends TestCase
++{
++    use MakesBranchFixtures, RefreshDatabase;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seedRoles();
++    }
++
++    public function test_parent_role_exists_without_permissions(): void
++    {
++        $role = Role::findByName('parent');
++
++        $this->assertCount(0, $role->permissions);
++    }
++
++    public function test_parent_can_login_and_me_exposes_branch_scope(): void
++    {
++        $parent = $this->makeStaff('parent');
++
++        $this->postJson('/api/login', ['email' => $parent->email, 'password' => 'password'])
++            ->assertOk()
++            ->assertJsonPath('user.roles.0', 'parent');
++
++        Sanctum::actingAs($parent);
++        $this->getJson('/api/me')->assertOk()
++            ->assertJsonPath('data.roles.0', 'parent')
++            ->assertJsonPath('data.branch_scope', 'assigned')
++            ->assertJsonPath('data.branches', []);
++    }
++
++    public function test_me_lists_assigned_branches_of_staff(): void
++    {
++        $bdg = $this->makeBranch('Cabang Bandung', 'BDG');
++        $this->makeBranch('Cabang Jakarta', 'JKT');
++        Sanctum::actingAs($this->makeStaff('trainer', 'assigned', [$bdg->id]));
++
++        $this->getJson('/api/me')->assertOk()
++            ->assertJsonCount(1, 'data.branches')
++            ->assertJsonPath('data.branches.0.code', 'BDG');
++    }
++
++    public function test_new_users_default_to_assigned_scope(): void
++    {
++        $this->assertSame('assigned', $this->makeStaff('trainer')->fresh()->branch_scope);
++    }
++}
+diff --git a/after-schola/tests/Feature/UserManagementTest.php b/after-schola/tests/Feature/UserManagementTest.php
+new file mode 100644
+index 0000000..9acc2e5
+--- /dev/null
++++ b/after-schola/tests/Feature/UserManagementTest.php
+@@ -0,0 +1,280 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\School;
++use App\Models\User;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Support\Facades\Hash;
++use Laravel\Sanctum\Sanctum;
++use Tests\Concerns\MakesBranchFixtures;
++use Tests\TestCase;
++
++class UserManagementTest extends TestCase
++{
++    use MakesBranchFixtures, RefreshDatabase;
++
++    private $bdg;
++
++    private $jkt;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seedRoles();
++        $this->bdg = $this->makeBranch('Cabang Bandung', 'BDG');
++        $this->jkt = $this->makeBranch('Cabang Jakarta', 'JKT');
++    }
++
++    private function payload(array $overrides = []): array
++    {
++        return array_merge([
++            'name' => 'Staf Baru',
++            'email' => 'baru@test.id',
++            'password' => 'rahasia123',
++            'role' => 'management',
++            'branch_scope' => 'assigned',
++            'branch_ids' => [$this->bdg->id],
++            'permissions' => ['verify registrations'],
++        ], $overrides);
++    }
++
++    // ---------- akses & listing ----------
++
++    public function test_guest_401_and_user_without_manage_users_403(): void
++    {
++        $this->getJson('/api/users')->assertStatus(401);
++
++        foreach (['trainer', 'finance', 'parent'] as $role) {
++            Sanctum::actingAs($this->makeStaff($role, 'all'));
++            $this->getJson('/api/users')->assertStatus(403);
++        }
++    }
++
++    public function test_management_without_manage_users_can_still_list_users_within_scope(): void
++    {
++        // Dropdown trainer/developer di halaman lain dulu terbuka bagi semua Management (role),
++        // sebelum manage users menjadi permission per user. Tetap dibatasi scope cabang.
++        $inBdg = $this->makeStaff('trainer', 'assigned', [$this->bdg->id]);
++        $inJkt = $this->makeStaff('trainer', 'assigned', [$this->jkt->id]);
++        Sanctum::actingAs($this->makeStaff('management', 'assigned', [$this->bdg->id]));
++
++        $ids = collect($this->getJson('/api/users?role=trainer')->assertOk()->json('data'))->pluck('id')->all();
++
++        $this->assertContains($inBdg->id, $ids);
++        $this->assertNotContains($inJkt->id, $ids);
++    }
++
++    public function test_all_scope_lists_internal_users_but_never_parents(): void
++    {
++        $admin = $this->makeAdmin('all');
++        $trainer = $this->makeStaff('trainer', 'assigned', [$this->jkt->id]);
++        $parent = $this->makeStaff('parent');
++        Sanctum::actingAs($admin);
++
++        $ids = collect($this->getJson('/api/users')->assertOk()->json('data'))->pluck('id');
++
++        $this->assertTrue($ids->contains($admin->id));
++        $this->assertTrue($ids->contains($trainer->id));
++        $this->assertFalse($ids->contains($parent->id));
++    }
++
++    public function test_assigned_scope_lists_only_assigned_users_sharing_a_branch(): void
++    {
++        $admin = $this->makeAdmin('assigned', [$this->bdg->id]);
++        $inBdg = $this->makeStaff('trainer', 'assigned', [$this->bdg->id]);
++        $inBoth = $this->makeStaff('trainer', 'assigned', [$this->bdg->id, $this->jkt->id]);
++        $inJkt = $this->makeStaff('trainer', 'assigned', [$this->jkt->id]);
++        $pusat = $this->makeStaff('management', 'all', [$this->bdg->id]); // pusat tidak boleh dikelola staf cabang
++        Sanctum::actingAs($admin);
++
++        $ids = collect($this->getJson('/api/users')->assertOk()->json('data'))->pluck('id')->sort()->values()->all();
++
++        $this->assertSame(collect([$admin->id, $inBdg->id, $inBoth->id])->sort()->values()->all(), $ids);
++        $this->assertNotContains($inJkt->id, $ids);
++        $this->assertNotContains($pusat->id, $ids);
++    }
++
++    public function test_role_filter_still_works(): void
++    {
++        $this->makeStaff('trainer', 'assigned', [$this->bdg->id]);
++        Sanctum::actingAs($this->makeAdmin('all'));
++
++        $roles = collect($this->getJson('/api/users?role=trainer')->assertOk()->json('data'))->pluck('roles.0')->unique()->all();
++
++        $this->assertSame(['trainer'], $roles);
++    }
++
++    public function test_show_out_of_scope_user_or_parent_returns_404(): void
++    {
++        $inJkt = $this->makeStaff('trainer', 'assigned', [$this->jkt->id]);
++        $pusat = $this->makeStaff('management', 'all');
++        $parent = $this->makeStaff('parent');
++
++        Sanctum::actingAs($this->makeAdmin('assigned', [$this->bdg->id]));
++        $this->getJson("/api/users/{$inJkt->id}")->assertStatus(404);
++        $this->getJson("/api/users/{$pusat->id}")->assertStatus(404);
++
++        Sanctum::actingAs($this->makeAdmin('all'));
++        $this->getJson("/api/users/{$parent->id}")->assertStatus(404);
++    }
++
++    // ---------- tambah user ----------
++
++    public function test_store_creates_user_with_branches_and_function_permissions(): void
++    {
++        Sanctum::actingAs($this->makeAdmin('all'));
++
++        $this->postJson('/api/users', $this->payload())
++            ->assertStatus(201)
++            ->assertJsonPath('data.branch_scope', 'assigned')
++            ->assertJsonPath('data.branches.0.code', 'BDG')
++            ->assertJsonPath('data.direct_permissions.0', 'verify registrations')
++            ->assertJsonPath('data.roles.0', 'management');
++
++        $user = User::where('email', 'baru@test.id')->firstOrFail();
++        $this->assertTrue($user->hasDirectPermission('verify registrations'));
++        $this->assertFalse($user->can('manage users'));
++        $this->assertDatabaseHas('branch_user', ['user_id' => $user->id, 'branch_id' => $this->bdg->id]);
++    }
++
++    public function test_store_all_scope_user_needs_no_branches(): void
++    {
++        Sanctum::actingAs($this->makeAdmin('all'));
++
++        $this->postJson('/api/users', $this->payload(['branch_scope' => 'all', 'branch_ids' => []]))
++            ->assertStatus(201)
++            ->assertJsonPath('data.branch_scope', 'all');
++    }
++
++    public function test_store_validation(): void
++    {
++        Sanctum::actingAs($this->makeAdmin('all'));
++
++        // scope assigned wajib punya minimal satu cabang
++        $this->postJson('/api/users', $this->payload(['branch_ids' => []]))->assertStatus(422)->assertJsonValidationErrors('branch_ids');
++        // role parent bukan user internal
++        $this->postJson('/api/users', $this->payload(['role' => 'parent']))->assertStatus(422)->assertJsonValidationErrors('role');
++        // permission harus permission fungsi yang dikenal
++        $this->postJson('/api/users', $this->payload(['permissions' => ['manage schools']]))->assertStatus(422)->assertJsonValidationErrors('permissions.0');
++        $this->postJson('/api/users', $this->payload(['permissions' => ['bukan permission']]))->assertStatus(422)->assertJsonValidationErrors('permissions.0');
++        $this->postJson('/api/users', $this->payload(['branch_scope' => 'semua']))->assertStatus(422)->assertJsonValidationErrors('branch_scope');
++        $this->postJson('/api/users', $this->payload(['branch_ids' => [999]]))->assertStatus(422)->assertJsonValidationErrors('branch_ids.0');
++        $this->postJson('/api/users', $this->payload(['email' => 'bukan-email']))->assertStatus(422)->assertJsonValidationErrors('email');
++        $this->assertSame(1, User::count()); // hanya admin
++    }
++
++    public function test_assigned_scope_actor_cannot_escalate(): void
++    {
++        Sanctum::actingAs($this->makeAdmin('assigned', [$this->bdg->id]));
++
++        $this->postJson('/api/users', $this->payload(['branch_scope' => 'all', 'branch_ids' => []]))
++            ->assertStatus(422)->assertJsonValidationErrors('branch_scope');
++        $this->postJson('/api/users', $this->payload(['branch_ids' => [$this->jkt->id]]))
++            ->assertStatus(422)->assertJsonValidationErrors('branch_ids.0');
++        $this->postJson('/api/users', $this->payload(['branch_ids' => [$this->bdg->id]]))->assertStatus(201);
++    }
++
++    public function test_trainer_school_assignment_still_works(): void
++    {
++        $school = School::create(['name' => 'SMP Contoh']);
++        Sanctum::actingAs($this->makeAdmin('all'));
++
++        $this->postJson('/api/users', $this->payload([
++            'role' => 'trainer', 'permissions' => [], 'school_ids' => [$school->id], 'subjects_taught' => ['Coding'], 'levels_taught' => ['beginner'],
++        ]))->assertStatus(201);
++
++        $trainer = User::where('email', 'baru@test.id')->firstOrFail();
++        $this->assertSame([$school->id], $trainer->assignedSchoolIds());
++        $this->assertSame(['Coding'], $trainer->subjects_taught);
++    }
++
++    // ---------- ubah user ----------
++
++    public function test_update_syncs_role_permissions_and_branches(): void
++    {
++        $target = $this->makeStaff('trainer', 'assigned', [$this->bdg->id], ['manage leads']);
++        Sanctum::actingAs($this->makeAdmin('all'));
++
++        $this->putJson("/api/users/{$target->id}", [
++            'role' => 'management', 'permissions' => ['manage classes'], 'branch_ids' => [$this->jkt->id],
++        ])->assertOk()
++            ->assertJsonPath('data.roles.0', 'management')
++            ->assertJsonPath('data.direct_permissions.0', 'manage classes')
++            ->assertJsonPath('data.branches.0.code', 'JKT');
++
++        $target = $target->fresh();
++        $this->assertFalse($target->hasDirectPermission('manage leads'));
++        $this->assertSame([$this->jkt->id], $target->branches()->pluck('branches.id')->all());
++    }
++
++    public function test_update_without_password_keeps_password_and_allows_own_email(): void
++    {
++        $target = $this->makeStaff('trainer', 'assigned', [$this->bdg->id]);
++        $hash = $target->password;
++        Sanctum::actingAs($this->makeAdmin('all'));
++
++        $this->putJson("/api/users/{$target->id}", ['name' => 'Nama Baru', 'email' => $target->email])->assertOk();
++
++        $this->assertSame('Nama Baru', $target->fresh()->name);
++        $this->assertSame($hash, $target->fresh()->password);
++    }
++
++    public function test_assigned_scope_update_keeps_branches_outside_actor_scope(): void
++    {
++        $target = $this->makeStaff('trainer', 'assigned', [$this->bdg->id, $this->jkt->id]);
++        Sanctum::actingAs($this->makeAdmin('assigned', [$this->bdg->id]));
++
++        // Staf Bandung hanya "melihat" Bandung; mengubah daftar cabang tidak boleh menghapus Jakarta.
++        $this->putJson("/api/users/{$target->id}", ['branch_ids' => [$this->bdg->id]])->assertOk();
++
++        $this->assertEqualsCanonicalizing(
++            [$this->bdg->id, $this->jkt->id],
++            $target->fresh()->branches()->pluck('branches.id')->all(),
++        );
++    }
++
++    public function test_update_out_of_scope_user_returns_404_even_with_empty_payload(): void
++    {
++        $inJkt = $this->makeStaff('trainer', 'assigned', [$this->jkt->id]);
++        Sanctum::actingAs($this->makeAdmin('assigned', [$this->bdg->id]));
++
++        $this->putJson("/api/users/{$inJkt->id}", [])->assertStatus(404);
++        $this->putJson("/api/users/{$inJkt->id}", ['name' => 'Hack'])->assertStatus(404);
++        $this->assertNotSame('Hack', $inJkt->fresh()->name);
++    }
++
++    // ---------- nonaktifkan (MGT-04) ----------
++
++    public function test_deactivating_user_revokes_tokens_and_blocks_login(): void
++    {
++        $target = $this->makeStaff('trainer', 'assigned', [$this->bdg->id]);
++        $target->createToken('web');
++        $this->assertSame(1, $target->tokens()->count());
++        Sanctum::actingAs($this->makeAdmin('all'));
++
++        $this->putJson("/api/users/{$target->id}", ['is_active' => false])->assertOk()->assertJsonPath('data.is_active', false);
++
++        $this->assertSame(0, $target->tokens()->count());
++        $this->postJson('/api/login', ['email' => $target->email, 'password' => 'password'])->assertStatus(422);
++    }
++
++    public function test_cannot_deactivate_own_account(): void
++    {
++        $admin = $this->makeAdmin('all');
++        Sanctum::actingAs($admin);
++
++        $this->putJson("/api/users/{$admin->id}", ['is_active' => false])
++            ->assertStatus(422)->assertJsonValidationErrors('is_active');
++        $this->assertTrue($admin->fresh()->is_active);
++    }
++
++    public function test_users_are_never_deleted(): void
++    {
++        $target = $this->makeStaff('trainer', 'assigned', [$this->bdg->id]);
++        Sanctum::actingAs($this->makeAdmin('all'));
++
++        $this->deleteJson("/api/users/{$target->id}")->assertStatus(405);
++        $this->assertTrue(User::whereKey($target->id)->exists());
++    }
++}

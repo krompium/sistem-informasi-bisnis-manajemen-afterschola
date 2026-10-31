@@ -3,6 +3,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import api from '@/lib/api'
 import { unwrap } from '@/lib/format'
+import { confirmDialog, toast } from '@/lib/feedback'
 
 const TIPE_OPTIONS = [
   { value: 'online', label: 'Online' },
@@ -123,17 +124,17 @@ async function toggleActive(program) {
     await api.put(`/programs/${program.id}`, { is_active: !program.is_active })
     await loadPrograms()
   } catch (e) {
-    window.alert('Gagal mengubah status program.')
+    toast.error('Gagal mengubah status program.')
   }
 }
 
 async function removeProgram(program) {
-  if (!window.confirm(`Hapus program "${program.name}"? Program yang sudah dipakai tidak bisa dihapus (nonaktifkan saja).`)) return
+  if (!(await confirmDialog(`Hapus program "${program.name}"? Program yang sudah dipakai tidak bisa dihapus (nonaktifkan saja).`, { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   try {
     await api.delete(`/programs/${program.id}`)
     await loadPrograms()
   } catch (err) {
-    window.alert(err?.response?.data?.message || 'Gagal menghapus program.')
+    toast.error(err?.response?.data?.message || 'Gagal menghapus program.')
   }
 }
 

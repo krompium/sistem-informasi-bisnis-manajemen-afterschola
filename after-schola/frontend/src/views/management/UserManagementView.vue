@@ -6,6 +6,7 @@ import api from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { initials, unwrap } from '@/lib/format'
 import UserAccessFields from './UserAccessFields.vue'
+import { toast } from '@/lib/feedback'
 
 const auth = useAuthStore()
 
@@ -205,7 +206,7 @@ async function toggleActive(user) {
     await api.put(`/users/${user.id}`, { is_active: !user.is_active })
     await loadUsers()
   } catch (err) {
-    window.alert(err?.response?.data?.errors?.is_active?.[0] || 'Gagal mengubah status user.')
+    toast.error(err?.response?.data?.errors?.is_active?.[0] || 'Gagal mengubah status user.')
   }
 }
 
