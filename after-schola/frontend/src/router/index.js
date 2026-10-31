@@ -24,6 +24,7 @@ import SessionAttendanceView from '@/views/SessionAttendanceView.vue'
 import ExpoReportsView from '@/views/ExpoReportsView.vue'
 import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
 import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
+import ResetPasswordView from '@/views/public/ResetPasswordView.vue'
 import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
 import PublicProgramsView from '@/views/public/PublicProgramsView.vue'
 import PublicProgramDetailView from '@/views/public/PublicProgramDetailView.vue'
@@ -36,6 +37,8 @@ import ProjectBoardView from '@/views/projects/ProjectBoardView.vue'
 import ProjectCalendarView from '@/views/projects/ProjectCalendarView.vue'
 import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
 import ManagementBranchesView from '@/views/management/BranchesView.vue'
+import ManagementTrialSlotsView from '@/views/management/TrialSlotsView.vue'
+import ManagementLeadsView from '@/views/management/LeadsView.vue'
 
 // 1) Import, di dekat import view publik lain
 
@@ -52,6 +55,12 @@ const routes = [
     name: 'login',
     component: LoginView,
     meta: { guestOnly: true },
+  },
+  {
+    // Tautan di email (pendaftaran trial dan lupa password). Tanpa guestOnly: tetap bisa dibuka saat sedang login.
+    path: '/reset-password',
+    name: 'public.reset-password',
+    component: ResetPasswordView,
   },
   {
     path: '/daftar-trial',
@@ -136,6 +145,18 @@ const routes = [
         name: 'management.branches',
         component: ManagementBranchesView,
         meta: { title: 'Cabang', icon: 'store' },
+      },
+      {
+        path: 'management/calon',
+        name: 'management.leads',
+        component: ManagementLeadsView,
+        meta: { title: 'Calon & Leads', icon: 'group_add' },
+      },
+      {
+        path: 'management/slot-trial',
+        name: 'management.trial-slots',
+        component: ManagementTrialSlotsView,
+        meta: { title: 'Slot Trial', icon: 'event_available' },
       },
       {
         path: 'management/program',

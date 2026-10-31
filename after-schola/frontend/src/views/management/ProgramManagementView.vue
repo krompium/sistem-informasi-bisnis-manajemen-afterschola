@@ -1,5 +1,5 @@
 <script setup>
-// Manajemen Program & Promosi — CRUD program + jadwal trial per program.
+// Manajemen Program & Promosi — CRUD program. Jadwal trial diatur di menu Slot Trial.
 import { onMounted, reactive, ref } from 'vue'
 import api from '@/lib/api'
 import { unwrap } from '@/lib/format'
@@ -9,7 +9,6 @@ const TIPE_OPTIONS = [
   { value: 'offline', label: 'Offline' },
 ]
 const JENJANG_OPTIONS = ['SD', 'SMP', 'SMA']
-const HARI_OPTIONS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu']
 
 const loading = ref(true)
 const programs = ref([])
@@ -22,7 +21,6 @@ function emptyForm() {
     description: '',
     price: '',
     is_active: true,
-    jadwal: [], // { hari, jam_mulai, jam_selesai }
   }
 }
 
@@ -47,13 +45,6 @@ async function loadPrograms() {
   }
 }
 
-function addJadwalRow(target) {
-  target.jadwal.push({ hari: 'senin', jam_mulai: '', jam_selesai: '' })
-}
-function removeJadwalRow(target, idx) {
-  target.jadwal.splice(idx, 1)
-}
-
 function openCreate() {
   Object.assign(form, emptyForm())
   formError.value = ''
@@ -64,7 +55,7 @@ async function submitCreate() {
   saving.value = true
   formError.value = ''
   try {
-    const { data } = await api.post('/programs', {
+    await api.post('/programs', {
       name: form.name,
       jenjang: form.jenjang,
       tipe: form.tipe,
@@ -72,10 +63,6 @@ async function submitCreate() {
       price: form.price,
       is_active: form.is_active,
     })
-    const newProgram = data?.data ?? data
-    for (const j of form.jadwal) {
-      await api.post(`/programs/${newProgram.id}/jadwal-trial`, j)
-    }
     showCreate.value = false
     await loadPrograms()
   } catch (err) {
@@ -100,7 +87,6 @@ function openEdit(program) {
     description: program.description ?? '',
     price: program.price,
     is_active: program.is_active,
-    jadwal: (program.jadwal_trial ?? []).map((j) => ({ ...j })),
   })
   editError.value = ''
   showEdit.value = true
@@ -172,7 +158,7 @@ onMounted(() => {
           Program & Trial
         </h1>
         <p class="font-body-md text-body-md text-on-surface-variant">
-          Kelola daftar program, biaya, dan jadwal trial.
+          Kelola daftar program dan biaya. Jadwal trial diatur di menu Slot Trial.
         </p>
       </div>
       <button
@@ -202,14 +188,6 @@ onMounted(() => {
         <div class="flex flex-col">
           <span class="font-label-lg text-label-lg font-semibold text-on-surface">{{ p.name }}</span>
           <span class="font-body-sm text-body-sm text-on-surface-variant">{{ formatPrice(p.price) }} • {{ [p.jenjang, p.tipe].filter(Boolean).join(' • ') }}</span>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-1 sm:ml-space-md">
-          <span
-            v-for="j in p.jadwal_trial ?? []"
-            :key="j.id"
-            class="rounded-full bg-surface-container px-2 py-0.5 font-label-sm text-label-sm capitalize text-on-surface-variant"
-          >{{ j.hari }} {{ j.jam_mulai }}–{{ j.jam_selesai }}</span>
         </div>
 
         <div class="flex items-center gap-space-xs sm:ml-auto">
@@ -291,25 +269,6 @@ onMounted(() => {
               <input type="checkbox" v-model="form.is_active" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Aktifkan program ini</span>
             </label>
-
-            <div class="flex flex-col gap-1">
-              <div class="flex items-center justify-between">
-                <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Jadwal Trial</span>
-                <button type="button" class="font-label-sm text-label-sm font-semibold text-primary" @click="addJadwalRow(form)">+ Tambah slot</button>
-              </div>
-              <div v-for="(j, idx) in form.jadwal" :key="idx" class="flex items-center gap-space-xs rounded-lg border border-outline-variant bg-white p-space-sm">
-                <select v-model="j.hari" class="rounded-lg border border-outline-variant px-2 py-1.5 font-body-sm text-body-sm capitalize">
-                  <option v-for="h in HARI_OPTIONS" :key="h" :value="h">{{ h }}</option>
-                </select>
-                <input v-model="j.jam_mulai" type="time" class="rounded-lg border border-outline-variant px-2 py-1.5 font-body-sm text-body-sm" />
-                <span class="text-outline">–</span>
-                <input v-model="j.jam_selesai" type="time" class="rounded-lg border border-outline-variant px-2 py-1.5 font-body-sm text-body-sm" />
-                <button type="button" class="ml-auto rounded-lg p-1 text-error hover:bg-error-container" @click="removeJadwalRow(form, idx)">
-                  <span class="material-symbols-outlined text-[16px]">close</span>
-                </button>
-              </div>
-              <p v-if="!form.jadwal.length" class="font-body-sm text-body-sm text-outline">Belum ada slot jadwal.</p>
-            </div>
           </div>
 
           <div class="mt-space-lg flex items-center justify-end gap-space-sm">
@@ -377,8 +336,6 @@ onMounted(() => {
               <input type="checkbox" v-model="editForm.is_active" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30" />
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Aktifkan program ini</span>
             </label>
-
-            <p class="font-body-sm text-body-sm text-outline">Jadwal trial belum bisa diubah dari form ini — nanti kita tambahkan di langkah berikutnya.</p>
           </div>
 
           <div class="mt-space-lg flex items-center justify-end gap-space-sm">

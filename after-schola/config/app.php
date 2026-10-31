@@ -54,6 +54,12 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // Zona waktu untuk teks yang dibaca user (email, export). Data tetap disimpan dalam UTC.
+    'display_timezone' => 'Asia/Jakarta',
+
+    // Alamat SPA (tautan di email, mis. atur password). Dev: Vite di http://localhost:5173.
+    'frontend_url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost')),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

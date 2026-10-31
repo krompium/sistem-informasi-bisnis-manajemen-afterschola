@@ -20,12 +20,11 @@ class PublicProgramTest extends TestCase
         $program->levels()->create(['name' => 'Lanjut', 'sort_order' => 2]);
         $program->levels()->create(['name' => 'Dasar', 'sort_order' => 1]);
         $program->rubricCriteria()->create(['name' => 'Logika', 'max_score' => 10]);
-        $program->jadwalTrial()->create(['hari' => 'senin', 'jam_mulai' => '15:30', 'jam_selesai' => '16:30']);
 
         return $program;
     }
 
-    public function test_list_is_public_and_returns_only_active_programs_with_levels_and_trial_schedule(): void
+    public function test_list_is_public_and_returns_only_active_programs_with_levels(): void
     {
         $this->makeFullProgram();
         Program::create(['name' => 'Program Arsip', 'tipe' => 'online', 'price' => 1, 'is_active' => false]);
@@ -37,7 +36,7 @@ class PublicProgramTest extends TestCase
             ->assertJsonPath('data.0.price', '750000.00')
             ->assertJsonPath('data.0.levels.0.name', 'Dasar')
             ->assertJsonPath('data.0.levels.1.name', 'Lanjut')
-            ->assertJsonPath('data.0.jadwal_trial.0.hari', 'senin');
+            ->assertJsonMissingPath('data.0.jadwal_trial');
     }
 
     public function test_public_payload_does_not_expose_rubric(): void

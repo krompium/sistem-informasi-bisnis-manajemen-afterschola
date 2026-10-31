@@ -1,41 +1,34 @@
 <script setup>
-// Form publik pendaftaran trial (Modul 2 — Pendaftaran Trial & Leads).
-// Tanpa login. Mengirim ke POST /api/leads (endpoint publik, lihat routes/api.php).
-import { computed, onMounted, reactive, ref } from 'vue'
+// Form publik pendaftaran trial (Modul 2, PUB-03..05). Tanpa login.
+// POST /api/public/trial-registrations: memesan slot, membuat akun orang tua, dan mengirim email
+// konfirmasi berisi tautan atur password. Slot dan program dipilih dari /api/public/*.
+import { onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/lib/api'
+import { formatStamp } from '@/lib/format'
 
 const route = useRoute()
 const loadingPrograms = ref(true)
 const programs = ref([])
+const slots = ref([])
+const loadingSlots = ref(false)
 
 const saving = ref(false)
-const submitted = ref(false)
+const result = ref(null) // data lead dari respons 201; menandai pendaftaran terkirim
 const formError = ref('')
 const fieldErrors = ref({})
 
 const form = reactive({
+  parent_name: '',
+  parent_email: '',
+  parent_phone: '',
   name: '',
   education_level: '',
   origin_school: '',
-  parent_email: '',
   program_id: '',
-  program_trial_schedule_id: '',
+  trial_slot_id: '',
+  consent: false,
 })
-
-const selectedProgram = computed(() =>
-  programs.value.find((p) => p.id === Number(form.program_id)) || null,
-)
-
-const hariLabel = {
-  senin: 'Senin',
-  selasa: 'Selasa',
-  rabu: 'Rabu',
-  kamis: 'Kamis',
-  jumat: 'Jumat',
-  sabtu: 'Sabtu',
-  minggu: 'Minggu',
-}
 
 async function loadPrograms() {
   loadingPrograms.value = true
@@ -44,17 +37,32 @@ async function loadPrograms() {
     programs.value = data.data ?? data
     // Datang dari halaman program (/program/:id): program langsung terpilih.
     const wanted = Number(route.query.program)
-    if (programs.value.some((p) => p.id === wanted)) form.program_id = wanted
+    if (programs.value.some((p) => p.id === wanted)) {
+      form.program_id = wanted
+      await loadSlots()
+    }
   } catch (err) {
-    // Non-fatal: form tetap bisa dikirim tanpa pilih program.
     programs.value = []
+    formError.value = 'Daftar program gagal dimuat. Muat ulang halaman ini.'
   } finally {
     loadingPrograms.value = false
   }
 }
 
-function onProgramChange() {
-  form.program_trial_schedule_id = ''
+// Slot yang masih tersedia untuk program terpilih (kapasitas dihitung server).
+async function loadSlots() {
+  form.trial_slot_id = ''
+  slots.value = []
+  if (!form.program_id) return
+  loadingSlots.value = true
+  try {
+    const { data } = await api.get('/public/trial-slots', { params: { program_id: form.program_id } })
+    slots.value = data.data ?? []
+  } catch (err) {
+    slots.value = []
+  } finally {
+    loadingSlots.value = false
+  }
 }
 
 async function submit() {
@@ -62,20 +70,23 @@ async function submit() {
   formError.value = ''
   fieldErrors.value = {}
   try {
-    await api.post('/leads', {
+    const { data } = await api.post('/public/trial-registrations', {
+      parent_name: form.parent_name,
+      parent_email: form.parent_email,
+      parent_phone: form.parent_phone,
       name: form.name,
       education_level: form.education_level,
       origin_school: form.origin_school,
-      parent_email: form.parent_email,
-      program_id: form.program_id || null,
-      program_trial_schedule_id: form.program_trial_schedule_id || null,
+      trial_slot_id: form.trial_slot_id,
+      consent: form.consent,
     })
-    submitted.value = true
+    result.value = data.data ?? data
   } catch (err) {
     const res = err?.response
     if (res?.status === 422) {
       fieldErrors.value = res.data?.errors ?? {}
       formError.value = 'Periksa lagi data yang diisi.'
+      if (fieldErrors.value.trial_slot_id) loadSlots() // slot mungkin baru saja penuh
     } else if (res?.status === 429) {
       formError.value = 'Terlalu banyak percobaan. Coba lagi dalam beberapa menit.'
     } else {
@@ -87,6 +98,10 @@ async function submit() {
 }
 
 onMounted(loadPrograms)
+
+const inputCls =
+  'rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50'
+const labelCls = 'font-label-md text-xs font-semibold uppercase tracking-wider text-slate-700'
 </script>
 
 <template>
@@ -101,55 +116,67 @@ onMounted(loadPrograms)
 
     <main class="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-6 pb-16 sm:px-0">
       <!-- Sukses -->
-      <div v-if="submitted" class="flex flex-col items-center gap-space-md rounded-2xl bg-surface-container-lowest p-space-xl text-center shadow-sm">
+      <div v-if="result" class="flex flex-col items-center gap-space-md rounded-2xl bg-surface-container-lowest p-space-xl text-center shadow-sm">
         <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#D1FAE5] text-[#065F46]">
           <span class="material-symbols-outlined text-[30px]">check_circle</span>
         </div>
         <h1 class="font-headline-lg text-headline-lg font-bold text-on-surface">Pendaftaran Terkirim</h1>
+        <p v-if="result.trial_slot" class="font-body-md text-body-md text-on-surface">
+          Trial <b>{{ result.trial_slot.program }}</b> di {{ result.trial_slot.branch }}<br />
+          {{ formatStamp(result.trial_slot.starts_at) }}
+        </p>
         <p class="font-body-md text-body-md text-on-surface-variant">
-          Terima kasih! Tim kami akan menghubungi orang tua/wali melalui email yang didaftarkan untuk
-          info jadwal trial selanjutnya.
+          Kami mengirim konfirmasi ke <b>{{ result.parent_email }}</b>. Buka email tersebut dan klik
+          "Atur Password" untuk mengaktifkan akun orang tua.
         </p>
       </div>
 
       <!-- Form -->
       <form v-else class="flex flex-col gap-space-md" @submit.prevent="submit">
         <div class="mb-space-sm">
-          <h1 class="font-headline-xl text-3xl font-extrabold tracking-tight text-slate-900">
-            Daftar Trial Kelas
-          </h1>
+          <h1 class="font-headline-xl text-3xl font-extrabold tracking-tight text-slate-900">Daftar Trial Kelas</h1>
           <p class="mt-2 font-body-md text-sm text-slate-500">
             Isi data di bawah untuk mencoba kelas After Schola secara gratis.
+            Sudah punya akun? <RouterLink :to="{ name: 'login' }" class="font-semibold text-blue-700 hover:underline">Masuk</RouterLink>
           </p>
         </div>
 
-        <p
-          v-if="formError"
-          class="flex items-center gap-2 rounded-lg bg-error-container px-3 py-2 text-sm text-on-error-container"
-        >
+        <p v-if="formError" class="flex items-center gap-2 rounded-lg bg-error-container px-3 py-2 text-sm text-on-error-container">
           <span class="material-symbols-outlined text-[18px]">error</span>
           {{ formError }}
         </p>
 
+        <h2 class="mt-2 font-label-md text-sm font-bold text-[#0B2A5B]">Data Orang Tua/Wali</h2>
+
         <label class="flex flex-col gap-1">
-          <span class="font-label-md text-xs font-semibold uppercase tracking-wider text-slate-700">Nama Calon Siswa</span>
-          <input
-            v-model="form.name"
-            type="text"
-            required
-            placeholder="Nama lengkap"
-            class="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
-          />
+          <span :class="labelCls">Nama Orang Tua/Wali</span>
+          <input v-model="form.parent_name" type="text" required autocomplete="name" placeholder="Nama lengkap" :class="inputCls" />
+          <span v-if="fieldErrors.parent_name" class="font-body-sm text-xs text-error">{{ fieldErrors.parent_name[0] }}</span>
+        </label>
+
+        <label class="flex flex-col gap-1">
+          <span :class="labelCls">Email</span>
+          <input v-model="form.parent_email" type="email" required autocomplete="email" placeholder="nama@email.com" :class="inputCls" />
+          <span v-if="fieldErrors.parent_email" class="font-body-sm text-xs text-error">{{ fieldErrors.parent_email[0] }}</span>
+        </label>
+
+        <label class="flex flex-col gap-1">
+          <span :class="labelCls">Nomor Telepon/WhatsApp</span>
+          <input v-model="form.parent_phone" type="tel" required autocomplete="tel" placeholder="0812-3456-7890" :class="inputCls" />
+          <span v-if="fieldErrors.parent_phone" class="font-body-sm text-xs text-error">{{ fieldErrors.parent_phone[0] }}</span>
+        </label>
+
+        <h2 class="mt-2 font-label-md text-sm font-bold text-[#0B2A5B]">Data Calon Siswa</h2>
+
+        <label class="flex flex-col gap-1">
+          <span :class="labelCls">Nama Calon Siswa</span>
+          <input v-model="form.name" type="text" required placeholder="Nama lengkap" :class="inputCls" />
           <span v-if="fieldErrors.name" class="font-body-sm text-xs text-error">{{ fieldErrors.name[0] }}</span>
         </label>
 
         <label class="flex flex-col gap-1">
-          <span class="font-label-md text-xs font-semibold uppercase tracking-wider text-slate-700">Jenjang</span>
-          <select
-            v-model="form.education_level"
-            required
-            class="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
-          >
+          <span :class="labelCls">Jenjang</span>
+          <select v-model="form.education_level" required :class="inputCls">
             <option value="" disabled>Pilih jenjang…</option>
             <option value="sd">SD</option>
             <option value="smp">SMP</option>
@@ -159,58 +186,40 @@ onMounted(loadPrograms)
         </label>
 
         <label class="flex flex-col gap-1">
-          <span class="font-label-md text-xs font-semibold uppercase tracking-wider text-slate-700">Asal Sekolah</span>
-          <input
-            v-model="form.origin_school"
-            type="text"
-            required
-            placeholder="mis. SMP Negeri 5 Bandung"
-            class="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
-          />
+          <span :class="labelCls">Asal Sekolah</span>
+          <input v-model="form.origin_school" type="text" required placeholder="mis. SMP Negeri 5 Bandung" :class="inputCls" />
           <span v-if="fieldErrors.origin_school" class="font-body-sm text-xs text-error">{{ fieldErrors.origin_school[0] }}</span>
         </label>
 
-        <label class="flex flex-col gap-1">
-          <span class="font-label-md text-xs font-semibold uppercase tracking-wider text-slate-700">Email Orang Tua/Wali</span>
-          <input
-            v-model="form.parent_email"
-            type="email"
-            required
-            placeholder="nama@email.com"
-            class="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
-          />
-          <span v-if="fieldErrors.parent_email" class="font-body-sm text-xs text-error">{{ fieldErrors.parent_email[0] }}</span>
-        </label>
+        <h2 class="mt-2 font-label-md text-sm font-bold text-[#0B2A5B]">Jadwal Trial</h2>
 
         <label class="flex flex-col gap-1">
-          <span class="font-label-md text-xs font-semibold uppercase tracking-wider text-slate-700">
-            Pilih Mata Pelajaran <span class="font-normal normal-case text-slate-400">(opsional)</span>
-          </span>
-          <select
-            v-model="form.program_id"
-            :disabled="loadingPrograms"
-            class="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
-            @change="onProgramChange"
-          >
-            <option value="">{{ loadingPrograms ? 'Memuat…' : 'Belum menentukan' }}</option>
+          <span :class="labelCls">Pilih Program</span>
+          <select v-model="form.program_id" required :disabled="loadingPrograms" :class="inputCls" @change="loadSlots">
+            <option value="" disabled>{{ loadingPrograms ? 'Memuat…' : 'Pilih program…' }}</option>
             <option v-for="p in programs" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
 
-        <label v-if="selectedProgram?.jadwal_trial?.length" class="flex flex-col gap-1">
-          <span class="font-label-md text-xs font-semibold uppercase tracking-wider text-slate-700">
-            Pilih Jadwal Trial <span class="font-normal normal-case text-slate-400">(opsional)</span>
-          </span>
-          <select
-            v-model="form.program_trial_schedule_id"
-            class="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
-          >
-            <option value="">Belum menentukan</option>
-            <option v-for="s in selectedProgram.jadwal_trial" :key="s.id" :value="s.id">
-              {{ hariLabel[s.hari] || s.hari }}, {{ s.jam_mulai }}–{{ s.jam_selesai }}
+        <label v-if="form.program_id" class="flex flex-col gap-1">
+          <span :class="labelCls">Pilih Jadwal</span>
+          <select v-model="form.trial_slot_id" required :disabled="loadingSlots || !slots.length" :class="inputCls">
+            <option value="" disabled>{{ loadingSlots ? 'Memuat…' : slots.length ? 'Pilih jadwal…' : 'Belum ada jadwal tersedia' }}</option>
+            <option v-for="s in slots" :key="s.id" :value="s.id">
+              {{ s.branch.name }} • {{ formatStamp(s.starts_at) }} • sisa {{ s.remaining }}
             </option>
           </select>
+          <span v-if="fieldErrors.trial_slot_id" class="font-body-sm text-xs text-error">{{ fieldErrors.trial_slot_id[0] }}</span>
         </label>
+
+        <label class="mt-2 flex items-start gap-2">
+          <input v-model="form.consent" type="checkbox" class="mt-1 h-4 w-4" />
+          <span class="font-body-sm text-sm text-slate-600">
+            Saya menyetujui penggunaan data pribadi saya dan anak saya oleh After Schola untuk keperluan
+            pendaftaran dan pembelajaran.
+          </span>
+        </label>
+        <span v-if="fieldErrors.consent" class="-mt-2 font-body-sm text-xs text-error">{{ fieldErrors.consent[0] }}</span>
 
         <button
           type="submit"

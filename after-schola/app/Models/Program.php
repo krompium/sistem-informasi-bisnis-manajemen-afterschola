@@ -26,11 +26,6 @@ class Program extends Model
         ];
     }
 
-    public function jadwalTrial()
-    {
-        return $this->hasMany(ProgramTrialSchedule::class);
-    }
-
     public function levels()
     {
         return $this->hasMany(ProgramLevel::class)->orderBy('sort_order')->orderBy('id');
@@ -46,6 +41,7 @@ class Program extends Model
     {
         return Lead::where('program_id', $this->id)->exists()
             || TrialEvaluation::where('program_id', $this->id)->exists()
-            || Registration::where('program_id', $this->id)->exists();
+            || Registration::where('program_id', $this->id)->exists()
+            || TrialSlot::where('program_id', $this->id)->exists();
     }
 }

@@ -15,7 +15,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'is_active', 'branch_scope', 'subjects_taught', 'levels_taught'])]
+#[Fillable(['name', 'email', 'phone', 'password', 'is_active', 'branch_scope', 'subjects_taught', 'levels_taught'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -36,6 +36,12 @@ class User extends Authenticatable
             'subjects_taught' => 'array',
             'levels_taught' => 'array',
         ];
+    }
+
+    /** Tautan halaman atur password di SPA; dipakai email reset bawaan dan email pendaftaran trial. */
+    public function passwordResetUrl(string $token): string
+    {
+        return rtrim(config('app.frontend_url'), '/').'/reset-password?'.http_build_query(['token' => $token, 'email' => $this->email]);
     }
 
     /**

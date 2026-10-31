@@ -23,6 +23,8 @@ const managementNav = [
   { label: 'Rekap Absensi', icon: 'summarize', to: '/management/absensi' },
   { label: 'Jadwal', icon: 'calendar_month', to: '/management/jadwal' },
   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/management/laporan-ekspo' },
+  { label: 'Slot Trial', icon: 'event_available', to: '/management/slot-trial', perm: 'manage trial slots' },
+  { label: 'Calon & Leads', icon: 'group_add', to: '/management/calon', perm: 'manage leads' },
   { label: 'Evaluasi Trial', icon: 'rate_review', to: '/management/evaluasi-trial' },
   { label: 'Keputusan & Pendaftaran', icon: 'how_to_reg', to: '/management/keputusan-pendaftaran' },
   { label: 'Verifikasi Pendaftaran', icon: 'fact_check', to: '/management/verifikasi-pendaftaran', perm: 'verify registrations' },

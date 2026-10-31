@@ -1,14 +1,21 @@
 <script setup>
 // Detail program untuk publik (PUB-02). URL /program/:id statis, cocok untuk QR code (PUB-06).
-// TODO(nanti): ganti jadwal trial mingguan dengan slot trial berkapasitas per cabang (Modul 2).
-import { onMounted, ref } from 'vue'
+// Slot trial yang masih tersedia diambil dari /public/trial-slots (berkapasitas, per cabang).
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/lib/api'
-import { formatRupiah } from '@/lib/format'
+import { formatRupiah, formatStamp } from '@/lib/format'
 
 const route = useRoute()
 const program = ref(null)
 const loading = ref(true)
+const slots = ref([])
+
+const slotsByBranch = computed(() => {
+  const groups = {}
+  for (const s of slots.value) (groups[s.branch.name] ??= []).push(s)
+  return Object.entries(groups)
+})
 
 onMounted(async () => {
   try {
@@ -16,9 +23,17 @@ onMounted(async () => {
     program.value = data.data ?? data
   } catch (e) {
     program.value = null // 404: program tidak ada atau tidak aktif
-  } finally {
-    loading.value = false
   }
+
+  if (program.value) {
+    try {
+      const { data } = await api.get('/public/trial-slots', { params: { program_id: program.value.id } })
+      slots.value = data.data ?? []
+    } catch (e) {
+      slots.value = [] // non-fatal: halaman program tetap tampil tanpa daftar slot
+    }
+  }
+  loading.value = false
 })
 </script>
 
@@ -60,11 +75,14 @@ onMounted(async () => {
           </ul>
         </section>
 
-        <section v-if="program.jadwal_trial?.length">
+        <section v-if="slotsByBranch.length">
           <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Jadwal trial</h2>
-          <ul class="mt-2 space-y-1 text-sm text-slate-700">
-            <li v-for="j in program.jadwal_trial" :key="j.id" class="capitalize">{{ j.hari }}, {{ j.jam_mulai }}–{{ j.jam_selesai }}</li>
-          </ul>
+          <div v-for="[branch, items] in slotsByBranch" :key="branch" class="mt-2">
+            <p class="text-sm font-semibold text-brandNavy">{{ branch }}</p>
+            <ul class="mt-1 space-y-1 text-sm text-slate-700">
+              <li v-for="s in items" :key="s.id">{{ formatStamp(s.starts_at) }} • sisa {{ s.remaining }} kursi</li>
+            </ul>
+          </div>
         </section>
 
         <RouterLink
