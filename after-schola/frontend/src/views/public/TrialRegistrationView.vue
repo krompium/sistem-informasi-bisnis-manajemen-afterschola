@@ -122,7 +122,7 @@ const labelCls = 'font-label-md text-sm font-semibold text-slate-700'
           {{ formatStamp(result.trial_slot.starts_at) }}
         </p>
         <p class="font-body-md text-base text-on-surface-variant">
-          Kami mengirim konfirmasi ke <b class="break-all">{{ result.parent_email }}</b>. Buka email tersebut dan klik
+          Kami mengirim konfirmasi ke <b class="[overflow-wrap:anywhere]">{{ result.parent_email }}</b>. Buka email tersebut dan klik
           "Atur Password" untuk mengaktifkan akun orang tua.
         </p>
         <div class="mt-2 flex w-full flex-col gap-3">

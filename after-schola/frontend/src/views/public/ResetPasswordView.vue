@@ -1,99 +1,129 @@
 <script setup>
-// Atur / reset password lewat tautan email (token + email di query). Dipakai email pendaftaran trial
-// (akun orang tua baru) dan alur lupa password. POST /api/reset-password.
-import { reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+// Buat password baru dari tautan email: /reset-password?token=...&email=... (ORT-01, SYS-01).
+// Dipakai email pendaftaran trial (akun orang tua baru) dan alur lupa password (/lupa-password).
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import api from '@/lib/api'
+import { toast } from '@/lib/feedback'
+import PublicHeader from './PublicHeader.vue'
 
 const route = useRoute()
-const token = String(route.query.token ?? '')
-const email = String(route.query.email ?? '')
+const router = useRouter()
 
-const form = reactive({ password: '', password_confirmation: '' })
-const saving = ref(false)
-const done = ref(false)
-const formError = ref('')
-const fieldErrors = ref({})
+const token = computed(() => String(route.query.token ?? ''))
+const email = computed(() => String(route.query.email ?? ''))
+
+const password = ref('')
+const confirmation = ref('')
+const showPassword = ref(false)
+const loading = ref(false)
+const error = ref('')
+const linkInvalid = ref(false) // token ditolak server: kedaluwarsa atau sudah dipakai
+
+const tooShort = computed(() => password.value.length > 0 && password.value.length < 8)
+const mismatch = computed(() => confirmation.value.length > 0 && confirmation.value !== password.value)
+const canSubmit = computed(() => password.value.length >= 8 && confirmation.value === password.value && !loading.value)
 
 async function submit() {
-  saving.value = true
-  formError.value = ''
-  fieldErrors.value = {}
+  if (!canSubmit.value) return
+  error.value = ''
+  loading.value = true
   try {
-    await api.post('/reset-password', { token, email, ...form })
-    done.value = true
-  } catch (err) {
-    const res = err?.response
-    if (res?.status === 422) {
-      fieldErrors.value = res.data?.errors ?? {}
-      formError.value = res.data?.message || 'Tautan tidak valid atau sudah kedaluwarsa.'
-    } else {
-      formError.value = 'Gagal menyimpan password. Coba lagi.'
-    }
+    const { data } = await api.post('/reset-password', {
+      token: token.value,
+      email: email.value,
+      password: password.value,
+      password_confirmation: confirmation.value,
+    })
+    toast.success(data.message)
+    router.push({ name: 'login' })
+  } catch (e) {
+    const res = e.response
+    if (res?.status === 422 && res.data?.errors?.email) linkInvalid.value = true
+    else if (res?.status === 422) error.value = res.data?.errors?.password?.[0] ?? 'Password belum memenuhi syarat.'
+    else if (res?.status === 429) error.value = 'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.'
+    else error.value = 'Password belum berhasil diubah. Periksa koneksi lalu coba lagi.'
   } finally {
-    saving.value = false
+    loading.value = false
   }
 }
-
-const inputCls =
-  'rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100'
 </script>
 
 <template>
-  <div class="flex min-h-screen w-full flex-col bg-white">
-    <header class="flex items-center gap-2.5 px-6 py-5 sm:px-10">
-      <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-container">
-        <span class="material-symbols-outlined fill text-[20px] text-white">school</span>
-      </div>
-      <span class="text-[15px] font-bold tracking-tight text-[#0B2A5B]">AFTER SCHOLA</span>
-    </header>
+  <div class="min-h-screen bg-slate-50 font-landing">
+    <PublicHeader hide-cta />
 
-    <main class="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 pb-16 sm:px-0">
-      <div v-if="done" class="flex flex-col items-center gap-space-md rounded-2xl bg-surface-container-lowest p-space-xl text-center shadow-sm">
-        <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#D1FAE5] text-[#065F46]">
-          <span class="material-symbols-outlined text-[30px]">check_circle</span>
+    <main class="mx-auto max-w-md px-4 py-10">
+      <!-- Tautan tidak lengkap atau ditolak server -->
+      <div v-if="!token || !email || linkInvalid" class="flex flex-col items-center gap-4 rounded-3xl bg-white p-8 text-center shadow-md">
+        <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-100 text-red-600">
+          <span class="material-symbols-outlined text-4xl" aria-hidden="true">link_off</span>
         </div>
-        <h1 class="font-headline-lg text-headline-lg font-bold text-on-surface">Password Tersimpan</h1>
-        <p class="font-body-md text-body-md text-on-surface-variant">Silakan masuk dengan password baru Anda.</p>
-        <RouterLink :to="{ name: 'login' }" class="rounded-full bg-[#1D4ED8] px-6 py-3 text-sm font-semibold text-white shadow-md hover:bg-blue-700">Masuk</RouterLink>
-      </div>
-
-      <form v-else class="flex flex-col gap-space-md" @submit.prevent="submit">
-        <div>
-          <h1 class="font-headline-xl text-3xl font-extrabold tracking-tight text-slate-900">Atur Password</h1>
-          <p class="mt-2 font-body-md text-sm text-slate-500">
-            Buat password baru<template v-if="email"> untuk <b>{{ email }}</b></template>.
-          </p>
-        </div>
-
-        <p v-if="!token || !email" class="rounded-lg bg-error-container px-3 py-2 text-sm text-on-error-container">
-          Tautan tidak lengkap. Buka kembali tautan dari email Anda.
+        <h1 class="text-2xl font-extrabold text-brandNavy">Tautan tidak berlaku</h1>
+        <p class="text-base text-slate-600">
+          Tautan reset password ini tidak lengkap, sudah kedaluwarsa, atau sudah pernah dipakai. Minta tautan baru ya.
         </p>
-        <p v-else-if="formError" class="flex items-center gap-2 rounded-lg bg-error-container px-3 py-2 text-sm text-on-error-container">
-          <span class="material-symbols-outlined text-[18px]">error</span>
-          {{ formError }}
-        </p>
-
-        <label class="flex flex-col gap-1">
-          <span class="font-label-md text-xs font-semibold uppercase tracking-wider text-slate-700">Password Baru</span>
-          <input v-model="form.password" type="password" required minlength="8" autocomplete="new-password" placeholder="Minimal 8 karakter" :class="inputCls" />
-          <span v-if="fieldErrors.password" class="font-body-sm text-xs text-error">{{ fieldErrors.password[0] }}</span>
-        </label>
-
-        <label class="flex flex-col gap-1">
-          <span class="font-label-md text-xs font-semibold uppercase tracking-wider text-slate-700">Ulangi Password</span>
-          <input v-model="form.password_confirmation" type="password" required minlength="8" autocomplete="new-password" :class="inputCls" />
-        </label>
-
-        <button
-          type="submit"
-          :disabled="saving || !token || !email"
-          class="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-[#1D4ED8] px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-blue-700 disabled:opacity-60"
+        <RouterLink
+          :to="{ name: 'public.forgot-password' }"
+          class="flex min-h-[48px] w-full items-center justify-center rounded-full bg-brandSun px-6 text-base font-bold text-brandDeepNavy hover:bg-brandSunDark"
         >
-          <span v-if="saving" class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
-          <span>{{ saving ? 'Menyimpan…' : 'Simpan Password' }}</span>
-        </button>
-      </form>
+          Minta tautan baru
+        </RouterLink>
+      </div>
+
+      <div v-else class="rounded-3xl bg-white p-6 shadow-md sm:p-8">
+        <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+          <span class="material-symbols-outlined text-3xl" aria-hidden="true">key</span>
+        </div>
+        <h1 class="text-2xl font-extrabold text-brandNavy">Buat password baru</h1>
+        <p class="mt-2 [overflow-wrap:anywhere] text-base text-slate-600">Untuk akun <strong>{{ email }}</strong></p>
+
+        <form class="mt-6 flex flex-col gap-4" novalidate @submit.prevent="submit">
+          <label class="flex flex-col gap-1.5">
+            <span class="text-sm font-semibold text-slate-700">Password baru</span>
+            <div class="relative">
+              <input
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                required
+                autocomplete="new-password"
+                class="min-h-[48px] w-full rounded-xl border border-slate-300 py-3 pl-4 pr-12 text-base text-slate-800 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20"
+              />
+              <button
+                type="button"
+                class="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-400 hover:text-slate-600"
+                :aria-label="showPassword ? 'Sembunyikan password' : 'Tampilkan password'"
+                @click="showPassword = !showPassword"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">{{ showPassword ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
+            <span class="text-sm" :class="tooShort ? 'text-red-600' : 'text-slate-500'">Minimal 8 karakter.</span>
+          </label>
+
+          <label class="flex flex-col gap-1.5">
+            <span class="text-sm font-semibold text-slate-700">Ulangi password baru</span>
+            <input
+              v-model="confirmation"
+              :type="showPassword ? 'text' : 'password'"
+              required
+              autocomplete="new-password"
+              class="min-h-[48px] rounded-xl border border-slate-300 px-4 py-3 text-base text-slate-800 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20"
+            />
+            <span v-if="mismatch" class="text-sm text-red-600">Password belum sama.</span>
+          </label>
+
+          <p v-if="error" class="rounded-xl bg-red-50 px-4 py-3 text-base text-red-700" role="alert">{{ error }}</p>
+
+          <button
+            type="submit"
+            :disabled="!canSubmit"
+            class="flex min-h-[52px] w-full items-center justify-center rounded-full bg-brandSun px-6 text-base font-bold text-brandDeepNavy shadow-lg hover:bg-brandSunDark disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {{ loading ? 'Menyimpan…' : 'Simpan password baru' }}
+          </button>
+        </form>
+      </div>
     </main>
   </div>
 </template>

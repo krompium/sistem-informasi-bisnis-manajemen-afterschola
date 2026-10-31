@@ -4,7 +4,7 @@
 import { ref } from 'vue'
 import api from '@/lib/api'
 import { whatsappLink } from '@/lib/contact'
-import PublicHeader from './public/PublicHeader.vue'
+import PublicHeader from './PublicHeader.vue'
 
 const email = ref('')
 const loading = ref(false)
@@ -39,7 +39,7 @@ async function submit() {
         </div>
         <h1 class="text-2xl font-extrabold text-brandNavy">Cek email Anda</h1>
         <p class="text-base text-slate-600">
-          Jika <strong class="break-all">{{ email }}</strong> terdaftar, tautan untuk mengatur ulang password sudah kami kirim.
+          Jika <strong class="[overflow-wrap:anywhere]">{{ email }}</strong> terdaftar, tautan untuk mengatur ulang password sudah kami kirim.
           Tautan berlaku 60 menit. Belum masuk? Cek juga folder spam.
         </p>
         <RouterLink

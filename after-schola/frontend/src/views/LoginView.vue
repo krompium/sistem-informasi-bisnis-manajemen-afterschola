@@ -206,7 +206,7 @@ async function handleSubmit() {
               <span>Ingat saya</span>
             </label>
             <RouterLink
-              :to="{ name: 'forgot-password' }"
+              :to="{ name: 'public.forgot-password' }"
               class="flex min-h-[44px] items-center font-label-sm font-semibold text-blue-600 transition-colors hover:text-blue-700"
               >Lupa Password?</RouterLink
             >

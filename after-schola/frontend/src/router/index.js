@@ -25,6 +25,7 @@ import ExpoReportsView from '@/views/ExpoReportsView.vue'
 import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
 import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
 import ResetPasswordView from '@/views/public/ResetPasswordView.vue'
+import ForgotPasswordView from '@/views/public/ForgotPasswordView.vue'
 import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
 import PublicProgramsView from '@/views/public/PublicProgramsView.vue'
 import PublicProgramDetailView from '@/views/public/PublicProgramDetailView.vue'
@@ -61,6 +62,12 @@ const routes = [
     path: '/reset-password',
     name: 'public.reset-password',
     component: ResetPasswordView,
+  },
+  {
+    path: '/lupa-password',
+    name: 'public.forgot-password',
+    component: ForgotPasswordView,
+    meta: { guestOnly: true },
   },
   {
     path: '/daftar-trial',

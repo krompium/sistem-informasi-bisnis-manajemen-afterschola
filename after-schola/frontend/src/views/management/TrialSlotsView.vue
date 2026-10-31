@@ -4,6 +4,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/lib/api'
 import { apiErrorMessage } from '@/lib/apiError'
+import { confirmDialog, toast } from '@/lib/feedback'
 import { formatStamp, unwrap } from '@/lib/format'
 
 const loading = ref(true)
@@ -114,17 +115,17 @@ async function toggleOpen(slot) {
     })
     await load()
   } catch (err) {
-    window.alert(apiErrorMessage(err, 'Gagal mengubah status slot.'))
+    toast.error(apiErrorMessage(err, 'Gagal mengubah status slot.'))
   }
 }
 
 async function remove(slot) {
-  if (!window.confirm('Hapus slot trial ini?')) return
+  if (!(await confirmDialog('Hapus slot trial ini?', { title: 'Hapus data?', danger: true, confirmText: 'Ya, hapus' }))) return
   try {
     await api.delete(`/trial-slots/${slot.id}`)
     await load()
   } catch (err) {
-    window.alert(apiErrorMessage(err, 'Gagal menghapus slot.'))
+    toast.error(apiErrorMessage(err, 'Gagal menghapus slot.'))
   }
 }
 
@@ -157,7 +158,7 @@ onMounted(() => {
         </p>
       </div>
       <button
-        class="inline-flex items-center gap-space-xs self-start rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 lg:self-center"
+        class="inline-flex items-center gap-space-xs self-start rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 lg:self-center min-h-[44px]"
         @click="openForm()"
       >
         <span class="material-symbols-outlined text-[18px]">add</span>
@@ -211,13 +212,13 @@ onMounted(() => {
             class="rounded-full px-2 py-0.5 font-label-sm text-label-sm font-semibold"
             :class="s.is_open ? 'bg-[#D1FAE5] text-[#065F46]' : 'bg-surface-container text-outline'"
           >{{ s.is_open ? 'Dibuka' : 'Ditutup' }}</span>
-          <button class="rounded-lg p-1.5 text-primary hover:bg-surface-container" :title="s.is_open ? 'Tutup pendaftaran' : 'Buka pendaftaran'" @click="toggleOpen(s)">
+          <button class="rounded-lg p-1.5 text-primary hover:bg-surface-container min-h-[44px] min-w-[44px]" :title="s.is_open ? 'Tutup pendaftaran' : 'Buka pendaftaran'" @click="toggleOpen(s)">
             <span class="material-symbols-outlined text-[18px]">{{ s.is_open ? 'toggle_on' : 'toggle_off' }}</span>
           </button>
-          <button class="rounded-lg p-1.5 text-secondary hover:bg-surface-container" title="Ubah slot" @click="openForm(s)">
+          <button class="rounded-lg p-1.5 text-secondary hover:bg-surface-container min-h-[44px] min-w-[44px]" title="Ubah slot" @click="openForm(s)">
             <span class="material-symbols-outlined text-[18px]">edit</span>
           </button>
-          <button class="rounded-lg p-1.5 text-error hover:bg-error-container" title="Hapus slot" @click="remove(s)">
+          <button class="rounded-lg p-1.5 text-error hover:bg-error-container min-h-[44px] min-w-[44px]" title="Hapus slot" @click="remove(s)">
             <span class="material-symbols-outlined text-[18px]">delete</span>
           </button>
         </div>
@@ -225,9 +226,9 @@ onMounted(() => {
     </div>
 
     <div v-if="meta && meta.last_page > 1" class="mt-space-md flex items-center justify-center gap-space-sm">
-      <button class="rounded-lg px-space-sm py-1.5 font-label-md text-label-md text-primary hover:bg-surface-container disabled:opacity-40" :disabled="page <= 1" @click="page--; load()">Sebelumnya</button>
+      <button class="rounded-lg px-space-sm py-1.5 font-label-md text-label-md text-primary hover:bg-surface-container disabled:opacity-40 min-h-[44px]" :disabled="page <= 1" @click="page--; load()">Sebelumnya</button>
       <span class="font-body-sm text-body-sm text-on-surface-variant">Halaman {{ meta.current_page }} dari {{ meta.last_page }}</span>
-      <button class="rounded-lg px-space-sm py-1.5 font-label-md text-label-md text-primary hover:bg-surface-container disabled:opacity-40" :disabled="page >= meta.last_page" @click="page++; load()">Berikutnya</button>
+      <button class="rounded-lg px-space-sm py-1.5 font-label-md text-label-md text-primary hover:bg-surface-container disabled:opacity-40 min-h-[44px]" :disabled="page >= meta.last_page" @click="page++; load()">Berikutnya</button>
     </div>
 
     <!-- Modal tambah / ubah slot -->
@@ -239,7 +240,7 @@ onMounted(() => {
       <div class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-surface-container-lowest shadow-xl animate-fade-in">
         <div class="flex items-center justify-between border-b border-surface-container p-space-lg">
           <h2 class="font-headline-md text-headline-md font-bold text-on-surface">{{ editing ? 'Ubah Slot Trial' : 'Tambah Slot Trial' }}</h2>
-          <button class="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low" @click="showForm = false">
+          <button class="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container-low min-h-[44px] min-w-[44px]" @click="showForm = false">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -292,8 +293,8 @@ onMounted(() => {
           </div>
 
           <div class="mt-space-lg flex items-center justify-end gap-space-sm">
-            <button type="button" class="rounded-xl px-space-md py-2.5 font-label-lg text-label-lg text-on-surface hover:bg-surface-container" @click="showForm = false">Batal</button>
-            <button type="submit" :disabled="saving" class="inline-flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60">
+            <button type="button" class="rounded-xl px-space-md py-2.5 font-label-lg text-label-lg text-on-surface hover:bg-surface-container min-h-[44px]" @click="showForm = false">Batal</button>
+            <button type="submit" :disabled="saving" class="inline-flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 disabled:opacity-60 min-h-[44px]">
               <span v-if="saving" class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
               Simpan
             </button>
