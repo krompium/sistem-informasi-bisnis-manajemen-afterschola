@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,7 +11,7 @@ class Invoice extends Model
 {
     protected $fillable = [
         'registration_id', 'number', 'amount', 'due_date', 'status',
-        'issued_at', 'paid_at', 'void_reason',
+        'issued_at', 'paid_at', 'last_reminded_at', 'void_reason',
     ];
 
     protected function casts(): array
@@ -20,6 +21,7 @@ class Invoice extends Model
             'due_date' => 'date',
             'issued_at' => 'datetime',
             'paid_at' => 'datetime',
+            'last_reminded_at' => 'datetime',
         ];
     }
 
@@ -33,14 +35,28 @@ class Invoice extends Model
         return $this->hasMany(Payment::class);
     }
 
-    /**
-     * Nomor berikutnya: INV/{YYYYMM}/{urut 4 digit}.
-     * Panggil di dalam transaksi. Invoice tidak pernah dihapus, jadi hitungan aman dipakai sebagai urutan.
-     * TODO(nanti): sisipkan kode cabang setelah entitas cabang ada (PRD BR-06).
-     */
-    public static function nextNumber(): string
+    /** Isolasi cabang (BR-19) mengikuti cabang pendaftarannya; invoice tidak menyimpan branch_id sendiri. */
+    public function scopeInBranchesOf(Builder $query, User $user): Builder
     {
-        $prefix = 'INV/'.now()->format('Ym').'/';
+        return $user->hasAllBranches()
+            ? $query
+            : $query->whereHas('registration', fn (Builder $r) => $r->inBranchesOf($user));
+    }
+
+    public function isInBranchesOf(User $user): bool
+    {
+        return $this->registration->isInBranchesOf($user);
+    }
+
+    /**
+     * Nomor berikutnya: INV/{kode cabang}/{YYYYMM}/{urut 4 digit}; urutan dihitung per cabang (BR-06).
+     * Pendaftaran lama tanpa cabang memakai format lama INV/{YYYYMM}/{urut}.
+     * Panggil di dalam transaksi. Invoice tidak pernah dihapus, jadi hitungan aman dipakai sebagai urutan.
+     * Kode cabang hanya [A-Z0-9], jadi aman dipakai di LIKE.
+     */
+    public static function nextNumber(?string $branchCode = null): string
+    {
+        $prefix = 'INV/'.($branchCode ? $branchCode.'/' : '').now()->format('Ym').'/';
         $count = static::where('number', 'like', $prefix.'%')->lockForUpdate()->count();
 
         return $prefix.str_pad((string) ($count + 1), 4, '0', STR_PAD_LEFT);

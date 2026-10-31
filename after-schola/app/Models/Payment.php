@@ -27,6 +27,11 @@ class Payment extends Model
         return $this->belongsTo(Invoice::class);
     }
 
+    public function isInBranchesOf(User $user): bool
+    {
+        return $this->invoice->isInBranchesOf($user);
+    }
+
     public function proofUrl(): ?string
     {
         return $this->proof_path ? Storage::disk('public')->url($this->proof_path) : null;

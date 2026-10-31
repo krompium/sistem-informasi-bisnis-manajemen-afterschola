@@ -15,7 +15,6 @@ class PaymentSettingController extends Controller
     }
 
     // Endpoint berdiri sendiri: validate() inline (konvensi §5.2).
-    // TODO(nanti): interval reminder baru dipakai scheduler SYS-04 (sisa Modul 5).
     public function update(Request $request)
     {
         $validated = $request->validate([

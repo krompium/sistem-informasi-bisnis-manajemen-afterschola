@@ -64,7 +64,7 @@ class RegistrationController extends Controller
 
             Invoice::create([
                 'registration_id' => $registration->id,
-                'number' => Invoice::nextNumber(),
+                'number' => Invoice::nextNumber($registration->branch?->code),
                 'amount' => $program->price, // snapshot harga saat terbit
                 'due_date' => now()->addDays(PaymentSetting::current()->due_days)->toDateString(),
                 'status' => 'unpaid',
