@@ -69,14 +69,7 @@ class TrialSlotController extends Controller
         $branches = Branch::visibleTo($request->user())->where('is_active', true)->orderBy('name')->get(['id', 'name']);
         $branchIds = $branches->pluck('id');
 
-        $trainers = User::role('trainer')->where('is_active', true)->with('branches:id')->orderBy('name')->get()
-            ->map(fn (User $trainer) => [
-                'id' => $trainer->id,
-                'name' => $trainer->name,
-                'branch_ids' => ($trainer->hasAllBranches() ? $branchIds : $trainer->branches->pluck('id')->intersect($branchIds))->values()->all(),
-            ])
-            ->filter(fn (array $trainer) => $trainer['branch_ids'] !== [])
-            ->values();
+        $trainers = User::trainerOptions($branchIds);
 
         return response()->json(['data' => [
             'branches' => $branches,

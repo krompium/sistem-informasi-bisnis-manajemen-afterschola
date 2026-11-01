@@ -38,6 +38,7 @@ import ProjectCalendarView from '@/views/projects/ProjectCalendarView.vue'
 import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
 import ManagementBranchesView from '@/views/management/BranchesView.vue'
 import ManagementTrialSlotsView from '@/views/management/TrialSlotsView.vue'
+import ManagementClassGroupsView from '@/views/management/ClassGroupsView.vue'
 import ManagementLeadsView from '@/views/management/LeadsView.vue'
 
 // 1) Import, di dekat import view publik lain
@@ -157,6 +158,12 @@ const routes = [
         name: 'management.trial-slots',
         component: ManagementTrialSlotsView,
         meta: { title: 'Slot Trial', icon: 'event_available' },
+      },
+      {
+        path: 'management/kelas',
+        name: 'management.class-groups',
+        component: ManagementClassGroupsView,
+        meta: { title: 'Kelas', icon: 'school' },
       },
       {
         path: 'management/program',

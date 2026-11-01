@@ -8,7 +8,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * Satu baris "pipeline" = satu evaluasi trial + keputusan + pendaftaran (jika ada).
  */
-class EnrollmentResource extends JsonResource
+class EnrollmentDecisionResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
