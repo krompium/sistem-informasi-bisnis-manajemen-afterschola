@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,7 +11,7 @@ class Invoice extends Model
 {
     protected $fillable = [
         'registration_id', 'number', 'amount', 'due_date', 'status',
-        'issued_at', 'paid_at', 'void_reason',
+        'issued_at', 'paid_at', 'last_reminded_at', 'void_reason',
     ];
 
     protected function casts(): array
@@ -20,12 +21,27 @@ class Invoice extends Model
             'due_date' => 'date',
             'issued_at' => 'datetime',
             'paid_at' => 'datetime',
+            'last_reminded_at' => 'datetime',
         ];
     }
 
     public function registration(): BelongsTo
     {
         return $this->belongsTo(Registration::class);
+    }
+
+    /** Invoice milik registrasi di cabang yang boleh diakses user (BR-19). */
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        return $user->hasAllBranches()
+            ? $query
+            : $query->whereHas('registration', fn (Builder $r) => $r->inBranchesOf($user));
+    }
+
+    /** Padanan scopeVisibleTo untuk satu record (Policy). */
+    public function isInBranchesOf(User $user): bool
+    {
+        return $this->registration->isInBranchesOf($user);
     }
 
     public function payments(): HasMany

@@ -34,6 +34,25 @@ const errMsg = (err, fallback) => {
   return (errors && Object.values(errors).flat()[0]) || err.response?.data?.message || fallback
 }
 
+// Kuitansi PDF (KEU-03) hanya untuk invoice lunas.
+async function downloadReceipt(inv) {
+  busyId.value = inv.id
+  try {
+    const res = await api.get(`/invoices/${inv.id}/receipt`, { responseType: 'blob' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+    link.download = `kuitansi-${inv.number.replaceAll('/', '-')}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000)
+  } catch (err) {
+    alert('Gagal mengunduh kuitansi.')
+  } finally {
+    busyId.value = null
+  }
+}
+
 const canConfirm = computed(() => auth.can('confirm payments'))
 // Invoice bisa menerima pembayaran / dibatalkan bila belum lunas dan tidak ada pembayaran aktif.
 const hasActivePayment = (inv) => inv.payments.some((p) => ['pending', 'confirmed'].includes(p.status))
@@ -197,6 +216,16 @@ onMounted(load)
               <button class="rounded-lg border border-outline-variant px-space-sm py-1.5 font-label-md text-label-md text-on-surface" @click="openReason('reject', p)">Tolak</button>
             </div>
           </div>
+        </div>
+
+        <div v-if="inv.status === 'paid'" class="flex flex-wrap gap-space-xs">
+          <button
+            class="rounded-xl border border-outline-variant px-space-md py-2 font-label-lg text-label-lg text-on-surface transition-all hover:bg-surface-container-low disabled:opacity-60"
+            :disabled="busyId === inv.id"
+            @click="downloadReceipt(inv)"
+          >
+            Unduh Kuitansi
+          </button>
         </div>
 
         <div v-if="canRecord(inv)" class="flex flex-wrap gap-space-xs">

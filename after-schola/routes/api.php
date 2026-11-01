@@ -156,6 +156,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('permission:manage invoices')->group(function () {
         Route::get('/invoices', [InvoiceController::class, 'index']);
         Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
+        Route::get('/invoices/{invoice}/receipt', [InvoiceController::class, 'receipt']);
         Route::post('/invoices/{invoice}/payments', [PaymentController::class, 'store']);
         Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'void']);
         Route::get('/payment-settings', [PaymentSettingController::class, 'show']);
