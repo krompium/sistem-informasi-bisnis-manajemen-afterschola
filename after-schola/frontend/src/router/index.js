@@ -19,6 +19,7 @@ import ManagementVerificationView from '@/views/management/VerificationView.vue'
 import ManagementInvoicesView from '@/views/management/InvoicesView.vue'
 import ManagementAgingReportView from '@/views/management/AgingReportView.vue'
 import ManagementIncomeReportView from '@/views/management/IncomeReportView.vue'
+import ManagementIntegrationTokensView from '@/views/management/IntegrationTokensView.vue'
 import TrainerScheduleView from '@/views/trainer/ScheduleView.vue'
 import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
 import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
@@ -131,6 +132,7 @@ const routes = [
       { path: 'management/invoice', name: 'management.invoices', component: ManagementInvoicesView },
       { path: 'management/umur-piutang', name: 'management.aging', component: ManagementAgingReportView },
       { path: 'management/pemasukan', name: 'management.income', component: ManagementIncomeReportView },
+      { path: 'management/integrasi', name: 'management.integrations', component: ManagementIntegrationTokensView },
       { path: 'management/pengaturan-pembayaran', name: 'management.payment-settings', component: ManagementPaymentSettingsView },
       { path: 'management/hot-issue', name: 'management.hot-issues', component: ManagementHotIssuesView },
       {

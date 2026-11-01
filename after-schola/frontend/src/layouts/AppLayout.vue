@@ -31,6 +31,7 @@ const managementNav = [
   { label: 'Invoice & Pembayaran', icon: 'receipt_long', to: '/management/invoice', perm: 'manage invoices' },
   { label: 'Umur Piutang', icon: 'hourglass_bottom', to: '/management/umur-piutang', perm: 'view finance reports' },
   { label: 'Laporan Pemasukan', icon: 'account_balance_wallet', to: '/management/pemasukan', perm: 'view finance reports' },
+  { label: 'Integrasi', icon: 'api', to: '/management/integrasi', perm: 'manage integrations' },
   { label: 'Pengaturan Pembayaran', icon: 'payments', to: '/management/pengaturan-pembayaran', perm: 'manage invoices' },
   { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue', perm: 'manage hot issues' },
   { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user', perm: 'manage users' },

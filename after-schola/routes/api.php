@@ -9,6 +9,8 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\FinanceReportController;
 use App\Http\Controllers\Api\IncomeExportController;
+use App\Http\Controllers\Api\IntegrationFinanceController;
+use App\Http\Controllers\Api\IntegrationTokenController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\ParentInvoiceController;
 use App\Http\Controllers\Api\ParentStudentController;
@@ -62,7 +64,14 @@ Route::middleware('throttle:60,1')->group(function () {
 });
 
 // --- Butuh autentikasi (Sanctum) ---
-Route::middleware('auth:sanctum')->group(function () {
+// API integrasi Tim Keuangan (SYS-05): hanya token ber-ability finance:read milik akun Keuangan; read-only, dibatasi cabang.
+Route::middleware(['auth:sanctum', 'abilities:finance:read', 'permission:view finance reports'])->prefix('integration/v1')->group(function () {
+    Route::get('/invoices', [IntegrationFinanceController::class, 'invoices']);
+    Route::get('/payments', [IntegrationFinanceController::class, 'payments']);
+});
+
+// API staf dan portal: token ber-ability terbatas (integrasi) ditolak.
+Route::middleware(['auth:sanctum', 'full.token'])->group(function () {
     // Sesi & profil
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -181,6 +190,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/students/{id}/registration/submit', [ParentStudentController::class, 'submit']);
         Route::post('/invoices/{id}/payments', [ParentInvoiceController::class, 'pay']);
         Route::get('/invoices/{id}/receipt', [ParentInvoiceController::class, 'receipt']);
+    });
+
+    // Token integrasi Tim Keuangan (SYS-05).
+    Route::middleware('permission:manage integrations')->group(function () {
+        Route::get('/integration-tokens', [IntegrationTokenController::class, 'index']);
+        Route::post('/integration-tokens', [IntegrationTokenController::class, 'store']);
+        Route::delete('/integration-tokens/{id}', [IntegrationTokenController::class, 'destroy']);
     });
 
     // Kelola user & role — hanya Management
