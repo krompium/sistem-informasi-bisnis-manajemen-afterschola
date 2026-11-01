@@ -44,9 +44,14 @@ class TrialEvaluationPolicy
         return $this->view($user, $evaluation);
     }
 
-    /** Keputusan dan pendaftaran resmi (Modul 4): permission "manage enrollment" dicek di route; di sini cabangnya. */
+    /** Keputusan dan pendaftaran resmi (Modul 4): permission "manage enrollment" dicek di route (staf); di sini cabangnya. */
     public function enroll(User $user, TrialEvaluation $evaluation): Response
     {
+        // Portal Orang Tua (BR-02): ortu hanya untuk anaknya sendiri, tanpa scope cabang.
+        if ($user->hasRole('parent')) {
+            return $evaluation->lead?->parent_id === $user->id ? Response::allow() : Response::denyAsNotFound();
+        }
+
         return $evaluation->isInBranchesOf($user) ? Response::allow() : Response::denyAsNotFound();
     }
 }

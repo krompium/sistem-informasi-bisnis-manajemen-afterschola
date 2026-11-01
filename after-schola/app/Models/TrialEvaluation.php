@@ -51,6 +51,23 @@ class TrialEvaluation extends Model
         return $this->hasOne(EnrollmentDecision::class, 'evaluation_id');
     }
 
+    /**
+     * Auto-fill form pendaftaran resmi (BR-01, AC-02): data anak dari lead, orang tua dari akun yang terdaftar saat form trial.
+     * Butuh lead.parent ter-load.
+     */
+    public function registrationPrefill(): array
+    {
+        return [
+            'student_name' => $this->lead?->name ?? $this->participant_name,
+            'origin_school' => $this->lead?->origin_school ?? $this->origin_school,
+            'origin_class' => $this->origin_class,
+            'program_id' => $this->program_id,
+            'parent_name' => $this->lead?->parent?->name,
+            'parent_phone' => $this->lead?->parent?->phone,
+            'parent_email' => $this->lead?->parent?->email ?? $this->lead?->parent_email,
+        ];
+    }
+
     /** Staf evaluasi: per cabang. Trainer: hanya evaluasi miliknya (trainer slot). */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {

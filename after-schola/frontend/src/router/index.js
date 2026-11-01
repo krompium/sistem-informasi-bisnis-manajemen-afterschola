@@ -5,7 +5,8 @@ import LandingPage from '@/views/public/LandingPage.vue'
 import LoginView from '@/views/LoginView.vue'
 import TrainerDashboardView from '@/views/TrainerDashboardView.vue'
 import ManagementDashboardView from '@/views/ManagementDashboardView.vue'
-import PlaceholderView from '@/views/PlaceholderView.vue'
+import ParentDashboardView from '@/views/portal/ParentDashboardView.vue'
+import ParentStudentView from '@/views/portal/ParentStudentView.vue'
 import ManagementScheduleView from '@/views/management/ScheduleView.vue'
 import ManagementTrainerAssignmentView from '@/views/management/TrainerAssignmentView.vue'
 import ManagementSchoolsAdminView from '@/views/management/SchoolsAdminView.vue'
@@ -99,13 +100,9 @@ const routes = [
       
 	  
 
-      // ---- Orang Tua (portal belum dibangun: Fase 2) ----
-      {
-        path: 'portal',
-        name: 'portal.dashboard',
-        component: PlaceholderView,
-        meta: { title: 'Portal Orang Tua', icon: 'family_restroom' },
-      },
+      // ---- Orang Tua (Portal) ----
+      { path: 'portal', name: 'portal.dashboard', component: ParentDashboardView },
+      { path: 'portal/anak/:id', name: 'portal.student', component: ParentStudentView },
 
       // ---- Management ----
       { path: 'management', name: 'management.dashboard', component: ManagementDashboardView },

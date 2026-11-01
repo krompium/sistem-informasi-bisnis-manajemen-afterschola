@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
 
 class TrialSlot extends Model
 {
@@ -52,6 +53,23 @@ class TrialSlot extends Model
             ->whereRaw('trial_slots.capacity > (select count(*) from leads where leads.trial_slot_id = trial_slots.id)')
             ->whereHas('program', fn (Builder $q) => $q->where('is_active', true))
             ->whereHas('branch', fn (Builder $q) => $q->where('is_active', true));
+    }
+
+    /**
+     * Booking diserialkan per slot: kunci baris slot lebih dulu, baru cek ulang kelayakan dan sisa kursi
+     * (pembacaan kedua ini harus yang pertama bersifat non-locking, supaya melihat booking yang baru di-commit).
+     * Panggil di dalam transaksi. Dipakai form publik dan portal orang tua.
+     */
+    public static function lockBookable(int $id): self
+    {
+        static::whereKey($id)->lockForUpdate()->first();
+
+        $slot = static::bookable()->find($id);
+        if (! $slot) {
+            throw ValidationException::withMessages(['trial_slot_id' => ['Slot trial tidak tersedia atau sudah penuh.']]);
+        }
+
+        return $slot;
     }
 
     /** Slot di cabang yang boleh diakses user: scope 'all' semua, 'assigned' hanya cabangnya (BR-19). */
