@@ -2,8 +2,11 @@
 
 namespace Tests\Concerns;
 
+use App\Models\Branch;
 use App\Models\EnrollmentDecision;
 use App\Models\Invoice;
+use App\Models\Lead;
+use App\Models\Payment;
 use App\Models\Program;
 use App\Models\Registration;
 use App\Models\TrialEvaluation;
@@ -94,6 +97,52 @@ trait MakesFinanceFixtures
             'due_date' => now()->addDays(7)->toDateString(),
             'status' => 'unpaid',
             'issued_at' => now(),
+        ], $overrides));
+    }
+
+    protected function newBranch(string $code): Branch
+    {
+        return Branch::create(['name' => "Cabang {$code}", 'code' => $code, 'is_active' => true]);
+    }
+
+    /** Staf dengan scope 'assigned' pada cabang tertentu (role finance/management). */
+    protected function makeBranchStaff(string $role, Branch ...$branches): User
+    {
+        $user = $this->makeUser($role);
+        $user->update(['branch_scope' => 'assigned']);
+        $user->branches()->sync(collect($branches)->pluck('id')->all());
+
+        return $user;
+    }
+
+    /** Pendaftaran di sebuah cabang, lengkap dengan lead dan akun Orangtua (rantai ke pemilik invoice). */
+    protected function makeParentRegistration(Branch $branch, array $overrides = []): Registration
+    {
+        $parent = $this->makeUser('parent');
+        $lead = Lead::create([
+            'name' => 'Budi Santoso',
+            'education_level' => 'sd',
+            'origin_school' => 'SDN 1',
+            'parent_email' => $parent->email,
+            'parent_id' => $parent->id,
+            'branch_id' => $branch->id,
+            'status' => 'trial_scheduled',
+        ]);
+
+        return $this->makeRegistration(
+            array_merge(['branch_id' => $branch->id, 'lead_id' => $lead->id, 'status' => 'terverifikasi'], $overrides),
+            $this->makeProgram(),
+        );
+    }
+
+    protected function makePayment(Invoice $invoice, array $overrides = []): Payment
+    {
+        return Payment::create(array_merge([
+            'invoice_id' => $invoice->id,
+            'amount' => $invoice->amount,
+            'method' => 'tunai',
+            'paid_date' => now()->toDateString(),
+            'status' => 'pending',
         ], $overrides));
     }
 }

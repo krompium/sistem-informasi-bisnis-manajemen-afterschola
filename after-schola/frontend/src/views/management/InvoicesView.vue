@@ -5,6 +5,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatDate, formatRupiah, unwrap } from '@/lib/format'
+import { saveBlob } from '@/lib/download'
 
 const auth = useAuthStore()
 const loading = ref(true)
@@ -50,6 +51,18 @@ async function load() {
     alert(errMsg(err, 'Gagal memuat invoice.'))
   } finally {
     loading.value = false
+  }
+}
+
+async function downloadReceipt(inv) {
+  busyId.value = inv.id
+  try {
+    const res = await api.get(`/invoices/${inv.id}/receipt`, { responseType: 'blob' })
+    saveBlob(res, 'kuitansi.pdf')
+  } catch (err) {
+    alert('Gagal mengunduh kuitansi.')
+  } finally {
+    busyId.value = null
   }
 }
 
@@ -197,6 +210,12 @@ onMounted(load)
               <button class="rounded-lg border border-outline-variant px-space-sm py-1.5 font-label-md text-label-md text-on-surface" @click="openReason('reject', p)">Tolak</button>
             </div>
           </div>
+        </div>
+
+        <div v-if="inv.status === 'paid'" class="flex flex-wrap gap-space-xs">
+          <button class="rounded-xl border border-outline-variant px-space-md py-2 font-label-lg text-label-lg text-on-surface transition-all hover:bg-surface-container-low disabled:opacity-60" :disabled="busyId === inv.id" @click="downloadReceipt(inv)">
+            Unduh Kuitansi
+          </button>
         </div>
 
         <div v-if="canRecord(inv)" class="flex flex-wrap gap-space-xs">

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -34,16 +35,30 @@ class Invoice extends Model
     }
 
     /**
-     * Nomor berikutnya: INV/{YYYYMM}/{urut 4 digit}.
+     * Nomor berikutnya: INV/{kode cabang}/{YYYYMM}/{urut 4 digit}, urutan per cabang per bulan (BR-06).
+     * Pendaftaran lama tanpa cabang memakai INV/{YYYYMM}/{urut}.
      * Panggil di dalam transaksi. Invoice tidak pernah dihapus, jadi hitungan aman dipakai sebagai urutan.
-     * TODO(nanti): sisipkan kode cabang setelah entitas cabang ada (PRD BR-06).
      */
-    public static function nextNumber(): string
+    public static function nextNumber(?string $branchCode = null): string
     {
-        $prefix = 'INV/'.now()->format('Ym').'/';
+        $prefix = 'INV/'.($branchCode ? $branchCode.'/' : '').now()->format('Ym').'/';
         $count = static::where('number', 'like', $prefix.'%')->lockForUpdate()->count();
 
         return $prefix.str_pad((string) ($count + 1), 4, '0', STR_PAD_LEFT);
+    }
+
+    /** Invoice di cabang yang boleh diakses user (BR-19), lewat pendaftarannya. */
+    public function scopeInBranchesOf(Builder $query, User $user): Builder
+    {
+        return $user->hasAllBranches()
+            ? $query
+            : $query->whereHas('registration', fn (Builder $r) => $r->inBranchesOf($user));
+    }
+
+    /** Padanan scopeInBranchesOf untuk satu record (Policy). */
+    public function isInBranchesOf(User $user): bool
+    {
+        return $this->registration->isInBranchesOf($user);
     }
 
     /** Hari keterlambatan; 0 bila belum jatuh tempo atau sudah tidak berstatus unpaid. */

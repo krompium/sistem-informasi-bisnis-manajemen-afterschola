@@ -28,6 +28,11 @@ class Registration extends Model
         ];
     }
 
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
     public function program(): BelongsTo
     {
         return $this->belongsTo(Program::class);

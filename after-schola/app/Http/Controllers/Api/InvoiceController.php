@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\InvoiceResource;
 use App\Models\Invoice;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -25,7 +26,7 @@ class InvoiceController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = Invoice::query()->with(self::WITH);
+        $query = Invoice::inBranchesOf($request->user())->with(self::WITH);
 
         if ($request->filled('status')) {
             $query->where('status', $request->string('status')->toString());
@@ -44,7 +45,25 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
+        $this->authorize('manage', $invoice);
+
         return new InvoiceResource($invoice->load(self::WITH));
+    }
+
+    /** KEU-03: kuitansi PDF, hanya untuk invoice yang sudah lunas. */
+    public function receipt(Invoice $invoice)
+    {
+        $this->authorize('manage', $invoice);
+        if ($invoice->status !== 'paid') {
+            throw ValidationException::withMessages(['status' => ['Kuitansi hanya tersedia untuk invoice yang sudah lunas.']]);
+        }
+
+        $invoice->load('registration.program', 'registration.branch');
+        $payment = $invoice->payments()->where('status', 'confirmed')->latest('confirmed_at')->first();
+
+        return Pdf::loadView('exports.receipt', ['invoice' => $invoice, 'payment' => $payment])
+            ->setPaper('a5', 'landscape')
+            ->download('kuitansi-'.str_replace('/', '-', $invoice->number).'.pdf');
     }
 
     /**
@@ -52,6 +71,7 @@ class InvoiceController extends Controller
      */
     public function void(Request $request, Invoice $invoice)
     {
+        $this->authorize('manage', $invoice); // sebelum validasi: di luar cabang harus 404, bukan 422
         $data = $request->validate([
             'reason' => ['required', 'string', 'max:500'],
         ]);

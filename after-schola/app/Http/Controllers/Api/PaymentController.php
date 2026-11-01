@@ -21,6 +21,7 @@ class PaymentController extends Controller
 {
     public function store(Request $request, Invoice $invoice)
     {
+        $this->authorize('manage', $invoice); // sebelum validasi: di luar cabang harus 404, bukan 422
         $data = $request->validate([
             'method' => ['required', 'in:transfer,tunai'],
             'paid_date' => ['required', 'date', 'before_or_equal:today'],
@@ -56,6 +57,7 @@ class PaymentController extends Controller
 
     public function confirm(Request $request, Payment $payment)
     {
+        $this->authorize('manage', $payment->invoice);
         $this->ensurePending($payment);
 
         DB::transaction(function () use ($payment, $request) {
@@ -76,6 +78,7 @@ class PaymentController extends Controller
 
     public function reject(Request $request, Payment $payment)
     {
+        $this->authorize('manage', $payment->invoice);
         $data = $request->validate([
             'reason' => ['required', 'string', 'max:500'],
         ]);
