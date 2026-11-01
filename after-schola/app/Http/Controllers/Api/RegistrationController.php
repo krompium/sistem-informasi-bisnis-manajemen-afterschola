@@ -7,6 +7,7 @@ use App\Http\Resources\RegistrationResource;
 use App\Models\Invoice;
 use App\Models\PaymentSetting;
 use App\Models\Registration;
+use App\Notifications\EnrollmentNotification;
 use App\Notifications\InvoiceNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -92,6 +93,10 @@ class RegistrationController extends Controller
             'verified_by' => null,
             'verified_at' => null,
         ]);
+
+        if ($registration->lead) {
+            EnrollmentNotification::send($registration->lead, 'revision', $data['note']);
+        }
 
         return new RegistrationResource($registration->fresh(self::WITH));
     }

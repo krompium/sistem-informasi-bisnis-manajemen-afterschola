@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\PaymentSetting;
 use Illuminate\Http\Request;
 
 /** Detail satu anak: hasil trial, penawaran, keputusan, pendaftaran, auto-fill, dan invoice aktif. Eager load tambahan: trialEvaluation.lead.parent, trialEvaluation.level, trialEvaluation.trainer. */
@@ -60,6 +61,12 @@ class ParentStudentDetailResource extends ParentStudentResource
                 'due_date' => $invoice->due_date?->toDateString(),
                 'status' => $invoice->status,
                 'is_overdue' => $invoice->isOverdue(),
+                'payments' => PaymentResource::collection($invoice->payments->sortByDesc('id')->values())->resolve(),
+            ] : null,
+            // Instruksi transfer hanya selama invoice belum lunas.
+            'payment_info' => $invoice?->status === 'unpaid' ? [
+                'bank_account' => PaymentSetting::current()->bank_account,
+                'instructions' => PaymentSetting::current()->payment_instructions,
             ] : null,
         ];
     }

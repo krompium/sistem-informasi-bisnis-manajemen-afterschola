@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\FinanceReportController;
 use App\Http\Controllers\Api\IncomeExportController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\ParentInvoiceController;
 use App\Http\Controllers\Api\ParentStudentController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentSettingController;
@@ -170,7 +171,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/exports/income/pdf', [IncomeExportController::class, 'pdf']);
     });
 
-    // Portal Orang Tua (ORT-02..07) — hanya role parent, hanya anaknya sendiri (BR-19, AC-07).
+    // Portal Orang Tua (ORT-02..09) — hanya role parent, hanya anaknya sendiri (BR-19, AC-07).
     Route::middleware('role:parent')->prefix('parent')->group(function () {
         Route::get('/students', [ParentStudentController::class, 'index']);
         Route::post('/students', [ParentStudentController::class, 'store']);
@@ -178,6 +179,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/students/{id}/decision', [ParentStudentController::class, 'decision']);
         Route::put('/students/{id}/registration', [ParentStudentController::class, 'registration']);
         Route::post('/students/{id}/registration/submit', [ParentStudentController::class, 'submit']);
+        Route::post('/invoices/{id}/payments', [ParentInvoiceController::class, 'pay']);
+        Route::get('/invoices/{id}/receipt', [ParentInvoiceController::class, 'receipt']);
     });
 
     // Kelola user & role — hanya Management

@@ -7,6 +7,7 @@ use App\Http\Requests\SaveTrialEvaluationRequest;
 use App\Http\Resources\TrialEvaluationResource;
 use App\Models\Lead;
 use App\Models\TrialEvaluation;
+use App\Notifications\EnrollmentNotification;
 use Illuminate\Http\Request;
 
 /**
@@ -55,6 +56,10 @@ class TrialEvaluationController extends Controller
             'origin_school' => $lead->origin_school,
         ]);
 
+        if ($evaluation->attendance === 'hadir') {
+            EnrollmentNotification::send($lead, 'trial_result');
+        }
+
         return (new TrialEvaluationResource($evaluation->load(self::WITH)))->response()->setStatusCode(201);
     }
 
@@ -68,6 +73,11 @@ class TrialEvaluationController extends Controller
     public function update(SaveTrialEvaluationRequest $request, TrialEvaluation $trialEvaluation)
     {
         $trialEvaluation->update($this->normalize($request->validated()));
+
+        // Hanya saat berubah menjadi hadir; sunting skor atau catatan tidak memberi tahu ulang.
+        if ($trialEvaluation->wasChanged('attendance') && $trialEvaluation->attendance === 'hadir' && $trialEvaluation->lead) {
+            EnrollmentNotification::send($trialEvaluation->lead, 'trial_result');
+        }
 
         return new TrialEvaluationResource($trialEvaluation->load(self::WITH));
     }

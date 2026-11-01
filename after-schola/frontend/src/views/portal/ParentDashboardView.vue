@@ -16,9 +16,29 @@ const inputCls =
   'rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15'
 const labelCls = 'font-label-md text-label-md font-semibold text-on-surface-variant'
 
+// Pemberitahuan in-app (ORT-13): hasil trial siap, pendaftaran perlu revisi, invoice, pembayaran.
+const notices = ref([])
+const unread = ref(0)
+
+async function loadNotices() {
+  try {
+    const { data } = await api.get('/notifications')
+    notices.value = unwrap(data).slice(0, 5)
+    unread.value = data.unread_count ?? 0
+  } catch (err) {
+    notices.value = [] // pemberitahuan opsional: kegagalan tidak mengganggu daftar anak
+  }
+}
+
+async function readAll() {
+  await api.post('/notifications/read-all')
+  await loadNotices()
+}
+
 async function load() {
   loading.value = true
   error.value = ''
+  loadNotices()
   try {
     const { data } = await api.get('/parent/students')
     children.value = unwrap(data)
@@ -96,6 +116,17 @@ onMounted(load)
       <button class="rounded-xl bg-primary-container px-space-md py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm active:scale-95" @click="openAdd">
         Tambah Anak
       </button>
+    </div>
+
+    <div v-if="notices.length" class="mb-space-md flex flex-col gap-space-xs rounded-2xl bg-surface-container-lowest p-space-lg shadow-sm">
+      <div class="flex items-center justify-between">
+        <h2 class="font-headline-sm text-headline-sm font-bold text-on-surface">Pemberitahuan<span v-if="unread" class="ml-2 rounded-full bg-primary-container px-2 py-0.5 font-label-sm text-label-sm text-on-primary">{{ unread }}</span></h2>
+        <button v-if="unread" class="font-label-md text-label-md font-semibold text-primary" @click="readAll">Tandai semua dibaca</button>
+      </div>
+      <div v-for="n in notices" :key="n.id" class="flex items-center justify-between gap-space-sm border-t border-outline-variant/40 py-space-xs font-body-md text-body-md first:border-t-0" :class="n.read_at ? 'text-on-surface-variant' : 'font-semibold text-on-surface'">
+        <span>{{ n.message }}</span>
+        <span class="shrink-0 font-label-sm text-label-sm font-normal text-on-surface-variant">{{ formatStamp(n.created_at) }}</span>
+      </div>
     </div>
 
     <p v-if="error" class="font-body-md text-body-md text-error">{{ error }}</p>

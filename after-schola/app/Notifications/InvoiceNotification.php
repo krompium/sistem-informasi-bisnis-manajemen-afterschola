@@ -48,7 +48,7 @@ class InvoiceNotification extends Notification
             $mail->line($line);
         }
 
-        return $mail;
+        return $mail->action('Buka Portal', rtrim(config('app.frontend_url'), '/').'/portal');
     }
 
     public function toArray(object $notifiable): array

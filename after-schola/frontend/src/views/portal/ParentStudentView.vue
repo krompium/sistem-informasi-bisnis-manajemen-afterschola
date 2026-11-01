@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router'
 import api from '@/lib/api'
 import { apiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatRupiah, formatStamp, unwrap } from '@/lib/format'
+import { saveBlob } from '@/lib/download'
 import { LEVELS, STAGES } from './stages'
 
 const route = useRoute()
@@ -80,6 +81,37 @@ const submitRegistration = () =>
     await api.put(`${base()}/registration`, { ...form })
     return api.post(`${base()}/registration/submit`)
   })
+
+// --- Pembayaran (ORT-08/09): transfer lalu unggah bukti; kuitansi setelah lunas ---
+const PAYMENT_STATUS = { pending: 'Menunggu konfirmasi', confirmed: 'Dikonfirmasi', rejected: 'Ditolak' }
+const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+const pay = reactive({ paid_date: today, file: null })
+const canPay = computed(() => child.value?.stage === 'menunggu_bayar' && child.value.invoice)
+
+async function sendProof() {
+  const body = new FormData()
+  body.append('paid_date', pay.paid_date)
+  if (pay.file) body.append('proof', pay.file)
+  busy.value = true
+  actionError.value = ''
+  try {
+    await api.post(`/parent/invoices/${child.value.invoice.id}/payments`, body)
+    pay.file = null
+    await load()
+  } catch (err) {
+    actionError.value = apiErrorMessage(err, 'Gagal mengirim bukti pembayaran.')
+  } finally {
+    busy.value = false
+  }
+}
+
+async function downloadReceipt() {
+  try {
+    saveBlob(await api.get(`/parent/invoices/${child.value.invoice.id}/receipt`, { responseType: 'blob' }), 'kuitansi.pdf')
+  } catch (err) {
+    actionError.value = 'Gagal mengunduh kuitansi.'
+  }
+}
 
 onMounted(load)
 </script>
@@ -187,6 +219,28 @@ onMounted(load)
         <p class="font-body-sm text-body-sm" :class="child.invoice.is_overdue ? 'text-error' : 'text-on-surface-variant'">Jatuh tempo {{ formatDate(child.invoice.due_date) }}</p>
         <p v-if="child.stage === 'lunas'" class="font-body-md text-body-md text-on-surface">Pembayaran sudah dikonfirmasi. Jadwal kelas akan diinformasikan setelah penempatan.</p>
         <p v-else-if="child.stage === 'menunggu_konfirmasi'" class="font-body-md text-body-md text-on-surface-variant">Bukti pembayaran sedang diperiksa Keuangan.</p>
+        <div v-if="child.payment_info && (child.payment_info.bank_account || child.payment_info.instructions)" class="rounded-xl bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface">
+          <p v-if="child.payment_info.bank_account"><b>Rekening tujuan:</b> {{ child.payment_info.bank_account }}</p>
+          <p v-if="child.payment_info.instructions" class="whitespace-pre-line">{{ child.payment_info.instructions }}</p>
+        </div>
+
+        <div v-if="child.invoice.payments.length" class="flex flex-col gap-space-xs">
+          <span :class="labelCls">Riwayat pembayaran</span>
+          <div v-for="p in child.invoice.payments" :key="p.id" class="flex flex-wrap items-center justify-between gap-space-xs rounded-xl border border-outline-variant/50 px-space-sm py-space-xs font-body-sm text-body-sm">
+            <span class="text-on-surface">{{ formatDate(p.paid_date) }} • {{ PAYMENT_STATUS[p.status] || p.status }}<template v-if="p.status === 'rejected' && p.reject_reason"> — {{ p.reject_reason }}</template></span>
+            <a v-if="p.proof_url" :href="p.proof_url" target="_blank" rel="noopener" class="font-semibold text-primary underline">Lihat bukti</a>
+          </div>
+        </div>
+
+        <div v-if="canPay" class="flex flex-col gap-space-sm border-t border-outline-variant/40 pt-space-sm">
+          <span :class="labelCls">Unggah bukti transfer</span>
+          <div class="grid gap-space-sm sm:grid-cols-2">
+            <label class="flex flex-col gap-1"><span :class="labelCls">Tanggal transfer</span><input v-model="pay.paid_date" type="date" :max="today" :class="inputCls" /></label>
+            <label class="flex flex-col gap-1"><span :class="labelCls">Foto bukti (JPG/PNG, maks. 5 MB)</span><input type="file" accept="image/jpeg,image/png" :class="inputCls" @change="pay.file = $event.target.files?.[0] ?? null" /></label>
+          </div>
+          <div><button :class="btnCls" :disabled="busy || !pay.file" @click="sendProof">Kirim Bukti Pembayaran</button></div>
+        </div>
+        <div v-if="child.stage === 'lunas'"><button :class="btnGhostCls" @click="downloadReceipt">Unduh Kuitansi</button></div>
       </div>
     </template>
   </div>
