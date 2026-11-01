@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PaymentResource;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Notifications\InvoiceNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -73,6 +74,8 @@ class PaymentController extends Controller
             }
         });
 
+        InvoiceNotification::send($payment->invoice, 'confirmed');
+
         return new PaymentResource($payment->fresh());
     }
 
@@ -85,6 +88,7 @@ class PaymentController extends Controller
         $this->ensurePending($payment);
 
         $payment->update(['status' => 'rejected', 'reject_reason' => $data['reason']]);
+        InvoiceNotification::send($payment->invoice, 'rejected', $data['reason']);
 
         return new PaymentResource($payment->fresh());
     }

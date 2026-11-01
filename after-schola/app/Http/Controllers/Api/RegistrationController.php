@@ -7,6 +7,7 @@ use App\Http\Resources\RegistrationResource;
 use App\Models\Invoice;
 use App\Models\PaymentSetting;
 use App\Models\Registration;
+use App\Notifications\InvoiceNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -54,7 +55,7 @@ class RegistrationController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($registration, $program, $request) {
+        $invoice = DB::transaction(function () use ($registration, $program, $request) {
             $registration->update([
                 'status' => 'terverifikasi',
                 'revision_note' => null,
@@ -62,7 +63,7 @@ class RegistrationController extends Controller
                 'verified_at' => now(),
             ]);
 
-            Invoice::create([
+            return Invoice::create([
                 'registration_id' => $registration->id,
                 'number' => Invoice::nextNumber($registration->branch?->code),
                 'amount' => $program->price, // snapshot harga saat terbit
@@ -71,6 +72,8 @@ class RegistrationController extends Controller
                 'issued_at' => now(),
             ]);
         });
+
+        InvoiceNotification::send($invoice, 'issued');
 
         return new RegistrationResource($registration->fresh(self::WITH));
     }
