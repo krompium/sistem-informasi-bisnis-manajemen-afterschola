@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\EnrollmentDecisionController;
 use App\Http\Controllers\Api\FinanceReportController;
+use App\Http\Controllers\Api\IncomeExportController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentSettingController;
@@ -167,6 +168,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/payments/{payment}/reject', [PaymentController::class, 'reject']);
     });
     Route::get('/finance/aging', [FinanceReportController::class, 'aging'])->middleware('permission:view finance reports');
+    Route::middleware('permission:view finance reports')->group(function () {
+        Route::get('/finance/income', [FinanceReportController::class, 'income']);
+        Route::get('/exports/income/excel', [IncomeExportController::class, 'excel']);
+        Route::get('/exports/income/pdf', [IncomeExportController::class, 'pdf']);
+    });
 
     // Kelola user & role — hanya Management
     // Daftar user juga dipakai dropdown di halaman Management lain (trainer, developer): terbuka

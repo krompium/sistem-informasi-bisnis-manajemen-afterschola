@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\IncomeReportRequest;
 use App\Http\Resources\InvoiceResource;
 use App\Models\Invoice;
+use App\Support\IncomeReport;
 use Illuminate\Http\Request;
 
 /**
  * Laporan keuangan. Hak akses: permission "view finance reports" (dipasang di routes).
- * TODO(nanti): laporan pemasukan per periode (PRD KEU-07) dan filter cabang.
  */
 class FinanceReportController extends Controller
 {
@@ -48,5 +49,15 @@ class FinanceReportController extends Controller
             'total' => $total,
             'invoices' => InvoiceResource::collection($invoices)->resolve(),
         ]]);
+    }
+
+    /**
+     * Laporan pemasukan per periode, cabang, dan program (KEU-07). Export: IncomeExportController.
+     */
+    public function income(IncomeReportRequest $request)
+    {
+        $report = IncomeReport::fromRequest($request);
+
+        return response()->json(['data' => $report->summary() + ['options' => $report->options()]]);
     }
 }
