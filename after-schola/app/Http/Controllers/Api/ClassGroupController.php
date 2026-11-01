@@ -23,7 +23,7 @@ class ClassGroupController extends Controller
     {
         $this->authorize('viewAny', ClassGroup::class);
 
-        $query = ClassGroup::visibleTo($request->user())->with(self::WITH)->orderBy('name');
+        $query = ClassGroup::visibleTo($request->user())->with(self::WITH)->withCount('activeEnrollments')->orderBy('name');
 
         if ($request->filled('branch_id')) {
             $query->where('branch_id', $request->integer('branch_id'));
@@ -35,7 +35,7 @@ class ClassGroupController extends Controller
             $query->where('is_active', $request->boolean('is_active'));
         }
 
-        return ClassGroupResource::collection($query->paginate(25));
+        return ClassGroupResource::collection($query->paginate(min($request->integer('per_page', 25), 100)));
     }
 
     // Pilihan untuk form kelas dan penugasan. Sengaja di sini: staf kelas tidak punya akses ke /branches, /programs, /users.
@@ -62,7 +62,7 @@ class ClassGroupController extends Controller
     {
         $classGroup = ClassGroup::create($request->validated());
 
-        return (new ClassGroupResource($classGroup->load(self::WITH)))->response()->setStatusCode(201);
+        return (new ClassGroupResource($classGroup->load(self::WITH)->loadCount('activeEnrollments')))->response()->setStatusCode(201);
     }
 
     public function show(ClassGroup $classGroup)
@@ -70,13 +70,13 @@ class ClassGroupController extends Controller
         $this->authorize('viewAny', ClassGroup::class);
         $this->authorize('view', $classGroup);
 
-        return new ClassGroupResource($classGroup->load(self::WITH));
+        return new ClassGroupResource($classGroup->load(self::WITH)->loadCount('activeEnrollments'));
     }
 
     public function update(SaveClassGroupRequest $request, ClassGroup $classGroup)
     {
         $classGroup->update($request->validated());
 
-        return new ClassGroupResource($classGroup->load(self::WITH));
+        return new ClassGroupResource($classGroup->load(self::WITH)->loadCount('activeEnrollments'));
     }
 }

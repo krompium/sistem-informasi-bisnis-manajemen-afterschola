@@ -41,6 +41,17 @@ class ClassGroup extends Model
         return $this->belongsTo(Branch::class);
     }
 
+    public function enrollments(): HasMany
+    {
+        return $this->hasMany(Enrollment::class);
+    }
+
+    /** Isi kelas saat ini: hanya yang berstatus aktif yang memakai kursi (BR-11). */
+    public function activeEnrollments(): HasMany
+    {
+        return $this->enrollments()->where('status', 'aktif');
+    }
+
     public function assignments(): HasMany
     {
         return $this->hasMany(TrainerAssignment::class);

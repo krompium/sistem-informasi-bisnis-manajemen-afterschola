@@ -23,6 +23,13 @@ class SaveClassGroupRequest extends FormRequest
         // Kelas baru hanya untuk cabang & program aktif; kelas lama tetap bisa diedit walau induknya diarsipkan.
         $creating = $this->isMethod('POST');
         $activeOnly = fn ($rule) => $rule->where('is_active', true);
+        $group = $this->route('class_group');
+        // Program, level, dan cabang tidak boleh berubah setelah kelas punya siswa (riwayat enrollment mengacu ke sana).
+        $lockedWhenEnrolled = fn (string $column) => function (string $attribute, mixed $value, \Closure $fail) use ($group, $column) {
+            if ($group && (int) $value !== (int) $group->{$column} && $group->enrollments()->exists()) {
+                $fail('Tidak dapat diubah karena kelas sudah memiliki siswa.');
+            }
+        };
 
         return [
             'branch_id' => [
@@ -33,13 +40,20 @@ class SaveClassGroupRequest extends FormRequest
                         $fail('Cabang di luar cakupan Anda.');
                     }
                 },
+                $lockedWhenEnrolled('branch_id'),
             ],
-            'program_id' => ['bail', 'required', 'integer', Rule::exists('programs', 'id')->when($creating, $activeOnly)],
-            'level_id' => ['bail', 'required', 'integer', Rule::exists('program_levels', 'id')->where('program_id', $this->input('program_id'))],
+            'program_id' => ['bail', 'required', 'integer', Rule::exists('programs', 'id')->when($creating, $activeOnly), $lockedWhenEnrolled('program_id')],
+            'level_id' => ['bail', 'required', 'integer', Rule::exists('program_levels', 'id')->where('program_id', $this->input('program_id')), $lockedWhenEnrolled('level_id')],
             'name' => ['required', 'string', 'max:100'],
-            // TODO(nanti): saat enrollment ada (6b), kapasitas tidak boleh di bawah enrollment aktif dan
-            // program/level/cabang terkunci bila kelas sudah berisi siswa.
-            'capacity' => ['required', 'integer', 'min:1', 'max:100'],
+            'capacity' => [
+                'bail', 'required', 'integer', 'min:1', 'max:100',
+                function (string $attribute, mixed $value, \Closure $fail) use ($group) {
+                    $active = $group?->activeEnrollments()->count() ?? 0;
+                    if ((int) $value < $active) {
+                        $fail("Kapasitas tidak boleh kurang dari jumlah siswa aktif ({$active}).");
+                    }
+                },
+            ],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

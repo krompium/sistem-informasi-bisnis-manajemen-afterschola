@@ -218,7 +218,7 @@ onMounted(() => {
       <div v-for="g in groups" :key="g.id" class="flex flex-col gap-space-sm border-b border-surface-container px-space-md py-space-sm last:border-0 sm:flex-row sm:items-center">
         <div class="flex flex-col gap-1">
           <span class="font-label-lg text-label-lg font-semibold text-on-surface">{{ g.name }}</span>
-          <span class="font-body-sm text-body-sm text-on-surface-variant">{{ g.program.name }} • {{ g.level.name }} • {{ g.branch.name }} • Kapasitas {{ g.capacity }}</span>
+          <span class="font-body-sm text-body-sm text-on-surface-variant">{{ g.program.name }} • {{ g.level.name }} • {{ g.branch.name }} • Terisi {{ g.enrolled_count }}/{{ g.capacity }}</span>
           <span class="font-body-sm text-body-sm text-on-surface-variant">
             <template v-if="g.assignments.length">
               <span v-for="(a, i) in g.assignments" :key="a.id">{{ i ? ', ' : '' }}{{ a.trainer.name }} ({{ roleLabel[a.role] }})</span>

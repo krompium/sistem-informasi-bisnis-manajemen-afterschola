@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\ClassroomController;
 use App\Http\Controllers\Api\ClassSessionController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\EnrollmentDecisionController;
 use App\Http\Controllers\Api\FinanceReportController;
 use App\Http\Controllers\Api\InvoiceController;
@@ -22,6 +23,8 @@ use App\Http\Controllers\Api\TrainerAttendanceController;
 use App\Http\Controllers\Api\TrainerTrialController;
 use App\Http\Controllers\Api\TrialEvaluationController;
 use App\Http\Controllers\Api\ClassGroupController;
+use App\Http\Controllers\Api\ClassGroupSessionController;
+use App\Http\Controllers\Api\PlacementCandidateController;
 use App\Http\Controllers\Api\TrainerAssignmentController;
 use App\Http\Controllers\Api\TrialSlotController;
 use App\Http\Controllers\Api\UserController;
@@ -222,13 +225,26 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Kelas dan penugasan trainer (Modul 6a, MGT-30/33). Baca: staf per cabang, trainer per penugasan (Policy + query).
     // `options` harus sebelum {class_group}.
-    Route::get('/class-groups/options', [ClassGroupController::class, 'options'])->middleware('permission:manage classes|assign trainers');
+    Route::get('/class-groups/options', [ClassGroupController::class, 'options'])->middleware('permission:manage classes|assign trainers|manage schedule');
     Route::get('/class-groups', [ClassGroupController::class, 'index']);
     Route::get('/class-groups/{class_group}', [ClassGroupController::class, 'show']);
     Route::post('/class-groups', [ClassGroupController::class, 'store'])->middleware('permission:manage classes');
     Route::put('/class-groups/{class_group}', [ClassGroupController::class, 'update'])->middleware('permission:manage classes');
     Route::apiResource('trainer-assignments', TrainerAssignmentController::class)->only(['store', 'update', 'destroy'])
         ->middleware('permission:assign trainers');
+
+    // Sesi dan jadwal kelas reguler (Modul 6c, MGT-34/35/36). Pertemuan sekolah tetap di /sessions.
+    Route::get('/class-sessions', [ClassGroupSessionController::class, 'index']);
+    Route::get('/class-sessions/{class_session}', [ClassGroupSessionController::class, 'show']);
+    Route::post('/class-sessions', [ClassGroupSessionController::class, 'store'])->middleware('permission:manage schedule');
+    Route::put('/class-sessions/{class_session}', [ClassGroupSessionController::class, 'update'])->middleware('permission:manage schedule');
+
+    // Penempatan siswa ke kelas (Modul 6b, MGT-31/32).
+    Route::middleware('permission:manage classes')->group(function () {
+        Route::get('/placement-candidates', [PlacementCandidateController::class, 'index']);
+        Route::get('/enrollments', [EnrollmentController::class, 'index']);
+        Route::post('/enrollments', [EnrollmentController::class, 'store']);
+    });
 
     // Calon dan leads (Modul 2, MGT-21/22) — scope cabang dijaga query + Policy.
     Route::middleware('permission:manage leads')->group(function () {

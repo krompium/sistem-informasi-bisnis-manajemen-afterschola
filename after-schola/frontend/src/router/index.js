@@ -39,6 +39,8 @@ import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
 import ManagementBranchesView from '@/views/management/BranchesView.vue'
 import ManagementTrialSlotsView from '@/views/management/TrialSlotsView.vue'
 import ManagementClassGroupsView from '@/views/management/ClassGroupsView.vue'
+import ManagementPlacementView from '@/views/management/PlacementView.vue'
+import ManagementSchedulesView from '@/views/management/SchedulesView.vue'
 import ManagementLeadsView from '@/views/management/LeadsView.vue'
 
 // 1) Import, di dekat import view publik lain
@@ -164,6 +166,18 @@ const routes = [
         name: 'management.class-groups',
         component: ManagementClassGroupsView,
         meta: { title: 'Kelas', icon: 'school' },
+      },
+      {
+        path: 'management/penempatan',
+        name: 'management.placement',
+        component: ManagementPlacementView,
+        meta: { title: 'Penempatan Siswa', icon: 'how_to_reg' },
+      },
+      {
+        path: 'management/jadwal',
+        name: 'management.schedules',
+        component: ManagementSchedulesView,
+        meta: { title: 'Jadwal Sesi', icon: 'event' },
       },
       {
         path: 'management/program',

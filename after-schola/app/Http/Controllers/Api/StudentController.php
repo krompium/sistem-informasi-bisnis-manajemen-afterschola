@@ -18,7 +18,8 @@ class StudentController extends Controller
     {
         $user = $request->user();
 
-        $query = Student::query()->with(['classroom', 'school']);
+        // Hanya murid jalur sekolah; siswa reguler (tanpa school_id) dikelola lewat enrollment kelas.
+        $query = Student::query()->whereNotNull('school_id')->with(['classroom', 'school']);
 
         if ($request->filled('school_id')) {
             $query->where('school_id', $request->integer('school_id'));
