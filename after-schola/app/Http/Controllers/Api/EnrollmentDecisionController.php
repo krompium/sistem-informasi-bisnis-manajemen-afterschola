@@ -7,7 +7,6 @@ use App\Http\Resources\EnrollmentDecisionResource;
 use App\Models\TrialEvaluation;
 use App\Support\EnrollmentFlow;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 /**
  * Modul 4 & 5 (bagian pendaftaran): Keputusan lanjut/tidak + Pendaftaran Resmi.
@@ -75,18 +74,7 @@ class EnrollmentDecisionController extends Controller
         $this->authorize('enroll', $trialEvaluation);
         $this->flow->editableRegistration($trialEvaluation);
 
-        $data = $request->validate([
-            'student_name' => ['required', 'string', 'max:255'],
-            'birth_date' => ['nullable', 'date', 'before:today'],
-            'origin_school' => ['nullable', 'string', 'max:255'],
-            'origin_class' => ['nullable', 'string', 'max:50'],
-            // Pilih paket (ORT-06): default program slot trial; hanya program aktif.
-            'program_id' => ['nullable', 'integer', Rule::exists('programs', 'id')->where('is_active', true)],
-            'parent_name' => ['required', 'string', 'max:255'],
-            'parent_phone' => ['required', 'string', 'max:30'],
-            'parent_email' => ['nullable', 'email', 'max:255'],
-            'parent_address' => ['nullable', 'string'],
-        ]);
+        $data = $request->validate(EnrollmentFlow::registrationRules());
 
         $this->flow->saveRegistration($trialEvaluation, $data, $request->user());
 

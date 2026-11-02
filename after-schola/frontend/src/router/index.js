@@ -19,6 +19,7 @@ import ManagementAgingReportView from '@/views/management/AgingReportView.vue'
 import ManagementIncomeReportView from '@/views/management/IncomeReportView.vue'
 import PortalDashboardView from '@/views/portal/PortalDashboardView.vue'
 import PortalChildDetailView from '@/views/portal/ChildDetailView.vue'
+import PortalRegistrationFormView from '@/views/portal/RegistrationFormView.vue'
 import TrainerScheduleView from '@/views/trainer/ScheduleView.vue'
 import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
 import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
@@ -106,6 +107,7 @@ const routes = [
       // ---- Orang Tua (Portal) ----
       { path: 'portal', name: 'portal.dashboard', component: PortalDashboardView },
       { path: 'portal/anak/:id', name: 'portal.child', component: PortalChildDetailView },
+      { path: 'portal/anak/:id/pendaftaran', name: 'portal.registration', component: PortalRegistrationFormView },
 
       // ---- Management ----
       { path: 'management', name: 'management.dashboard', component: ManagementDashboardView },

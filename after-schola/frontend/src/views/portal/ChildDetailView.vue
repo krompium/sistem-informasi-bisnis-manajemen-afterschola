@@ -156,6 +156,14 @@ onMounted(load)
           Pendaftaran sudah diajukan, keputusan tidak dapat diubah.
         </p>
 
+        <RouterLink
+          v-if="child.decision?.decision === 'lanjut'"
+          :to="`/portal/anak/${child.id}/pendaftaran`"
+          class="inline-block self-start rounded-xl bg-primary-container px-space-md py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95"
+        >
+          {{ canDecide ? 'Lengkapi pendaftaran' : 'Lihat status pendaftaran' }}
+        </RouterLink>
+
         <p v-if="actionError" class="rounded-lg bg-error-container px-space-sm py-2 font-body-sm text-on-error-container">{{ actionError }}</p>
       </section>
     </template>
