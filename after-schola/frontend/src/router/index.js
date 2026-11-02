@@ -23,6 +23,7 @@ import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
 import SessionAttendanceView from '@/views/SessionAttendanceView.vue'
 import ExpoReportsView from '@/views/ExpoReportsView.vue'
 import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
+import ProgressNotesView from '@/views/ProgressNotesView.vue'
 import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
 import ResetPasswordView from '@/views/public/ResetPasswordView.vue'
 import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
@@ -89,6 +90,7 @@ const routes = [
       },
       { path: 'trainer/laporan-ekspo', name: 'trainer.expo', component: ExpoReportsView },
       { path: 'trainer/evaluasi-trial', name: 'trainer.trial', component: TrialEvaluationsView },
+      { path: 'trainer/catatan-progres', name: 'trainer.progress-notes', component: ProgressNotesView },
 
             // ---- Developer (Modul 12: Manajemen Proyek) ----
       
@@ -178,6 +180,12 @@ const routes = [
         name: 'management.schedules',
         component: ManagementSchedulesView,
         meta: { title: 'Jadwal Sesi', icon: 'event' },
+      },
+      {
+        path: 'management/catatan-progres',
+        name: 'management.progress-notes',
+        component: ProgressNotesView,
+        meta: { title: 'Catatan Progres', icon: 'edit_note' },
       },
       {
         path: 'management/program',

@@ -27,6 +27,7 @@ const managementNav = [
   { label: 'Kelas', icon: 'school', to: '/management/kelas', perm: 'manage classes|assign trainers' },
   { label: 'Penempatan Siswa', icon: 'how_to_reg', to: '/management/penempatan', perm: 'manage classes' },
   { label: 'Jadwal Sesi', icon: 'event', to: '/management/jadwal', perm: 'manage schedule|manage classes' },
+  { label: 'Catatan Progres', icon: 'edit_note', to: '/management/catatan-progres', perm: 'manage classes|assign trainers|manage schedule|review reports' },
   { label: 'Calon & Leads', icon: 'group_add', to: '/management/calon', perm: 'manage leads' },
   { label: 'Evaluasi Trial', icon: 'rate_review', to: '/management/evaluasi-trial' },
   { label: 'Keputusan & Pendaftaran', icon: 'how_to_reg', to: '/management/keputusan-pendaftaran' },
@@ -50,6 +51,7 @@ const trainerNav = [
   { label: 'Absensi', icon: 'fact_check', to: '/trainer/absensi' },
   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/trainer/laporan-ekspo' },
   { label: 'Evaluasi Trial', icon: 'rate_review', to: '/trainer/evaluasi-trial' },
+  { label: 'Catatan Progres', icon: 'edit_note', to: '/trainer/catatan-progres' },
 ]
 
 const developerNav = [

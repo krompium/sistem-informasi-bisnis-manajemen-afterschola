@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\TrainerAttendanceController;
 use App\Http\Controllers\Api\TrainerTrialController;
 use App\Http\Controllers\Api\TrialEvaluationController;
 use App\Http\Controllers\Api\ClassGroupController;
+use App\Http\Controllers\Api\ClassGroupEnrollmentController;
 use App\Http\Controllers\Api\ClassGroupSessionController;
 use App\Http\Controllers\Api\PlacementCandidateController;
 use App\Http\Controllers\Api\TrainerAssignmentController;
@@ -33,6 +34,7 @@ use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\LeadExportController;
 use App\Http\Controllers\Api\ProgramController;
 use App\Http\Controllers\Api\ProgramLevelController;
+use App\Http\Controllers\Api\ProgressNoteController;
 use App\Http\Controllers\Api\RubricCriterionController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TeamController;
@@ -244,6 +246,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/placement-candidates', [PlacementCandidateController::class, 'index']);
         Route::get('/enrollments', [EnrollmentController::class, 'index']);
         Route::post('/enrollments', [EnrollmentController::class, 'store']);
+    });
+
+    // Roster kelas (TRN-03) dan catatan progres (Modul 8, TRN-08/MGT-44). Baca: trainer + Management, isolasi di query/Policy.
+    Route::get('/class-groups/{class_group}/enrollments', ClassGroupEnrollmentController::class);
+    Route::middleware('role:trainer|management')->get('/progress-notes', [ProgressNoteController::class, 'index']);
+    Route::middleware('role:trainer')->group(function () {
+        Route::post('/progress-notes', [ProgressNoteController::class, 'store']);
+        Route::put('/progress-notes/{progress_note}', [ProgressNoteController::class, 'update']);
     });
 
     // Calon dan leads (Modul 2, MGT-21/22) — scope cabang dijaga query + Policy.
