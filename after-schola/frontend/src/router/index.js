@@ -24,6 +24,7 @@ import SessionAttendanceView from '@/views/SessionAttendanceView.vue'
 import ExpoReportsView from '@/views/ExpoReportsView.vue'
 import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
 import ProgressNotesView from '@/views/ProgressNotesView.vue'
+import EvaluationsView from '@/views/EvaluationsView.vue'
 import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
 import ResetPasswordView from '@/views/public/ResetPasswordView.vue'
 import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
@@ -40,6 +41,7 @@ import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
 import ManagementBranchesView from '@/views/management/BranchesView.vue'
 import ManagementTrialSlotsView from '@/views/management/TrialSlotsView.vue'
 import ManagementClassGroupsView from '@/views/management/ClassGroupsView.vue'
+import ManagementReportReviewView from '@/views/management/ReportReviewView.vue'
 import ManagementPlacementView from '@/views/management/PlacementView.vue'
 import ManagementSchedulesView from '@/views/management/SchedulesView.vue'
 import ManagementLeadsView from '@/views/management/LeadsView.vue'
@@ -91,6 +93,7 @@ const routes = [
       { path: 'trainer/laporan-ekspo', name: 'trainer.expo', component: ExpoReportsView },
       { path: 'trainer/evaluasi-trial', name: 'trainer.trial', component: TrialEvaluationsView },
       { path: 'trainer/catatan-progres', name: 'trainer.progress-notes', component: ProgressNotesView },
+      { path: 'trainer/evaluasi-siswa', name: 'trainer.evaluations', component: EvaluationsView },
 
             // ---- Developer (Modul 12: Manajemen Proyek) ----
       
@@ -180,6 +183,12 @@ const routes = [
         name: 'management.schedules',
         component: ManagementSchedulesView,
         meta: { title: 'Jadwal Sesi', icon: 'event' },
+      },
+      {
+        path: 'management/raport',
+        name: 'management.report-review',
+        component: ManagementReportReviewView,
+        meta: { title: 'Tinjau Raport', icon: 'fact_check' },
       },
       {
         path: 'management/catatan-progres',

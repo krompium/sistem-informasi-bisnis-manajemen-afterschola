@@ -7,6 +7,8 @@ use App\Http\Requests\SaveRubricCriterionRequest;
 use App\Http\Resources\RubricCriterionResource;
 use App\Models\Program;
 use App\Models\RubricCriterion;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class RubricCriterionController extends Controller
 {
@@ -32,6 +34,11 @@ class RubricCriterionController extends Controller
     // TODO(nanti): tolak bila kriteria sudah punya skor evaluasi (Fase 4) — FK restrict di evaluation_scores.
     public function destroy(Program $program, RubricCriterion $rubricCriterion)
     {
+        // Kriteria yang sudah dipakai evaluasi tidak boleh hilang (riwayat nilai siswa); FK restrict akan jadi 500 tanpa ini.
+        if (DB::table('evaluation_scores')->where('criterion_id', $rubricCriterion->id)->exists()) {
+            throw ValidationException::withMessages(['criterion' => ['Kriteria sudah dipakai evaluasi dan tidak dapat dihapus.']]);
+        }
+
         $rubricCriterion->delete();
 
         return response()->noContent();

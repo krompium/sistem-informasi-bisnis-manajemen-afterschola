@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\ClassSessionController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\EnrollmentDecisionController;
+use App\Http\Controllers\Api\EvaluationController;
 use App\Http\Controllers\Api\FinanceReportController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\PaymentController;
@@ -35,6 +36,7 @@ use App\Http\Controllers\Api\LeadExportController;
 use App\Http\Controllers\Api\ProgramController;
 use App\Http\Controllers\Api\ProgramLevelController;
 use App\Http\Controllers\Api\ProgressNoteController;
+use App\Http\Controllers\Api\ProgressReportController;
 use App\Http\Controllers\Api\RubricCriterionController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TeamController;
@@ -254,6 +256,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:trainer')->group(function () {
         Route::post('/progress-notes', [ProgressNoteController::class, 'store']);
         Route::put('/progress-notes/{progress_note}', [ProgressNoteController::class, 'update']);
+    });
+
+    // Evaluasi periodik (Modul 9a, TRN-09/TRN-10). Baca: trainer (miliknya) + peninjau; tulis: trainer.
+    Route::middleware('role:trainer|management')->group(function () {
+        Route::get('/evaluations', [EvaluationController::class, 'index']);
+        Route::get('/evaluations/{evaluation}', [EvaluationController::class, 'show']);
+    });
+    Route::middleware('role:trainer')->group(function () {
+        Route::post('/evaluations', [EvaluationController::class, 'store']);
+        Route::put('/evaluations/{evaluation}', [EvaluationController::class, 'update']);
+        Route::post('/progress-reports/{progress_report}/submit', [ProgressReportController::class, 'submit']);
+    });
+    // Tinjau raport (Modul 9b, MGT-50/51): koordinator dengan `review reports`, per cabang.
+    Route::middleware('permission:review reports')->group(function () {
+        Route::get('/progress-reports', [ProgressReportController::class, 'index']);
+        Route::post('/progress-reports/{progress_report}/approve', [ProgressReportController::class, 'approve']);
+        Route::post('/progress-reports/{progress_report}/return', [ProgressReportController::class, 'sendBack']);
     });
 
     // Calon dan leads (Modul 2, MGT-21/22) — scope cabang dijaga query + Policy.
