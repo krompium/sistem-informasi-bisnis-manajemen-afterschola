@@ -6,20 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PaymentResource;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Support\PaymentRecorder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Modul 5 (bagian pembayaran). Mencatat pembayaran = permission "manage invoices";
  * mengonfirmasi / menolak = permission "confirm payments" (dipasang di routes).
- * Nominal selalu = nominal invoice (lunas sekaligus).
- * TODO(nanti): cicilan — tabel sudah mendukung banyak pembayaran per invoice (PRD KEU-11, [v3]).
+ * Aturan pencatatan (nominal, satu pembayaran aktif per invoice) ada di PaymentRecorder.
  */
 class PaymentController extends Controller
 {
-    public function store(Request $request, Invoice $invoice)
+    public function store(Request $request, Invoice $invoice, PaymentRecorder $recorder)
     {
         $this->authorize('view', $invoice); // sebelum validasi: di luar cabang harus 404, bukan 422
         $data = $request->validate([
@@ -28,29 +27,7 @@ class PaymentController extends Controller
             'proof' => ['nullable', 'required_if:method,transfer', 'image', 'mimes:jpeg,jpg,png', 'max:5120'],
         ]);
 
-        if ($invoice->status !== 'unpaid') {
-            throw ValidationException::withMessages(['invoice' => ['Invoice ini tidak dapat menerima pembayaran.']]);
-        }
-        if ($invoice->payments()->whereIn('status', ['pending', 'confirmed'])->exists()) {
-            throw ValidationException::withMessages(['invoice' => ['Invoice ini sudah punya pembayaran yang menunggu atau sudah dikonfirmasi.']]);
-        }
-
-        $path = null;
-        if ($request->hasFile('proof')) {
-            $file = $request->file('proof');
-            // Nama hasil generate, bukan nama asli dari client.
-            $path = $file->storeAs('payment-proofs', Str::uuid().'.'.$file->extension(), 'public');
-        }
-
-        $payment = Payment::create([
-            'invoice_id' => $invoice->id,
-            'amount' => $invoice->amount,
-            'method' => $data['method'],
-            'paid_date' => $data['paid_date'],
-            'proof_path' => $path,
-            'status' => 'pending',
-            'recorded_by' => $request->user()->id,
-        ]);
+        $payment = $recorder->record($invoice, $data['method'], $data['paid_date'], $request->file('proof'), $request->user());
 
         return (new PaymentResource($payment))->response()->setStatusCode(201);
     }

@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\FinanceReportController;
 use App\Http\Controllers\Api\IncomeExportController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\ParentChildController;
+use App\Http\Controllers\Api\ParentInvoiceController;
 use App\Http\Controllers\Api\ParentRegistrationController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentSettingController;
@@ -160,6 +161,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/children/{child}/registration', [ParentRegistrationController::class, 'show'])->whereNumber('child');
         Route::put('/children/{child}/registration', [ParentRegistrationController::class, 'save'])->whereNumber('child');
         Route::post('/children/{child}/registration/submit', [ParentRegistrationController::class, 'submit'])->whereNumber('child');
+        Route::get('/invoices', [ParentInvoiceController::class, 'index']);
+        Route::post('/invoices/{invoice}/payments', [ParentInvoiceController::class, 'pay'])->whereNumber('invoice');
+        Route::get('/invoices/{invoice}/receipt', [ParentInvoiceController::class, 'receipt'])->whereNumber('invoice');
     });
 
     Route::middleware('permission:verify registrations')->group(function () {

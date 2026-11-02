@@ -30,5 +30,6 @@ export const errMsg = (err, fallback) => {
 // Tujuan tombol tindakan tiap anak. Satu tempat supaya dasbor dan detail konsisten.
 export function actionTo(child) {
   if (['daftar', 'perbaiki_data'].includes(child.next_action)) return `/portal/anak/${child.id}/pendaftaran`
+  if (child.next_action === 'bayar') return '/portal/tagihan'
   return `/portal/anak/${child.id}`
 }

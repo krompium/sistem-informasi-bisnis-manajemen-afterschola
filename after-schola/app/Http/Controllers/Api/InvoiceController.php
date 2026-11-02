@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\InvoiceResource;
 use App\Models\Invoice;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\ReceiptPdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -83,26 +83,11 @@ class InvoiceController extends Controller
         return new InvoiceResource($invoice->fresh(self::WITH));
     }
 
-    /**
-     * Kuitansi PDF (KEU-03): hanya untuk invoice Lunas.
-     * TODO(nanti): terbilang dan nomor kuitansi tersendiri bila Keuangan memintanya (OQ-14).
-     */
-    public function receipt(Invoice $invoice)
+    /** Kuitansi PDF (KEU-03): hanya untuk invoice Lunas. */
+    public function receipt(Invoice $invoice, ReceiptPdf $receipt)
     {
         $this->authorize('view', $invoice);
 
-        if ($invoice->status !== 'paid') {
-            throw ValidationException::withMessages(['status' => ['Kuitansi hanya tersedia untuk invoice yang sudah lunas.']]);
-        }
-
-        $invoice->load('registration.program', 'registration.branch');
-        $pdf = Pdf::loadView('exports.receipt', [
-            'invoice' => $invoice,
-            'registration' => $invoice->registration,
-            'branch' => $invoice->registration->branch,
-            'payment' => $invoice->payments()->where('status', 'confirmed')->latest('id')->first(),
-        ])->setPaper('a5', 'landscape');
-
-        return $pdf->download('kuitansi-'.str_replace('/', '-', $invoice->number).'.pdf');
+        return $receipt->download($invoice);
     }
 }

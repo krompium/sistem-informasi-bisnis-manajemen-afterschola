@@ -38,6 +38,12 @@ class Invoice extends Model
             : $query->whereHas('registration', fn (Builder $r) => $r->inBranchesOf($user));
     }
 
+    /** Invoice milik anak orang tua ini (Portal Orang Tua): registrasi -> lead -> parent_id. */
+    public function scopeOwnedBy(Builder $query, User $parent): Builder
+    {
+        return $query->whereHas('registration.lead', fn (Builder $lead) => $lead->where('parent_id', $parent->id));
+    }
+
     /** Padanan scopeVisibleTo untuk satu record (Policy). */
     public function isInBranchesOf(User $user): bool
     {

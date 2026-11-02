@@ -59,7 +59,10 @@ const developerNav = [
   { label: 'Kalender', icon: 'calendar_month', to: '/developer/kalender' },
 ]
 
-const parentNav = [{ label: 'Beranda', icon: 'family_restroom', to: '/portal' }]
+const parentNav = [
+  { label: 'Beranda', icon: 'family_restroom', to: '/portal' },
+  { label: 'Tagihan', icon: 'receipt_long', to: '/portal/tagihan' },
+]
 
 // Item bertanda `perm` hanya tampil bila user punya permission itu (backend tetap otoritas).
 const navItems = computed(() => {
