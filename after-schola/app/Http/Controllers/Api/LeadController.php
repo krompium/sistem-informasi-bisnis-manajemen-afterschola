@@ -16,7 +16,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 
 class LeadController extends Controller
 {
@@ -51,7 +50,7 @@ class LeadController extends Controller
         $data = $request->validated();
 
         [$lead, $parent] = DB::transaction(function () use ($data) {
-            $slot = $this->lockBookableSlot((int) $data['trial_slot_id']);
+            $slot = TrialSlot::lockBookable((int) $data['trial_slot_id']);
 
             $parent = User::create([
                 'name' => $data['parent_name'],
@@ -81,20 +80,6 @@ class LeadController extends Controller
         $this->sendConfirmation($lead, $parent);
 
         return (new LeadResource($lead->load('trialSlot.program', 'trialSlot.branch')))->response()->setStatusCode(201);
-    }
-
-    // Booking diserialkan per slot: kunci baris slot lebih dulu, baru cek ulang kelayakan dan sisa kursi
-    // (pembacaan kedua ini harus yang pertama bersifat non-locking, supaya melihat booking yang baru di-commit).
-    private function lockBookableSlot(int $id): TrialSlot
-    {
-        TrialSlot::whereKey($id)->lockForUpdate()->first();
-
-        $slot = TrialSlot::bookable()->find($id);
-        if (! $slot) {
-            throw ValidationException::withMessages(['trial_slot_id' => ['Slot trial tidak tersedia atau sudah penuh.']]);
-        }
-
-        return $slot;
     }
 
     // Kegagalan kirim tidak membatalkan pendaftaran: dicatat (NFR-07), notifikasi in-app tetap tersimpan.

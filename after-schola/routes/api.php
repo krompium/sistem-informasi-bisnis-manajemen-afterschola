@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\EnrollmentDecisionController;
 use App\Http\Controllers\Api\FinanceReportController;
 use App\Http\Controllers\Api\IncomeExportController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\ParentChildController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentSettingController;
 use App\Http\Controllers\Api\RegistrationController;
@@ -149,6 +150,14 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // Verifikasi & Pembayaran (Modul 5)
+    // Portal Orang Tua (PRD 6.2): hanya role parent; kepemilikan anak dijaga query (404).
+    Route::middleware('role:parent')->prefix('parent')->group(function () {
+        Route::get('/children', [ParentChildController::class, 'index']);
+        Route::post('/children', [ParentChildController::class, 'store']);
+        Route::get('/children/{child}', [ParentChildController::class, 'show'])->whereNumber('child');
+        Route::post('/children/{child}/decision', [ParentChildController::class, 'decision'])->whereNumber('child');
+    });
+
     Route::middleware('permission:verify registrations')->group(function () {
         Route::get('/registrations', [RegistrationController::class, 'index']);
         Route::post('/registrations/{registration}/approve', [RegistrationController::class, 'approve']);

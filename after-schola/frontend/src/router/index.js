@@ -5,7 +5,6 @@ import LandingPage from '@/views/public/LandingPage.vue'
 import LoginView from '@/views/LoginView.vue'
 import TrainerDashboardView from '@/views/TrainerDashboardView.vue'
 import ManagementDashboardView from '@/views/ManagementDashboardView.vue'
-import PlaceholderView from '@/views/PlaceholderView.vue'
 import ManagementScheduleView from '@/views/management/ScheduleView.vue'
 import ManagementTrainerAssignmentView from '@/views/management/TrainerAssignmentView.vue'
 import ManagementSchoolsAdminView from '@/views/management/SchoolsAdminView.vue'
@@ -18,6 +17,8 @@ import ManagementVerificationView from '@/views/management/VerificationView.vue'
 import ManagementInvoicesView from '@/views/management/InvoicesView.vue'
 import ManagementAgingReportView from '@/views/management/AgingReportView.vue'
 import ManagementIncomeReportView from '@/views/management/IncomeReportView.vue'
+import PortalDashboardView from '@/views/portal/PortalDashboardView.vue'
+import PortalChildDetailView from '@/views/portal/ChildDetailView.vue'
 import TrainerScheduleView from '@/views/trainer/ScheduleView.vue'
 import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
 import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
@@ -102,13 +103,9 @@ const routes = [
       
 	  
 
-      // ---- Orang Tua (portal belum dibangun: Fase 2) ----
-      {
-        path: 'portal',
-        name: 'portal.dashboard',
-        component: PlaceholderView,
-        meta: { title: 'Portal Orang Tua', icon: 'family_restroom' },
-      },
+      // ---- Orang Tua (Portal) ----
+      { path: 'portal', name: 'portal.dashboard', component: PortalDashboardView },
+      { path: 'portal/anak/:id', name: 'portal.child', component: PortalChildDetailView },
 
       // ---- Management ----
       { path: 'management', name: 'management.dashboard', component: ManagementDashboardView },
