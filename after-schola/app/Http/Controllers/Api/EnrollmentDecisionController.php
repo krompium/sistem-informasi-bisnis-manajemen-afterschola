@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\EnrollmentResource;
+use App\Http\Resources\EnrollmentDecisionResource;
 use App\Models\EnrollmentDecision;
 use App\Models\Registration;
 use App\Models\TrialEvaluation;
@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
  * Hak akses: permission "manage enrollment" (routes) + scope cabang (Policy "enroll" dan query).
  * Keputusan dicatat staf atas nama orang tua sampai Portal Orang Tua ada (BR-02, ORT-05).
  */
-class EnrollmentController extends Controller
+class EnrollmentDecisionController extends Controller
 {
     private const WITH = ['trainer', 'level', 'lead.parent:id,name,email,phone', 'decision.registration'];
 
@@ -42,7 +42,7 @@ class EnrollmentController extends Controller
             }
         }
 
-        return EnrollmentResource::collection(
+        return EnrollmentDecisionResource::collection(
             $query->orderByDesc('trial_date')->orderByDesc('id')->get()
         );
     }
@@ -100,7 +100,7 @@ class EnrollmentController extends Controller
             }
         });
 
-        return new EnrollmentResource($trialEvaluation->fresh(self::WITH));
+        return new EnrollmentDecisionResource($trialEvaluation->fresh(self::WITH));
     }
 
     /**
@@ -146,7 +146,7 @@ class EnrollmentController extends Controller
 
         Registration::updateOrCreate(['decision_id' => $decision->id], $data);
 
-        return new EnrollmentResource($trialEvaluation->fresh(self::WITH));
+        return new EnrollmentDecisionResource($trialEvaluation->fresh(self::WITH));
     }
 
     /**
@@ -171,6 +171,6 @@ class EnrollmentController extends Controller
 
         $registration->update(['status' => 'menunggu_verifikasi']);
 
-        return new EnrollmentResource($trialEvaluation->fresh(self::WITH));
+        return new EnrollmentDecisionResource($trialEvaluation->fresh(self::WITH));
     }
 }

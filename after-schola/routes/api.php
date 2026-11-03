@@ -6,7 +6,7 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\ClassroomController;
 use App\Http\Controllers\Api\ClassSessionController;
 use App\Http\Controllers\Api\DashboardController;
-use App\Http\Controllers\Api\EnrollmentController;
+use App\Http\Controllers\Api\EnrollmentDecisionController;
 use App\Http\Controllers\Api\FinanceReportController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\PaymentController;
@@ -136,10 +136,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Keputusan lanjut/tidak + Pendaftaran Resmi (Modul 4) — hanya Management
     Route::middleware('permission:manage enrollment')->group(function () {
-        Route::get('/enrollments', [EnrollmentController::class, 'index']);
-        Route::put('/trial-evaluations/{trialEvaluation}/decision', [EnrollmentController::class, 'saveDecision']);
-        Route::put('/trial-evaluations/{trialEvaluation}/registration', [EnrollmentController::class, 'saveRegistration']);
-        Route::post('/trial-evaluations/{trialEvaluation}/registration/submit', [EnrollmentController::class, 'submitRegistration']);
+        Route::get('/enrollment-decisions', [EnrollmentDecisionController::class, 'index']);
+        Route::put('/trial-evaluations/{trialEvaluation}/decision', [EnrollmentDecisionController::class, 'saveDecision']);
+        Route::put('/trial-evaluations/{trialEvaluation}/registration', [EnrollmentDecisionController::class, 'saveRegistration']);
+        Route::post('/trial-evaluations/{trialEvaluation}/registration/submit', [EnrollmentDecisionController::class, 'submitRegistration']);
     });
 
     // Verifikasi & Pembayaran (Modul 5)
