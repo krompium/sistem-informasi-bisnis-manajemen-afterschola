@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Student extends Model
 {
-    protected $fillable = ['school_id', 'classroom_id', 'name', 'origin_class', 'level', 'created_by'];
+    protected $fillable = ['school_id', 'classroom_id', 'parent_id', 'branch_id', 'name', 'origin_class', 'level', 'created_by'];
 
     public function school(): BelongsTo
     {
@@ -23,6 +23,11 @@ class Student extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function enrollments(): HasMany
+    {
+        return $this->hasMany(Enrollment::class);
     }
 
     public function attendances(): HasMany

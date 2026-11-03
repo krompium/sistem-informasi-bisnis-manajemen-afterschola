@@ -17,6 +17,7 @@ class ClassGroupResource extends JsonResource
             'program' => $this->whenLoaded('program', fn () => ['id' => $this->program->id, 'name' => $this->program->name]),
             'level' => $this->whenLoaded('level', fn () => ['id' => $this->level->id, 'name' => $this->level->name]),
             'branch' => $this->whenLoaded('branch', fn () => ['id' => $this->branch->id, 'name' => $this->branch->name]),
+            'enrolled_count' => $this->whenCounted('activeEnrollments'),
             'assignments' => TrainerAssignmentResource::collection($this->whenLoaded('assignments')),
         ];
     }
