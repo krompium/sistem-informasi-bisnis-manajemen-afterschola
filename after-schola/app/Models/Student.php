@@ -25,6 +25,11 @@ class Student extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'parent_id');
+    }
+
     public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);

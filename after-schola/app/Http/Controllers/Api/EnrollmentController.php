@@ -8,6 +8,7 @@ use App\Http\Resources\EnrollmentResource;
 use App\Models\ClassGroup;
 use App\Models\Enrollment;
 use App\Models\Registration;
+use App\Support\ScheduleNotifier;
 use App\Support\StudentPlacement;
 use Illuminate\Http\Request;
 
@@ -30,13 +31,15 @@ class EnrollmentController extends Controller
         return EnrollmentResource::collection($query->paginate(min($request->integer('per_page', 25), 100)));
     }
 
-    public function store(StoreEnrollmentRequest $request, StudentPlacement $placement)
+    public function store(StoreEnrollmentRequest $request, StudentPlacement $placement, ScheduleNotifier $notifier)
     {
         $enrollment = $placement->place(
             Registration::findOrFail($request->integer('registration_id')),
             ClassGroup::findOrFail($request->integer('class_group_id')),
             $request->input('level_override_reason'),
         );
+
+        $notifier->studentPlaced($enrollment);
 
         return (new EnrollmentResource($enrollment->load(self::WITH)))->response()->setStatusCode(201);
     }

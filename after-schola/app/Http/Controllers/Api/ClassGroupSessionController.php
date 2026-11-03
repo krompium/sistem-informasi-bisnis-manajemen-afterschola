@@ -7,6 +7,7 @@ use App\Http\Requests\SaveClassSessionRequest;
 use App\Http\Resources\ClassGroupSessionResource;
 use App\Models\ClassGroup;
 use App\Models\ClassSession;
+use App\Support\ScheduleNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -49,20 +50,23 @@ class ClassGroupSessionController extends Controller
         return new ClassGroupSessionResource($classSession->load(self::WITH));
     }
 
-    public function store(SaveClassSessionRequest $request)
+    public function store(SaveClassSessionRequest $request, ScheduleNotifier $notifier)
     {
         $session = ClassSession::create($request->validated());
+        $notifier->sessionScheduled($session);
 
         return (new ClassGroupSessionResource($session->load(self::WITH)))->response()->setStatusCode(201);
     }
 
-    public function update(SaveClassSessionRequest $request, ClassSession $classSession)
+    public function update(SaveClassSessionRequest $request, ClassSession $classSession, ScheduleNotifier $notifier)
     {
         if ($classSession->is_locked) {
             throw ValidationException::withMessages(['session' => ['Sesi sudah dikunci dan tidak dapat diubah.']]);
         }
 
+        $before = ScheduleNotifier::signature($classSession);
         $classSession->update($request->validated());
+        $notifier->sessionChanged($classSession, $before);
 
         return new ClassGroupSessionResource($classSession->load(self::WITH));
     }
