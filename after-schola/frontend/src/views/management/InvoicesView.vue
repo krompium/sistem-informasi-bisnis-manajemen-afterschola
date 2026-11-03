@@ -11,6 +11,8 @@ const loading = ref(true)
 const rows = ref([])
 const search = ref('')
 const status = ref('unpaid')
+const branchId = ref('')
+const branches = ref([]) // dari data.options di respons daftar; dropdown tampil bila > 1 cabang
 const busyId = ref(null)
 
 const inputCls =
@@ -43,9 +45,10 @@ async function load() {
   loading.value = true
   try {
     const { data } = await api.get('/invoices', {
-      params: { status: status.value || undefined, q: search.value || undefined, per_page: 100 },
+      params: { status: status.value || undefined, branch_id: branchId.value || undefined, q: search.value || undefined, per_page: 100 },
     })
     rows.value = unwrap(data)
+    branches.value = data.options?.branches ?? []
   } catch (err) {
     alert(errMsg(err, 'Gagal memuat invoice.'))
   } finally {
@@ -116,7 +119,8 @@ watch(search, () => {
   clearTimeout(timer)
   timer = setTimeout(load, 300)
 })
-watch(status, load)
+watch([status, branchId], load)
+
 onMounted(load)
 </script>
 
@@ -137,6 +141,10 @@ onMounted(load)
         <option value="paid">Lunas</option>
         <option value="void">Dibatalkan</option>
         <option value="">Semua</option>
+      </select>
+      <select v-if="branches.length > 1" v-model="branchId" :class="[inputCls, 'sm:w-52']">
+        <option value="">Semua cabang</option>
+        <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
       </select>
     </div>
 

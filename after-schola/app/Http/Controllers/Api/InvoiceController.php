@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\InvoiceResource;
+use App\Models\Branch;
 use App\Models\Invoice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,11 +22,16 @@ class InvoiceController extends Controller
     {
         $request->validate([
             'status' => ['nullable', 'in:unpaid,paid,void'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'q' => ['nullable', 'string', 'max:100'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = Invoice::query()->with(self::WITH);
+        $query = Invoice::inBranchesOf($request->user())->with(self::WITH);
+
+        if ($request->filled('branch_id')) {
+            $query->whereHas('registration', fn ($r) => $r->where('branch_id', $request->integer('branch_id')));
+        }
 
         if ($request->filled('status')) {
             $query->where('status', $request->string('status')->toString());
@@ -37,13 +43,18 @@ class InvoiceController extends Controller
                 ->orWhereHas('registration', fn ($r) => $r->where('student_name', 'like', $q)->orWhere('parent_name', 'like', $q)));
         }
 
+        // Opsi filter cabang ikut di respons: role Keuangan tidak punya akses ke /branches.
         return InvoiceResource::collection(
             $query->orderByDesc('issued_at')->orderByDesc('id')->paginate($request->integer('per_page', 25))
-        );
+        )->additional(['options' => [
+            'branches' => Branch::visibleTo($request->user())->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+        ]]);
     }
 
     public function show(Invoice $invoice)
     {
+        $this->authorize('manage', $invoice);
+
         return new InvoiceResource($invoice->load(self::WITH));
     }
 
@@ -52,6 +63,8 @@ class InvoiceController extends Controller
      */
     public function void(Request $request, Invoice $invoice)
     {
+        $this->authorize('manage', $invoice); // sebelum validasi: di luar cabang harus 404, bukan 422
+
         $data = $request->validate([
             'reason' => ['required', 'string', 'max:500'],
         ]);

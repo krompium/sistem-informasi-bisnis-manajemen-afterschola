@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -33,14 +34,28 @@ class Invoice extends Model
         return $this->hasMany(Payment::class);
     }
 
-    /**
-     * Nomor berikutnya: INV/{YYYYMM}/{urut 4 digit}.
-     * Panggil di dalam transaksi. Invoice tidak pernah dihapus, jadi hitungan aman dipakai sebagai urutan.
-     * TODO(nanti): sisipkan kode cabang setelah entitas cabang ada (PRD BR-06).
-     */
-    public static function nextNumber(): string
+    /** Isolasi cabang (BR-19) mengikuti cabang pendaftarannya; invoice tidak menyimpan branch_id sendiri. */
+    public function scopeInBranchesOf(Builder $query, User $user): Builder
     {
-        $prefix = 'INV/'.now()->format('Ym').'/';
+        return $user->hasAllBranches()
+            ? $query
+            : $query->whereHas('registration', fn (Builder $r) => $r->inBranchesOf($user));
+    }
+
+    public function isInBranchesOf(User $user): bool
+    {
+        return $this->registration->isInBranchesOf($user);
+    }
+
+    /**
+     * Nomor berikutnya: INV/{kode cabang}/{YYYYMM}/{urut 4 digit}; urutan dihitung per cabang (BR-06).
+     * Pendaftaran lama tanpa cabang memakai format lama INV/{YYYYMM}/{urut}.
+     * Panggil di dalam transaksi. Invoice tidak pernah dihapus, jadi hitungan aman dipakai sebagai urutan.
+     * Kode cabang hanya [A-Z0-9], jadi aman dipakai di LIKE.
+     */
+    public static function nextNumber(?string $branchCode = null): string
+    {
+        $prefix = 'INV/'.($branchCode ? $branchCode.'/' : '').now()->format('Ym').'/';
         $count = static::where('number', 'like', $prefix.'%')->lockForUpdate()->count();
 
         return $prefix.str_pad((string) ($count + 1), 4, '0', STR_PAD_LEFT);
