@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
 
 class TrialSlot extends Model
 {
@@ -45,6 +46,23 @@ class TrialSlot extends Model
     }
 
     /** Slot yang masih bisa dipesan publik: dibuka, belum mulai, masih ada kursi, program dan cabang aktif. */
+    /**
+     * Booking diserialkan per slot: kunci baris slot lebih dulu, baru cek ulang kelayakan dan sisa kursi
+     * (pembacaan kedua ini harus yang pertama bersifat non-locking, supaya melihat booking yang baru di-commit).
+     * Dipanggil di dalam transaksi (form trial publik dan portal orang tua).
+     */
+    public static function lockBookable(int $id): self
+    {
+        self::whereKey($id)->lockForUpdate()->first();
+
+        $slot = self::bookable()->find($id);
+        if (! $slot) {
+            throw ValidationException::withMessages(['trial_slot_id' => ['Slot trial tidak tersedia atau sudah penuh.']]);
+        }
+
+        return $slot;
+    }
+
     public function scopeBookable(Builder $query): Builder
     {
         return $query->where('trial_slots.is_open', true)

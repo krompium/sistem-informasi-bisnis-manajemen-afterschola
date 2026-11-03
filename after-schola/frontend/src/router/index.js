@@ -5,7 +5,6 @@ import LandingPage from '@/views/public/LandingPage.vue'
 import LoginView from '@/views/LoginView.vue'
 import TrainerDashboardView from '@/views/TrainerDashboardView.vue'
 import ManagementDashboardView from '@/views/ManagementDashboardView.vue'
-import PlaceholderView from '@/views/PlaceholderView.vue'
 import ManagementScheduleView from '@/views/management/ScheduleView.vue'
 import ManagementTrainerAssignmentView from '@/views/management/TrainerAssignmentView.vue'
 import ManagementSchoolsAdminView from '@/views/management/SchoolsAdminView.vue'
@@ -17,12 +16,25 @@ import ManagementEnrollmentView from '@/views/management/EnrollmentView.vue'
 import ManagementVerificationView from '@/views/management/VerificationView.vue'
 import ManagementInvoicesView from '@/views/management/InvoicesView.vue'
 import ManagementAgingReportView from '@/views/management/AgingReportView.vue'
+import ManagementIncomeReportView from '@/views/management/IncomeReportView.vue'
+import PortalDashboardView from '@/views/portal/PortalDashboardView.vue'
+import PortalChildDetailView from '@/views/portal/ChildDetailView.vue'
+import PortalRegistrationFormView from '@/views/portal/RegistrationFormView.vue'
+import PortalInvoicesView from '@/views/portal/InvoicesView.vue'
+import PortalScheduleView from '@/views/portal/ScheduleView.vue'
+import PortalNotificationsView from '@/views/portal/NotificationsView.vue'
+import ManagementIntegrationTokensView from '@/views/management/IntegrationTokensView.vue'
 import TrainerScheduleView from '@/views/trainer/ScheduleView.vue'
+import TrainerClassSessionsView from '@/views/trainer/ClassSessionsView.vue'
+import TrainerClassSessionView from '@/views/trainer/ClassSessionView.vue'
+import TrainerAttendanceRecapView from '@/views/trainer/AttendanceRecapView.vue'
 import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
 import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
 import SessionAttendanceView from '@/views/SessionAttendanceView.vue'
 import ExpoReportsView from '@/views/ExpoReportsView.vue'
 import TrialEvaluationsView from '@/views/TrialEvaluationsView.vue'
+import ProgressNotesView from '@/views/ProgressNotesView.vue'
+import EvaluationsView from '@/views/EvaluationsView.vue'
 import TrialRegistrationView from '@/views/public/TrialRegistrationView.vue'
 import ResetPasswordView from '@/views/public/ResetPasswordView.vue'
 import ManagementProgramView from '@/views/management/ProgramManagementView.vue'
@@ -38,6 +50,11 @@ import ProjectCalendarView from '@/views/projects/ProjectCalendarView.vue'
 import ProjectGanttView from '@/views/projects/ProjectGanttView.vue'
 import ManagementBranchesView from '@/views/management/BranchesView.vue'
 import ManagementTrialSlotsView from '@/views/management/TrialSlotsView.vue'
+import ManagementClassGroupsView from '@/views/management/ClassGroupsView.vue'
+import ManagementReportReviewView from '@/views/management/ReportReviewView.vue'
+import ManagementPlacementView from '@/views/management/PlacementView.vue'
+import ManagementSchedulesView from '@/views/management/SchedulesView.vue'
+import ManagementAttendanceReportView from '@/views/management/AttendanceReportView.vue'
 import ManagementLeadsView from '@/views/management/LeadsView.vue'
 
 // 1) Import, di dekat import view publik lain
@@ -79,6 +96,9 @@ const routes = [
       { path: 'trainer/sekolah', name: 'trainer.schools', component: TrainerSchoolsView },
       { path: 'trainer/jadwal', name: 'trainer.schedule', component: TrainerScheduleView },
       { path: 'trainer/absensi', name: 'trainer.attendance', component: AttendanceSessionsView },
+      { path: 'trainer/sesi-kelas', name: 'trainer.class-sessions', component: TrainerClassSessionsView },
+      { path: 'trainer/sesi-kelas/:id', name: 'trainer.class-session', component: TrainerClassSessionView },
+      { path: 'trainer/rekap', name: 'trainer.recap', component: TrainerAttendanceRecapView },
       {
         path: 'trainer/absensi/:id',
         name: 'trainer.attendance.session',
@@ -86,6 +106,8 @@ const routes = [
       },
       { path: 'trainer/laporan-ekspo', name: 'trainer.expo', component: ExpoReportsView },
       { path: 'trainer/evaluasi-trial', name: 'trainer.trial', component: TrialEvaluationsView },
+      { path: 'trainer/catatan-progres', name: 'trainer.progress-notes', component: ProgressNotesView },
+      { path: 'trainer/evaluasi-siswa', name: 'trainer.evaluations', component: EvaluationsView },
 
             // ---- Developer (Modul 12: Manajemen Proyek) ----
       
@@ -98,13 +120,13 @@ const routes = [
       
 	  
 
-      // ---- Orang Tua (portal belum dibangun: Fase 2) ----
-      {
-        path: 'portal',
-        name: 'portal.dashboard',
-        component: PlaceholderView,
-        meta: { title: 'Portal Orang Tua', icon: 'family_restroom' },
-      },
+      // ---- Orang Tua (Portal) ----
+      { path: 'portal', name: 'portal.dashboard', component: PortalDashboardView },
+      { path: 'portal/anak/:id', name: 'portal.child', component: PortalChildDetailView },
+      { path: 'portal/anak/:id/pendaftaran', name: 'portal.registration', component: PortalRegistrationFormView },
+      { path: 'portal/tagihan', name: 'portal.invoices', component: PortalInvoicesView },
+      { path: 'portal/jadwal', name: 'portal.schedule', component: PortalScheduleView },
+      { path: 'portal/notifikasi', name: 'portal.notifications', component: PortalNotificationsView },
 
       // ---- Management ----
       { path: 'management', name: 'management.dashboard', component: ManagementDashboardView },
@@ -132,6 +154,8 @@ const routes = [
       { path: 'management/verifikasi-pendaftaran', name: 'management.verification', component: ManagementVerificationView },
       { path: 'management/invoice', name: 'management.invoices', component: ManagementInvoicesView },
       { path: 'management/umur-piutang', name: 'management.aging', component: ManagementAgingReportView },
+      { path: 'management/laporan-pemasukan', name: 'management.income', component: ManagementIncomeReportView },
+      { path: 'management/integrasi', name: 'management.integrations', component: ManagementIntegrationTokensView },
       { path: 'management/pengaturan-pembayaran', name: 'management.payment-settings', component: ManagementPaymentSettingsView },
       { path: 'management/hot-issue', name: 'management.hot-issues', component: ManagementHotIssuesView },
       {
@@ -157,6 +181,40 @@ const routes = [
         name: 'management.trial-slots',
         component: ManagementTrialSlotsView,
         meta: { title: 'Slot Trial', icon: 'event_available' },
+      },
+      {
+        path: 'management/kelas',
+        name: 'management.class-groups',
+        component: ManagementClassGroupsView,
+        meta: { title: 'Kelas', icon: 'school' },
+      },
+      {
+        path: 'management/penempatan',
+        name: 'management.placement',
+        component: ManagementPlacementView,
+        meta: { title: 'Penempatan Siswa', icon: 'how_to_reg' },
+      },
+      {
+        path: 'management/jadwal-kelas',
+        name: 'management.schedules',
+        component: ManagementSchedulesView,
+        meta: { title: 'Jadwal Sesi', icon: 'event' },
+      },
+      {
+        path: 'management/raport',
+        name: 'management.report-review',
+        component: ManagementReportReviewView,
+        meta: { title: 'Tinjau Raport', icon: 'fact_check' },
+      },
+      {
+        path: 'management/catatan-progres',
+        name: 'management.progress-notes',
+        component: ProgressNotesView,
+        meta: { title: 'Catatan Progres', icon: 'edit_note' },
+        path: 'management/rekap-absensi',
+        name: 'management.attendance-report',
+        component: ManagementAttendanceReportView,
+        meta: { title: 'Rekap Absensi', icon: 'fact_check' },
       },
       {
         path: 'management/program',

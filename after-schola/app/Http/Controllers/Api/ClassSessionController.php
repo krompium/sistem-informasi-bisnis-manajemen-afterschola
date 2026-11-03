@@ -17,7 +17,8 @@ class ClassSessionController extends Controller
     {
         $user = $request->user();
 
-        $query = ClassSession::query()
+        // Hanya pertemuan jalur sekolah; sesi kelas reguler ada di /class-sessions.
+        $query = ClassSession::query()->whereNotNull('school_id')
             ->with(['school', 'classroom', 'trainer'])
             ->withCount(['studentAttendances as present_count' => fn ($q) => $q->where('is_present', true)]);
 

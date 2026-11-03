@@ -158,7 +158,7 @@ class EnrollmentFlowTest extends TestCase
         $parent = $evaluation->lead->parent;
         Sanctum::actingAs($this->staff('assigned', [$this->bdg->id]));
 
-        $this->getJson('/api/enrollments')->assertOk()
+        $this->getJson('/api/enrollment-decisions')->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.recommended_level', 'Dasar')
             ->assertJsonPath('data.0.prefill.student_name', 'Budi')
@@ -178,7 +178,7 @@ class EnrollmentFlowTest extends TestCase
             'participant_name' => 'Lama', 'trainer_id' => User::role('trainer')->first()->id,
             'trial_date' => '2026-09-01', 'attendance' => 'hadir',
         ]);
-        $names = fn () => collect($this->getJson('/api/enrollments')->assertOk()->json('data'))->pluck('participant_name')->sort()->values()->all();
+        $names = fn () => collect($this->getJson('/api/enrollment-decisions')->assertOk()->json('data'))->pluck('participant_name')->sort()->values()->all();
 
         Sanctum::actingAs($this->staff('assigned', [$this->bdg->id]));
         $this->assertSame(['Budi'], $names());
@@ -280,7 +280,7 @@ class EnrollmentFlowTest extends TestCase
 
         foreach (['trainer', 'parent'] as $role) {
             Sanctum::actingAs($this->makeStaff($role, 'assigned', [$this->bdg->id]));
-            $this->getJson('/api/enrollments')->assertStatus(403);
+            $this->getJson('/api/enrollment-decisions')->assertStatus(403);
             $this->decide($evaluation)->assertStatus(403);
             $this->putJson("/api/trial-evaluations/{$evaluation->id}/registration", $this->registrationPayload())->assertStatus(403);
         }

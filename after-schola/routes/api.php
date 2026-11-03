@@ -7,8 +7,17 @@ use App\Http\Controllers\Api\ClassroomController;
 use App\Http\Controllers\Api\ClassSessionController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EnrollmentController;
+use App\Http\Controllers\Api\EnrollmentDecisionController;
+use App\Http\Controllers\Api\EvaluationController;
 use App\Http\Controllers\Api\FinanceReportController;
+use App\Http\Controllers\Api\IncomeExportController;
+use App\Http\Controllers\Api\IntegrationFinanceController;
+use App\Http\Controllers\Api\IntegrationTokenController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\ParentChildController;
+use App\Http\Controllers\Api\ParentInvoiceController;
+use App\Http\Controllers\Api\ParentRegistrationController;
+use App\Http\Controllers\Api\ParentScheduleController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentSettingController;
 use App\Http\Controllers\Api\RegistrationController;
@@ -21,6 +30,16 @@ use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\TrainerAttendanceController;
 use App\Http\Controllers\Api\TrainerTrialController;
 use App\Http\Controllers\Api\TrialEvaluationController;
+use App\Http\Controllers\Api\ClassGroupController;
+use App\Http\Controllers\Api\ClassGroupEnrollmentController;
+use App\Http\Controllers\Api\ClassGroupSessionController;
+use App\Http\Controllers\Api\ClassSessionAttendanceController;
+use App\Http\Controllers\Api\ClassSessionTrainerAttendanceController;
+use App\Http\Controllers\Api\PlacementCandidateController;
+use App\Http\Controllers\Api\RegularAttendanceExportController;
+use App\Http\Controllers\Api\RegularAttendanceReportController;
+use App\Http\Controllers\Api\TrainerAssignmentController;
+use App\Http\Controllers\Api\TrainerAttendanceRecapController;
 use App\Http\Controllers\Api\TrialSlotController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -28,6 +47,8 @@ use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\LeadExportController;
 use App\Http\Controllers\Api\ProgramController;
 use App\Http\Controllers\Api\ProgramLevelController;
+use App\Http\Controllers\Api\ProgressNoteController;
+use App\Http\Controllers\Api\ProgressReportController;
 use App\Http\Controllers\Api\RubricCriterionController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TeamController;
@@ -59,7 +80,14 @@ Route::middleware('throttle:60,1')->group(function () {
 });
 
 // --- Butuh autentikasi (Sanctum) ---
-Route::middleware('auth:sanctum')->group(function () {
+// API integrasi Tim Keuangan (SYS-05): hanya token ber-ability finance:read milik akun Keuangan; read-only, dibatasi cabang.
+Route::middleware(['auth:sanctum', 'abilities:finance:read', 'permission:view finance reports'])->prefix('integration/v1')->group(function () {
+    Route::get('/invoices', [IntegrationFinanceController::class, 'invoices']);
+    Route::get('/payments', [IntegrationFinanceController::class, 'payments']);
+});
+
+// API staf dan portal: token ber-ability terbatas (integrasi) ditolak.
+Route::middleware(['auth:sanctum', 'full.token'])->group(function () {
     // Sesi & profil
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -136,13 +164,28 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Keputusan lanjut/tidak + Pendaftaran Resmi (Modul 4) — hanya Management
     Route::middleware('permission:manage enrollment')->group(function () {
-        Route::get('/enrollments', [EnrollmentController::class, 'index']);
-        Route::put('/trial-evaluations/{trialEvaluation}/decision', [EnrollmentController::class, 'saveDecision']);
-        Route::put('/trial-evaluations/{trialEvaluation}/registration', [EnrollmentController::class, 'saveRegistration']);
-        Route::post('/trial-evaluations/{trialEvaluation}/registration/submit', [EnrollmentController::class, 'submitRegistration']);
+        Route::get('/enrollment-decisions', [EnrollmentDecisionController::class, 'index']);
+        Route::put('/trial-evaluations/{trialEvaluation}/decision', [EnrollmentDecisionController::class, 'saveDecision']);
+        Route::put('/trial-evaluations/{trialEvaluation}/registration', [EnrollmentDecisionController::class, 'saveRegistration']);
+        Route::post('/trial-evaluations/{trialEvaluation}/registration/submit', [EnrollmentDecisionController::class, 'submitRegistration']);
     });
 
     // Verifikasi & Pembayaran (Modul 5)
+    // Portal Orang Tua (PRD 6.2): hanya role parent; kepemilikan anak dijaga query (404).
+    Route::middleware('role:parent')->prefix('parent')->group(function () {
+        Route::get('/children', [ParentChildController::class, 'index']);
+        Route::post('/children', [ParentChildController::class, 'store']);
+        Route::get('/children/{child}', [ParentChildController::class, 'show'])->whereNumber('child');
+        Route::post('/children/{child}/decision', [ParentChildController::class, 'decision'])->whereNumber('child');
+        Route::get('/children/{child}/registration', [ParentRegistrationController::class, 'show'])->whereNumber('child');
+        Route::put('/children/{child}/registration', [ParentRegistrationController::class, 'save'])->whereNumber('child');
+        Route::post('/children/{child}/registration/submit', [ParentRegistrationController::class, 'submit'])->whereNumber('child');
+        Route::get('/schedule', [ParentScheduleController::class, 'index']);
+        Route::get('/invoices', [ParentInvoiceController::class, 'index']);
+        Route::post('/invoices/{invoice}/payments', [ParentInvoiceController::class, 'pay'])->whereNumber('invoice');
+        Route::get('/invoices/{invoice}/receipt', [ParentInvoiceController::class, 'receipt'])->whereNumber('invoice');
+    });
+
     Route::middleware('permission:verify registrations')->group(function () {
         Route::get('/registrations', [RegistrationController::class, 'index']);
         Route::post('/registrations/{registration}/approve', [RegistrationController::class, 'approve']);
@@ -151,6 +194,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('permission:manage invoices')->group(function () {
         Route::get('/invoices', [InvoiceController::class, 'index']);
         Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
+        Route::get('/invoices/{invoice}/receipt', [InvoiceController::class, 'receipt']);
         Route::post('/invoices/{invoice}/payments', [PaymentController::class, 'store']);
         Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'void']);
         Route::get('/payment-settings', [PaymentSettingController::class, 'show']);
@@ -161,6 +205,18 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/payments/{payment}/reject', [PaymentController::class, 'reject']);
     });
     Route::get('/finance/aging', [FinanceReportController::class, 'aging'])->middleware('permission:view finance reports');
+    Route::middleware('permission:view finance reports')->group(function () {
+        Route::get('/finance/income', [FinanceReportController::class, 'income']);
+        Route::get('/exports/income/excel', [IncomeExportController::class, 'excel']);
+        Route::get('/exports/income/pdf', [IncomeExportController::class, 'pdf']);
+    });
+
+    // Token integrasi Tim Keuangan (SYS-05).
+    Route::middleware('permission:manage integrations')->group(function () {
+        Route::get('/integration-tokens', [IntegrationTokenController::class, 'index']);
+        Route::post('/integration-tokens', [IntegrationTokenController::class, 'store']);
+        Route::delete('/integration-tokens/{id}', [IntegrationTokenController::class, 'destroy']);
+    });
 
     // Kelola user & role — hanya Management
     // Daftar user juga dipakai dropdown di halaman Management lain (trainer, developer): terbuka
@@ -216,6 +272,83 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('permission:manage trial slots|manage leads');
     Route::middleware('permission:manage trial slots')->group(function () {
         Route::apiResource('trial-slots', TrialSlotController::class);
+    });
+
+    // Kelas dan penugasan trainer (Modul 6a, MGT-30/33). Baca: staf per cabang, trainer per penugasan (Policy + query).
+    // `options` harus sebelum {class_group}.
+    Route::get('/class-groups/options', [ClassGroupController::class, 'options'])->middleware('permission:manage classes|assign trainers|manage schedule');
+    Route::get('/class-groups', [ClassGroupController::class, 'index']);
+    Route::get('/class-groups/{class_group}', [ClassGroupController::class, 'show']);
+    Route::post('/class-groups', [ClassGroupController::class, 'store'])->middleware('permission:manage classes');
+    Route::put('/class-groups/{class_group}', [ClassGroupController::class, 'update'])->middleware('permission:manage classes');
+    Route::apiResource('trainer-assignments', TrainerAssignmentController::class)->only(['store', 'update', 'destroy'])
+        ->middleware('permission:assign trainers');
+
+    // Sesi dan jadwal kelas reguler (Modul 6c, MGT-34/35/36). Pertemuan sekolah tetap di /sessions.
+    Route::get('/class-sessions', [ClassGroupSessionController::class, 'index']);
+    Route::get('/class-sessions/{class_session}', [ClassGroupSessionController::class, 'show']);
+    Route::post('/class-sessions', [ClassGroupSessionController::class, 'store'])->middleware('permission:manage schedule');
+    Route::put('/class-sessions/{class_session}', [ClassGroupSessionController::class, 'update'])->middleware('permission:manage schedule');
+    // Absensi siswa dan kunci sesi reguler (Modul 7a). Otorisasi lewat ClassSessionPolicy.
+    Route::get('/class-sessions/{class_session}/student-attendances', [ClassSessionAttendanceController::class, 'index']);
+    Route::put('/class-sessions/{class_session}/student-attendances', [ClassSessionAttendanceController::class, 'sync']);
+    // Check-in trainer sesi reguler (Modul 7b). Otorisasi lewat ClassSessionPolicy.
+    Route::get('/class-sessions/{class_session}/trainer-attendance', [ClassSessionTrainerAttendanceController::class, 'show']);
+    Route::post('/class-sessions/{class_session}/trainer-attendance', [ClassSessionTrainerAttendanceController::class, 'store']);
+    Route::post('/class-sessions/{class_session}/lock', [ClassGroupSessionController::class, 'lock']);
+    Route::post('/class-sessions/{class_session}/unlock', [ClassGroupSessionController::class, 'unlock']);
+
+    // Rekap dan monitoring absensi reguler (Modul 7c). Scope cabang di RegularAttendanceReport.
+    Route::middleware('permission:view all attendance|manage schedule')->group(function () {
+        Route::get('/regular-attendance/recap', [RegularAttendanceReportController::class, 'recap']);
+        Route::get('/regular-attendance/students/{student}', [RegularAttendanceReportController::class, 'student']);
+        Route::get('/regular-attendance/trainers/missing-today', [RegularAttendanceReportController::class, 'missingToday']);
+        Route::get('/exports/regular-attendance/excel', [RegularAttendanceExportController::class, 'studentExcel']);
+        Route::get('/exports/regular-attendance/pdf', [RegularAttendanceExportController::class, 'studentPdf']);
+    });
+    // Rekap absensi trainer juga untuk Keuangan (KEU-08, bagian Excel; API integrasi di Fase 3).
+    Route::middleware('permission:view all attendance|manage schedule|export trainer attendance')->group(function () {
+        Route::get('/regular-attendance/trainers', [RegularAttendanceReportController::class, 'trainers']);
+        Route::get('/exports/regular-attendance/trainers/excel', [RegularAttendanceExportController::class, 'trainerExcel']);
+    });
+
+    // Rekap dan riwayat absensi reguler untuk trainer sendiri (Modul 7d, TRN-11/12).
+    Route::middleware('role:trainer')->group(function () {
+        Route::get('/trainer/recap', [TrainerAttendanceRecapController::class, 'recap']);
+        Route::get('/trainer/class-history', [TrainerAttendanceRecapController::class, 'classHistory']);
+        Route::get('/exports/trainer/recap/excel', [RegularAttendanceExportController::class, 'ownTrainerExcel']);
+    });
+
+    // Penempatan siswa ke kelas (Modul 6b, MGT-31/32).
+    Route::middleware('permission:manage classes')->group(function () {
+        Route::get('/placement-candidates', [PlacementCandidateController::class, 'index']);
+        Route::get('/enrollments', [EnrollmentController::class, 'index']);
+        Route::post('/enrollments', [EnrollmentController::class, 'store']);
+    });
+
+    // Roster kelas (TRN-03) dan catatan progres (Modul 8, TRN-08/MGT-44). Baca: trainer + Management, isolasi di query/Policy.
+    Route::get('/class-groups/{class_group}/enrollments', ClassGroupEnrollmentController::class);
+    Route::middleware('role:trainer|management')->get('/progress-notes', [ProgressNoteController::class, 'index']);
+    Route::middleware('role:trainer')->group(function () {
+        Route::post('/progress-notes', [ProgressNoteController::class, 'store']);
+        Route::put('/progress-notes/{progress_note}', [ProgressNoteController::class, 'update']);
+    });
+
+    // Evaluasi periodik (Modul 9a, TRN-09/TRN-10). Baca: trainer (miliknya) + peninjau; tulis: trainer.
+    Route::middleware('role:trainer|management')->group(function () {
+        Route::get('/evaluations', [EvaluationController::class, 'index']);
+        Route::get('/evaluations/{evaluation}', [EvaluationController::class, 'show']);
+    });
+    Route::middleware('role:trainer')->group(function () {
+        Route::post('/evaluations', [EvaluationController::class, 'store']);
+        Route::put('/evaluations/{evaluation}', [EvaluationController::class, 'update']);
+        Route::post('/progress-reports/{progress_report}/submit', [ProgressReportController::class, 'submit']);
+    });
+    // Tinjau raport (Modul 9b, MGT-50/51): koordinator dengan `review reports`, per cabang.
+    Route::middleware('permission:review reports')->group(function () {
+        Route::get('/progress-reports', [ProgressReportController::class, 'index']);
+        Route::post('/progress-reports/{progress_report}/approve', [ProgressReportController::class, 'approve']);
+        Route::post('/progress-reports/{progress_report}/return', [ProgressReportController::class, 'sendBack']);
     });
 
     // Calon dan leads (Modul 2, MGT-21/22) — scope cabang dijaga query + Policy.

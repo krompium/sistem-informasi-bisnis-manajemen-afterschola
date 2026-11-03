@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Student;
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 
 class StudentPolicy
 {
@@ -15,6 +16,14 @@ class StudentPolicy
     public function view(User $user, Student $student): bool
     {
         return $user->handlesSchool($student->school_id);
+    }
+
+    // Siswa reguler (Modul 7c): hanya yang berada di cabang user. Murid sekolah (tanpa cabang) bukan bagiannya: 404.
+    public function viewRegular(User $user, Student $student): Response
+    {
+        return $student->branch_id !== null && $user->handlesBranch($student->branch_id)
+            ? Response::allow()
+            : Response::denyAsNotFound();
     }
 
     /**

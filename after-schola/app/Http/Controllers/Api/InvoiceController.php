@@ -5,12 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\InvoiceResource;
 use App\Models\Invoice;
+use App\Support\ReceiptPdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Modul 5 (bagian invoice): daftar, detail, batalkan.
+ * Modul 5 (bagian invoice): daftar, detail, batalkan, kuitansi.
  * Hak akses: permission "manage invoices" (dipasang di routes).
  */
 class InvoiceController extends Controller
@@ -25,7 +26,7 @@ class InvoiceController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = Invoice::query()->with(self::WITH);
+        $query = Invoice::visibleTo($request->user())->with(self::WITH);
 
         if ($request->filled('status')) {
             $query->where('status', $request->string('status')->toString());
@@ -44,6 +45,8 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
+        $this->authorize('view', $invoice);
+
         return new InvoiceResource($invoice->load(self::WITH));
     }
 
@@ -52,6 +55,7 @@ class InvoiceController extends Controller
      */
     public function void(Request $request, Invoice $invoice)
     {
+        $this->authorize('view', $invoice); // sebelum validasi: di luar cabang harus 404, bukan 422
         $data = $request->validate([
             'reason' => ['required', 'string', 'max:500'],
         ]);
@@ -77,5 +81,13 @@ class InvoiceController extends Controller
         });
 
         return new InvoiceResource($invoice->fresh(self::WITH));
+    }
+
+    /** Kuitansi PDF (KEU-03): hanya untuk invoice Lunas. */
+    public function receipt(Invoice $invoice, ReceiptPdf $receipt)
+    {
+        $this->authorize('view', $invoice);
+
+        return $receipt->download($invoice);
     }
 }

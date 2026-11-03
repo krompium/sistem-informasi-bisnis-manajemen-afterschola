@@ -35,7 +35,7 @@ async function load() {
     const params = {}
     if (search.value.trim()) params.q = search.value.trim()
     if (filterStatus.value) params.status = filterStatus.value
-    const { data } = await api.get('/enrollments', { params })
+    const { data } = await api.get('/enrollment-decisions', { params })
     rows.value = unwrap(data)
   } finally {
     loading.value = false

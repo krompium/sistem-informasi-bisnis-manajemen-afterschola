@@ -3,21 +3,23 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\IncomeReportRequest;
 use App\Http\Resources\InvoiceResource;
 use App\Models\Invoice;
+use App\Support\IncomeReport;
+use Illuminate\Http\Request;
 
 /**
  * Laporan keuangan. Hak akses: permission "view finance reports" (dipasang di routes).
- * TODO(nanti): laporan pemasukan per periode (PRD KEU-07) dan filter cabang.
  */
 class FinanceReportController extends Controller
 {
     /**
      * Umur piutang: invoice unpaid dikelompokkan menurut hari keterlambatan dari jatuh tempo.
      */
-    public function aging()
+    public function aging(Request $request)
     {
-        $invoices = Invoice::query()->with('registration.program')
+        $invoices = Invoice::visibleTo($request->user())->with('registration.program')
             ->where('status', 'unpaid')->orderBy('due_date')->get();
 
         $empty = fn () => ['count' => 0, 'total' => 0.0];
@@ -47,5 +49,15 @@ class FinanceReportController extends Controller
             'total' => $total,
             'invoices' => InvoiceResource::collection($invoices)->resolve(),
         ]]);
+    }
+
+    /**
+     * Laporan pemasukan per periode, cabang, dan program (KEU-07). Export: IncomeExportController.
+     */
+    public function income(IncomeReportRequest $request)
+    {
+        $report = IncomeReport::fromRequest($request);
+
+        return response()->json(['data' => $report->summary() + ['options' => $report->options()]]);
     }
 }
