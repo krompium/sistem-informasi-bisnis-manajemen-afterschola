@@ -37,10 +37,20 @@ class RegularAttendanceExportController extends Controller
     /** KEU-08 (bagian Excel): rekap absensi trainer untuk honor; sesi tanpa check-in ikut sebagai "Belum check-in". */
     public function trainerExcel(Request $request)
     {
-        $report = RegularAttendanceReport::fromRequest($request);
+        return $this->trainerWorkbook(RegularAttendanceReport::fromRequest($request), 'rekap-absensi-trainer');
+    }
+
+    /** TRN-11: trainer mengekspor rekap kehadirannya sendiri. */
+    public function ownTrainerExcel(Request $request)
+    {
+        return $this->trainerWorkbook(RegularAttendanceReport::forTrainer($request, 'own'), 'rekap-absensi-saya');
+    }
+
+    private function trainerWorkbook(RegularAttendanceReport $report, string $kind)
+    {
         $zone = config('app.display_timezone');
 
-        return $this->xlsx($report->filenameBase('rekap-absensi-trainer'),
+        return $this->xlsx($report->filenameBase($kind),
             ['Tanggal', 'Jam', 'Kelas', 'Cabang', 'Trainer', 'Status', 'Waktu Check-in', 'GPS', 'Catatan'],
             $report->trainerRows()->map(fn (array $r) => [
                 Carbon::parse($r['date'])->format('d/m/Y'),

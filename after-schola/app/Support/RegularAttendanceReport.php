@@ -14,8 +14,10 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
- * Rekap dan monitoring absensi reguler (Modul 7c, MGT-40..43, KEU-08). Dipakai JSON, Excel, dan PDF
- * agar angkanya selalu sama. Dibatasi cabang user (BR-19); "hari ini" mengikuti Asia/Jakarta.
+ * Rekap dan monitoring absensi reguler (Modul 7c, MGT-40..43, KEU-08; sisi trainer 7d, TRN-11/12). Dipakai JSON,
+ * Excel, dan PDF agar angkanya selalu sama. Scope data: 'branch' = cabang user (BR-19, Management/Keuangan),
+ * 'own' = sesi yang dijalankan trainer itu sendiri, 'classes' = sesi kelas yang ditugaskan atau ia isi sebagai pengganti.
+ * "Hari ini" mengikuti Asia/Jakarta.
  *
  * Aturan hitung rekap siswa: hanya sesi yang sudah lewat DAN sudah dicatat (dikunci atau punya baris absensi);
  * sesi yang trainer-nya belum mengabsen tidak menghukum siswa. Siswa dihitung pada sesi yang tanggalnya
@@ -33,7 +35,7 @@ class RegularAttendanceReport
     public readonly string $to;
 
     /** @param array{from?: string, to?: string, branch_id?: ?int, class_group_id?: ?int, trainer_id?: ?int} $filters */
-    public function __construct(private User $user, private array $filters = [])
+    public function __construct(private User $user, private array $filters = [], private string $scope = 'branch')
     {
         $this->from = $filters['from'] ?? $this->today();
         $this->to = $filters['to'] ?? $this->today();
@@ -49,6 +51,16 @@ class RegularAttendanceReport
             'class_group_id' => ['nullable', 'integer', 'exists:class_groups,id'],
             'trainer_id' => ['nullable', 'integer', 'exists:users,id'],
         ]));
+    }
+
+    /** Versi trainer (7d): validasi periode (+ filter kelas) lalu bentuk laporan ber-scope 'own' atau 'classes'. */
+    public static function forTrainer(Request $request, string $scope): self
+    {
+        return new self($request->user(), $request->validate([
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'class_group_id' => ['nullable', 'integer', 'exists:class_groups,id'],
+        ]), $scope);
     }
 
     public function filenameBase(string $kind): string
@@ -127,6 +139,28 @@ class RegularAttendanceReport
             ->map(fn (ClassSession $s) => self::trainerRow($s));
     }
 
+    /** TRN-12: riwayat absensi siswa per sesi (terbaru dulu) pada kelas yang boleh dilihat trainer. */
+    public function classHistory(): Collection
+    {
+        $sessions = $this->sessions()->with('studentAttendances', 'classGroup:id,name', 'trainer:id,name')
+            ->orderByDesc('date')->orderByDesc('start_time')->orderByDesc('id')->get();
+        $enrollments = Enrollment::whereIn('class_group_id', $sessions->pluck('class_group_id')->unique())->get()->groupBy('class_group_id');
+
+        return $sessions->map(fn (ClassSession $s) => [
+            'session_id' => $s->id,
+            'date' => $s->date->toDateString(),
+            'start_time' => substr($s->start_time, 0, 5),
+            'end_time' => substr($s->end_time, 0, 5),
+            'meeting_no' => $s->meeting_no,
+            'class_group' => ['id' => $s->classGroup->id, 'name' => $s->classGroup->name],
+            'trainer' => ['id' => $s->trainer->id, 'name' => $s->trainer->name],
+            'is_locked' => $s->is_locked,
+            'status' => $s->is_locked || $s->studentAttendances->isNotEmpty() ? 'dicatat' : 'belum_dicatat',
+            'present_count' => $s->studentAttendances->where('is_present', true)->count(),
+            'total' => $enrollments->get($s->class_group_id, collect())->filter(fn (Enrollment $e) => $e->coversDate($s->date))->count(),
+        ])->values();
+    }
+
     /** @return Collection<int, array> ringkasan per trainer dari hasil trainerRows() */
     public function trainerSummary(Collection $rows): Collection
     {
@@ -180,10 +214,15 @@ class RegularAttendanceReport
         $to = min($this->to, $today);
 
         $query = ClassSession::query()->whereNotNull('class_sessions.class_group_id')
-            ->whereDate('date', '>=', $this->from)->whereDate('date', '<=', $to)
-            ->whereHas('classGroup', fn (Builder $group) => $group->inBranchesOf($this->user)
-                ->when($this->filters['branch_id'] ?? null, fn (Builder $q, $id) => $q->where('branch_id', $id)))
-            ->when($this->filters['class_group_id'] ?? null, fn (Builder $q, $id) => $q->where('class_group_id', $id));
+            ->whereDate('date', '>=', $this->from)->whereDate('date', '<=', $to);
+
+        $query = match ($this->scope) {
+            'own' => $query->where('class_sessions.trainer_id', $this->user->id),
+            'classes' => $query->visibleToRegular($this->user),
+            default => $query->whereHas('classGroup', fn (Builder $group) => $group->inBranchesOf($this->user)
+                ->when($this->filters['branch_id'] ?? null, fn (Builder $q, $id) => $q->where('branch_id', $id))),
+        };
+        $query->when($this->filters['class_group_id'] ?? null, fn (Builder $q, $id) => $q->where('class_sessions.class_group_id', $id));
 
         if ($startedOnly) {
             $nowTime = now(config('app.display_timezone'))->format('H:i');

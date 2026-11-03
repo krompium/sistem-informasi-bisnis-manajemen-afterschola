@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\PlacementCandidateController;
 use App\Http\Controllers\Api\RegularAttendanceExportController;
 use App\Http\Controllers\Api\RegularAttendanceReportController;
 use App\Http\Controllers\Api\TrainerAssignmentController;
+use App\Http\Controllers\Api\TrainerAttendanceRecapController;
 use App\Http\Controllers\Api\TrialSlotController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -269,6 +270,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('permission:view all attendance|manage schedule|export trainer attendance')->group(function () {
         Route::get('/regular-attendance/trainers', [RegularAttendanceReportController::class, 'trainers']);
         Route::get('/exports/regular-attendance/trainers/excel', [RegularAttendanceExportController::class, 'trainerExcel']);
+    });
+
+    // Rekap dan riwayat absensi reguler untuk trainer sendiri (Modul 7d, TRN-11/12).
+    Route::middleware('role:trainer')->group(function () {
+        Route::get('/trainer/recap', [TrainerAttendanceRecapController::class, 'recap']);
+        Route::get('/trainer/class-history', [TrainerAttendanceRecapController::class, 'classHistory']);
+        Route::get('/exports/trainer/recap/excel', [RegularAttendanceExportController::class, 'ownTrainerExcel']);
     });
 
     // Penempatan siswa ke kelas (Modul 6b, MGT-31/32).

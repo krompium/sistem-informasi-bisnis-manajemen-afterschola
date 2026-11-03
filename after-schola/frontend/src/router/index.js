@@ -21,6 +21,7 @@ import ManagementIncomeReportView from '@/views/management/IncomeReportView.vue'
 import TrainerScheduleView from '@/views/trainer/ScheduleView.vue'
 import TrainerClassSessionsView from '@/views/trainer/ClassSessionsView.vue'
 import TrainerClassSessionView from '@/views/trainer/ClassSessionView.vue'
+import TrainerAttendanceRecapView from '@/views/trainer/AttendanceRecapView.vue'
 import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
 import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
 import SessionAttendanceView from '@/views/SessionAttendanceView.vue'
@@ -88,6 +89,7 @@ const routes = [
       { path: 'trainer/absensi', name: 'trainer.attendance', component: AttendanceSessionsView },
       { path: 'trainer/sesi-kelas', name: 'trainer.class-sessions', component: TrainerClassSessionsView },
       { path: 'trainer/sesi-kelas/:id', name: 'trainer.class-session', component: TrainerClassSessionView },
+      { path: 'trainer/rekap', name: 'trainer.recap', component: TrainerAttendanceRecapView },
       {
         path: 'trainer/absensi/:id',
         name: 'trainer.attendance.session',

@@ -51,6 +51,7 @@ const trainerNav = [
   { label: 'Jadwal Saya', icon: 'calendar_month', to: '/trainer/jadwal' },
   { label: 'Absensi', icon: 'fact_check', to: '/trainer/absensi' },
   { label: 'Sesi Kelas', icon: 'groups', to: '/trainer/sesi-kelas' },
+  { label: 'Rekap Saya', icon: 'summarize', to: '/trainer/rekap' },
   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/trainer/laporan-ekspo' },
   { label: 'Evaluasi Trial', icon: 'rate_review', to: '/trainer/evaluasi-trial' },
 ]
