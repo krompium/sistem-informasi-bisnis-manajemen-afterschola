@@ -29,6 +29,16 @@ class Enrollment extends Model
         return $this->belongsTo(Student::class);
     }
 
+    /** Enrollment yang mencakup tanggal tertentu (BR-14): sudah mulai, dan belum berakhir atau masih aktif tanpa tanggal akhir. */
+    public function scopeActiveOn(Builder $query, \DateTimeInterface|string $date): Builder
+    {
+        $date = $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : $date;
+
+        return $query->whereDate('start_date', '<=', $date)
+            ->where(fn (Builder $q) => $q->whereDate('end_date', '>=', $date)
+                ->orWhere(fn (Builder $open) => $open->whereNull('end_date')->where('status', 'aktif')));
+    }
+
     /** Enrollment di kelas yang boleh dilihat user (cabang untuk staf, penugasan untuk trainer). */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {

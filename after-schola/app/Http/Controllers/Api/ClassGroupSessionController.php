@@ -70,4 +70,21 @@ class ClassGroupSessionController extends Controller
 
         return new ClassGroupSessionResource($classSession->load(self::WITH));
     }
+
+    // Kunci sesi (Modul 7a): setelah terkunci, jadwal dan absensi siswa tidak dapat diubah.
+    public function lock(ClassSession $classSession)
+    {
+        $this->authorize('lockRegular', $classSession);
+        $classSession->update(['is_locked' => true]);
+
+        return new ClassGroupSessionResource($classSession->load(self::WITH));
+    }
+
+    public function unlock(ClassSession $classSession)
+    {
+        $this->authorize('unlockRegular', $classSession);
+        $classSession->update(['is_locked' => false]);
+
+        return new ClassGroupSessionResource($classSession->load(self::WITH));
+    }
 }

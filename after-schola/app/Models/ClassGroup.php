@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class ClassGroup extends Model
 {
     /** Pemegang salah satu permission ini adalah staf kelas: dibatasi cabang, bukan penugasan. */
-    public const STAFF_PERMISSIONS = ['manage classes', 'assign trainers', 'manage schedule'];
+    public const STAFF_PERMISSIONS = ['manage classes', 'assign trainers', 'manage schedule', 'view all attendance'];
 
     protected $fillable = ['program_id', 'level_id', 'branch_id', 'name', 'capacity', 'is_active'];
 

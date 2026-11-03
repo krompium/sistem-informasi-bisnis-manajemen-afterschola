@@ -114,6 +114,16 @@ async function submit() {
   }
 }
 
+async function unlock(session) {
+  if (!window.confirm('Buka kunci sesi ini? Trainer dapat mengubah absensi kembali.')) return
+  try {
+    await api.post(`/class-sessions/${session.id}/unlock`)
+    await load()
+  } catch (err) {
+    window.alert(apiErrorMessage(err, 'Gagal membuka kunci sesi.'))
+  }
+}
+
 watch(() => form.class_group_id, () => {
   if (![...trainerGroups.value.assigned, ...trainerGroups.value.substitutes].some((t) => t.id === form.trainer_id)) form.trainer_id = ''
 })
@@ -191,7 +201,10 @@ onMounted(() => {
             </div>
             <div class="flex items-center gap-space-xs sm:ml-auto">
               <span v-if="s.is_substitute" class="rounded-full bg-secondary-container px-2 py-0.5 font-label-sm text-label-sm font-semibold text-on-secondary-container">Pengganti</span>
-              <span v-if="s.is_locked" class="material-symbols-outlined text-[18px] text-outline" title="Sesi dikunci">lock</span>
+              <button v-if="s.is_locked && canManage" class="rounded-lg p-1.5 text-outline hover:bg-surface-container" title="Sesi dikunci; klik untuk membuka kunci" @click="unlock(s)">
+                <span class="material-symbols-outlined text-[18px]">lock</span>
+              </button>
+              <span v-else-if="s.is_locked" class="material-symbols-outlined text-[18px] text-outline" title="Sesi dikunci">lock</span>
               <button v-else-if="canManage" class="rounded-lg p-1.5 text-secondary hover:bg-surface-container" title="Ubah sesi" @click="openForm(s)">
                 <span class="material-symbols-outlined text-[18px]">edit</span>
               </button>
