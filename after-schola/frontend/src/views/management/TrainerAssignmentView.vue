@@ -1,9 +1,12 @@
 <script setup>
 // Penugasan Trainer (Management) — tentukan trainer memegang sekolah apa saja.
 // Sinkron many-to-many via POST /schools/{id}/trainers.
+// Dipakai sebagai tab "Penugasan" di halaman Trainer (prop `embedded` = tanpa judul halaman sendiri).
 import { computed, onMounted, ref } from 'vue'
 import api from '@/lib/api'
 import { initials, unwrap } from '@/lib/format'
+
+defineProps({ embedded: { type: Boolean, default: false } })
 
 const loading = ref(true)
 const schools = ref([])
@@ -90,7 +93,8 @@ onMounted(loadBase)
       <span class="font-body-md text-body-md font-medium">{{ toast.message }}</span>
     </div>
 
-    <div class="flex flex-col gap-space-2xs py-space-xl">
+    <!-- Judul halaman (disembunyikan kalau dipakai sebagai tab di halaman Trainer) -->
+    <div v-if="!embedded" class="flex flex-col gap-space-2xs py-space-xl">
       <span class="font-label-sm text-label-sm font-semibold uppercase tracking-widest text-secondary"
         >Modul Absensi • Data Master</span
       >

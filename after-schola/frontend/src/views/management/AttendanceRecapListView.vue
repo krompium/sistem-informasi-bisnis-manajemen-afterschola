@@ -1,16 +1,39 @@
 <script setup>
-// Rekap Absensi (Management) — langkah 1: daftar sekolah + import absensi dari Excel.
-// Klik sekolah → halaman detail rekap sekolah tsb.
+// Rekap Absensi (Management) — 3 tab: Siswa (daftar sekolah + import Excel), Trainer, Karyawan.
+// Tab Siswa: klik sekolah → halaman detail rekap sekolah tsb.
+// Tab Trainer: daftar trainer → tabel sesi per trainer.
+// Tab Karyawan: belum ada pencatatan absensi, jadi "Segera Hadir".
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import api from '@/lib/api'
 import { unwrap } from '@/lib/format'
+import TrainerRecapList from '@/components/TrainerRecapList.vue'
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref(true)
 const errorMessage = ref('')
 const schools = ref([])
 const search = ref('')
+
+// ---- Tab: Siswa | Trainer | Karyawan (disimpan di URL: ?tab=trainer) ----
+const tabs = [
+  { key: 'siswa', label: 'Siswa', icon: 'school' },
+  { key: 'trainer', label: 'Trainer', icon: 'person' },
+  { key: 'karyawan', label: 'Karyawan', icon: 'badge' },
+]
+const tab = computed(() => (tabs.some((t) => t.key === route.query.tab) ? route.query.tab : 'siswa'))
+function setTab(key) {
+  router.replace({ query: key === 'siswa' ? {} : { tab: key } })
+}
+const subtitle = computed(
+  () =>
+    ({
+      siswa: 'Pilih sekolah untuk melihat rekap kehadiran murid dan mengunduhnya (Excel / PDF).',
+      trainer: 'Pilih trainer untuk melihat rekap sesi mengajarnya (tanggal, sekolah, mode, dan dokumentasi).',
+      karyawan: 'Rekap kehadiran karyawan.',
+    })[tab.value],
+)
 
 // ---- Import Absensi dari Excel ----
 const showImport = ref(false)
@@ -174,10 +197,11 @@ onMounted(load)
           Rekap Absensi
         </h1>
         <p class="font-body-md text-body-md text-on-surface-variant">
-          Pilih sekolah untuk melihat rekap kehadiran murid dan mengunduhnya (Excel / PDF).
+          {{ subtitle }}
         </p>
       </div>
       <button
+        v-if="tab === 'siswa'"
         class="inline-flex items-center gap-space-xs self-start rounded-xl bg-primary-container px-space-lg py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95 lg:self-center"
         @click="openImport"
       >
@@ -186,48 +210,76 @@ onMounted(load)
       </button>
     </div>
 
-    <div class="relative mb-space-lg w-full sm:max-w-sm">
-      <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline">search</span>
-      <input
-        v-model="search"
-        type="text"
-        placeholder="Cari sekolah…"
-        class="w-full rounded-xl bg-surface-container-lowest py-2.5 pl-9 pr-space-md font-body-md text-body-md text-on-surface shadow-sm placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary"
-      />
-    </div>
-
-    <div v-if="errorMessage" class="mb-space-lg flex items-center gap-space-sm rounded-2xl bg-error-container px-space-md py-space-sm text-on-error-container">
-      <span class="material-symbols-outlined">error</span>
-      <span class="font-body-md text-body-md">{{ errorMessage }}</span>
-      <button class="ml-auto font-label-md text-label-md font-semibold underline" @click="load">Muat ulang</button>
-    </div>
-
-    <div v-if="loading" class="grid grid-cols-1 gap-space-md sm:grid-cols-2 xl:grid-cols-3">
-      <div v-for="i in 3" :key="i" class="h-28 animate-pulse rounded-2xl bg-surface-container"></div>
-    </div>
-
-    <div v-else-if="!schools.length" class="rounded-2xl bg-surface-container-lowest px-space-lg py-space-2xl text-center">
-      <span class="material-symbols-outlined text-[36px] text-outline">domain_disabled</span>
-      <p class="mt-space-sm font-headline-sm text-headline-sm text-on-surface">Belum ada sekolah</p>
-    </div>
-
-    <div v-else class="grid grid-cols-1 gap-space-md sm:grid-cols-2 xl:grid-cols-3">
+    <!-- Tab: Siswa | Trainer | Karyawan -->
+    <div class="mb-space-lg inline-flex w-fit rounded-xl bg-surface-container-low p-1">
       <button
-        v-for="s in schools.filter((x) => x.name.toLowerCase().includes(search.toLowerCase()))"
-        :key="s.id"
-        class="group flex items-center gap-space-md rounded-2xl bg-surface-container-lowest p-space-lg text-left shadow-sm transition-all hover:shadow-md"
-        @click="open(s)"
+        v-for="t in tabs"
+        :key="t.key"
+        type="button"
+        class="inline-flex items-center gap-1.5 rounded-lg px-space-lg py-2 font-label-md text-label-md font-semibold transition-all"
+        :class="tab === t.key ? 'bg-primary-container text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container'"
+        @click="setTab(t.key)"
       >
-        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-fixed text-primary">
-          <span class="material-symbols-outlined text-[26px]">school</span>
-        </span>
-        <span class="flex min-w-0 flex-col">
-          <span class="truncate font-headline-sm text-headline-sm font-bold text-on-surface">{{ s.name }}</span>
-          <span class="truncate font-body-sm text-body-sm text-on-surface-variant">{{ s.address || 'Sekolah binaan' }}</span>
-          <span class="mt-0.5 font-label-sm text-label-sm text-on-surface-variant">{{ s.students_count ?? 0 }} murid • {{ s.classrooms?.length ?? 0 }} level</span>
-        </span>
-        <span class="material-symbols-outlined ml-auto text-[22px] text-primary transition-transform group-hover:translate-x-0.5">arrow_forward</span>
+        <span class="material-symbols-outlined text-[18px]">{{ t.icon }}</span>{{ t.label }}
       </button>
+    </div>
+
+    <!-- ===================== TAB SISWA ===================== -->
+    <template v-if="tab === 'siswa'">
+      <div class="relative mb-space-lg w-full sm:max-w-sm">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline">search</span>
+        <input
+          v-model="search"
+          type="text"
+          placeholder="Cari sekolah…"
+          class="w-full rounded-xl bg-surface-container-lowest py-2.5 pl-9 pr-space-md font-body-md text-body-md text-on-surface shadow-sm placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+      </div>
+
+      <div v-if="errorMessage" class="mb-space-lg flex items-center gap-space-sm rounded-2xl bg-error-container px-space-md py-space-sm text-on-error-container">
+        <span class="material-symbols-outlined">error</span>
+        <span class="font-body-md text-body-md">{{ errorMessage }}</span>
+        <button class="ml-auto font-label-md text-label-md font-semibold underline" @click="load">Muat ulang</button>
+      </div>
+
+      <div v-if="loading" class="grid grid-cols-1 gap-space-md sm:grid-cols-2 xl:grid-cols-3">
+        <div v-for="i in 3" :key="i" class="h-28 animate-pulse rounded-2xl bg-surface-container"></div>
+      </div>
+
+      <div v-else-if="!schools.length" class="rounded-2xl bg-surface-container-lowest px-space-lg py-space-2xl text-center">
+        <span class="material-symbols-outlined text-[36px] text-outline">domain_disabled</span>
+        <p class="mt-space-sm font-headline-sm text-headline-sm text-on-surface">Belum ada sekolah</p>
+      </div>
+
+      <div v-else class="grid grid-cols-1 gap-space-md sm:grid-cols-2 xl:grid-cols-3">
+        <button
+          v-for="s in schools.filter((x) => x.name.toLowerCase().includes(search.toLowerCase()))"
+          :key="s.id"
+          class="group flex items-center gap-space-md rounded-2xl bg-surface-container-lowest p-space-lg text-left shadow-sm transition-all hover:shadow-md"
+          @click="open(s)"
+        >
+          <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-fixed text-primary">
+            <span class="material-symbols-outlined text-[26px]">school</span>
+          </span>
+          <span class="flex min-w-0 flex-col">
+            <span class="truncate font-headline-sm text-headline-sm font-bold text-on-surface">{{ s.name }}</span>
+            <span class="truncate font-body-sm text-body-sm text-on-surface-variant">{{ s.address || 'Sekolah binaan' }}</span>
+            <span class="mt-0.5 font-label-sm text-label-sm text-on-surface-variant">{{ s.students_count ?? 0 }} murid • {{ s.classrooms?.length ?? 0 }} level</span>
+          </span>
+          <span class="material-symbols-outlined ml-auto text-[22px] text-primary transition-transform group-hover:translate-x-0.5">arrow_forward</span>
+        </button>
+      </div>
+    </template>
+
+    <!-- ===================== TAB TRAINER ===================== -->
+    <TrainerRecapList v-else-if="tab === 'trainer'" />
+
+    <!-- ===================== TAB KARYAWAN ===================== -->
+    <div v-else class="rounded-2xl bg-surface-container-lowest px-space-lg py-space-2xl text-center shadow-sm">
+      <span class="material-symbols-outlined text-[40px] text-outline">badge</span>
+      <p class="mt-space-sm font-headline-sm text-headline-sm text-on-surface">Absensi Karyawan</p>
+      <span class="mt-2 inline-flex rounded-full bg-surface-container px-3 py-1 font-label-sm text-label-sm font-semibold text-on-surface-variant">Segera Hadir</span>
+      <p class="mt-2 font-body-sm text-body-sm text-on-surface-variant">Pencatatan absensi karyawan belum tersedia.</p>
     </div>
 
     <!-- ===================== MODAL IMPORT ABSENSI ===================== -->

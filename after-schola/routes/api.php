@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AttendanceImportController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\TrainerRecapController;
 use App\Http\Controllers\Api\ClassroomController;
 use App\Http\Controllers\Api\ClassSessionController;
 use App\Http\Controllers\Api\DashboardController;
@@ -45,7 +46,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/schools/{school}', [SchoolController::class, 'destroy']);
     Route::post('/schools/{school}/trainers', [SchoolController::class, 'assignTrainers']);
 
-    // Level (classrooms)
+    // Level (classrooms) — catalog didefinisikan sebelum {classroom}
+    Route::get('/classrooms/catalog', [ClassroomController::class, 'catalog']);
     Route::get('/classrooms', [ClassroomController::class, 'index']);
     Route::post('/classrooms', [ClassroomController::class, 'store']);
     Route::get('/classrooms/{classroom}', [ClassroomController::class, 'show']);
@@ -89,6 +91,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Import absensi dari Excel/CSV — pratinjau dulu sebelum disimpan
     Route::post('/attendance-imports/preview', [AttendanceImportController::class, 'preview']);
     Route::post('/attendance-imports/{token}/commit', [AttendanceImportController::class, 'commit']);
+
+    // Rekap kehadiran trainer (tab "Absensi Trainer" di Rekap Absensi)
+    Route::get('/trainer-attendance-recap', [TrainerRecapController::class, 'index']);
 
     // Laporan Ekspo / Free-Trial
     Route::get('/expo-reports', [ExpoReportController::class, 'index']);

@@ -59,7 +59,10 @@ class DashboardController extends Controller
             'role' => 'management',
             'totals' => [
                 'schools' => School::count(),
-                'students' => Student::count(),
+                'active_schools' => School::where('is_active', true)->count(),
+                // Murid aktif = murid dari sekolah yang masih aktif.
+                'students' => Student::whereIn('school_id', School::where('is_active', true)->select('id'))->count(),
+                'all_students' => Student::count(),
                 'trainers' => User::role('trainer')->count(),
             ],
             'today' => [

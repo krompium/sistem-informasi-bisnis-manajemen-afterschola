@@ -8,13 +8,15 @@ import { usePolling } from '@/lib/usePolling'
 const loading = ref(true)
 const errorMessage = ref('')
 const dashboard = ref({
-  totals: { schools: 0, students: 0, trainers: 0 },
+  totals: { schools: 0, active_schools: 0, students: 0, trainers: 0 },
   today: { sessions: 0, trainers_not_checked_in: [] },
 })
 
 const toast = ref({ show: false, message: '' })
 
-const totals = computed(() => dashboard.value.totals ?? { schools: 0, students: 0, trainers: 0 })
+const totals = computed(
+  () => dashboard.value.totals ?? { schools: 0, active_schools: 0, students: 0, trainers: 0 },
+)
 const today = computed(
   () => dashboard.value.today ?? { sessions: 0, trainers_not_checked_in: [] },
 )
@@ -49,7 +51,7 @@ async function loadDashboard(silent = false) {
   try {
     const { data } = await api.get('/dashboard')
     dashboard.value = {
-      totals: data.totals ?? { schools: 0, students: 0, trainers: 0 },
+      totals: data.totals ?? { schools: 0, active_schools: 0, students: 0, trainers: 0 },
       today: data.today ?? { sessions: 0, trainers_not_checked_in: [] },
     }
     errorMessage.value = ''
@@ -132,8 +134,10 @@ usePolling(() => loadDashboard(true), 1000)
     <template v-else>
       <!-- 4 stat cards -->
       <div class="mb-space-xl grid grid-cols-1 gap-space-md sm:grid-cols-2 lg:grid-cols-4">
-        <div
-          class="flex flex-col justify-between rounded-2xl bg-surface-container-lowest p-space-md shadow-sm transition-shadow hover:shadow-md"
+        <!-- Kartu klik: Sekolah → Sekolah & Murid (ubah tujuan di atribut `to`) -->
+        <RouterLink
+          to="/management/sekolah-murid"
+          class="group flex cursor-pointer flex-col justify-between rounded-2xl border border-[#D5DCEB] bg-surface-container-lowest p-space-md shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#9DB3E8] hover:shadow-md"
         >
           <div class="flex items-start justify-between">
             <div class="flex flex-col">
@@ -141,10 +145,10 @@ usePolling(() => loadDashboard(true), 1000)
                 >Total Sekolah Mitra</span
               >
               <span class="mt-1 font-headline-lg text-headline-lg font-extrabold text-on-surface"
-                >{{ totals.schools }} Sekolah</span
+                >{{ totals.active_schools ?? totals.schools }} Sekolah</span
               >
             </div>
-            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-low text-primary">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-low text-primary transition-colors group-hover:bg-primary group-hover:text-on-primary">
               <span class="material-symbols-outlined text-[24px]">school</span>
             </div>
           </div>
@@ -152,10 +156,12 @@ usePolling(() => loadDashboard(true), 1000)
             <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
             <span class="font-medium">Mitra aktif terdaftar</span>
           </div>
-        </div>
+        </RouterLink>
 
-        <div
-          class="flex flex-col justify-between rounded-2xl bg-surface-container-lowest p-space-md shadow-sm transition-shadow hover:shadow-md"
+        <!-- Kartu klik: Murid → Sekolah & Murid (ubah tujuan di atribut `to`) -->
+        <RouterLink
+          to="/management/sekolah-murid"
+          class="group flex cursor-pointer flex-col justify-between rounded-2xl border border-[#D5DCEB] bg-surface-container-lowest p-space-md shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#9DB3E8] hover:shadow-md"
         >
           <div class="flex items-start justify-between">
             <div class="flex flex-col">
@@ -166,7 +172,7 @@ usePolling(() => loadDashboard(true), 1000)
                 >{{ totals.students.toLocaleString('id-ID') }} Siswa</span
               >
             </div>
-            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-low text-primary">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-low text-primary transition-colors group-hover:bg-primary group-hover:text-on-primary">
               <span class="material-symbols-outlined text-[24px]">groups</span>
             </div>
           </div>
@@ -174,10 +180,12 @@ usePolling(() => loadDashboard(true), 1000)
             <span class="material-symbols-outlined text-[16px]">trending_up</span>
             <span>Seluruh sekolah binaan</span>
           </div>
-        </div>
+        </RouterLink>
 
-        <div
-          class="flex flex-col justify-between rounded-2xl bg-surface-container-lowest p-space-md shadow-sm transition-shadow hover:shadow-md"
+        <!-- Kartu klik: Trainer → halaman Trainer (ubah tujuan di atribut `to`) -->
+        <RouterLink
+          to="/management/trainer"
+          class="group flex cursor-pointer flex-col justify-between rounded-2xl border border-[#D5DCEB] bg-surface-container-lowest p-space-md shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#9DB3E8] hover:shadow-md"
         >
           <div class="flex items-start justify-between">
             <div class="flex flex-col">
@@ -188,7 +196,7 @@ usePolling(() => loadDashboard(true), 1000)
                 >{{ totals.trainers }} Trainer</span
               >
             </div>
-            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-low text-primary">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-low text-primary transition-colors group-hover:bg-primary group-hover:text-on-primary">
               <span class="material-symbols-outlined text-[24px]">badge</span>
             </div>
           </div>
@@ -199,10 +207,12 @@ usePolling(() => loadDashboard(true), 1000)
             <span class="font-semibold text-secondary">{{ needAttention.length }}</span>
             <span>perlu tindakan</span>
           </div>
-        </div>
+        </RouterLink>
 
-        <div
-          class="flex flex-col justify-between rounded-2xl bg-surface-container-lowest p-space-md shadow-sm transition-shadow hover:shadow-md"
+        <!-- Kartu klik: Pertemuan hari ini → Jadwal (ubah tujuan di atribut `to`) -->
+        <RouterLink
+          to="/management/jadwal"
+          class="group flex cursor-pointer flex-col justify-between rounded-2xl border border-[#D5DCEB] bg-surface-container-lowest p-space-md shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#9DB3E8] hover:shadow-md"
         >
           <div class="flex items-start justify-between">
             <div class="flex flex-col">
@@ -213,7 +223,7 @@ usePolling(() => loadDashboard(true), 1000)
                 >{{ today.sessions }} Sesi</span
               >
             </div>
-            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-fixed text-primary">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-fixed text-primary transition-colors group-hover:bg-primary group-hover:text-on-primary">
               <span class="material-symbols-outlined text-[24px]">fact_check</span>
             </div>
           </div>
@@ -223,7 +233,7 @@ usePolling(() => loadDashboard(true), 1000)
             >
             <span class="font-label-sm text-label-sm text-outline">Live</span>
           </div>
-        </div>
+        </RouterLink>
       </div>
 
       <!-- Trainer belum absen -->

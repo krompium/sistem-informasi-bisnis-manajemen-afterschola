@@ -21,6 +21,8 @@ class SchoolController extends Controller
             $query->whereIn('id', $user->assignedSchoolIds());
         }
 
+        // Tidak difilter aktif/nonaktif di sini — Sekolah & Murid sengaja
+        // menampilkan semua sekolah, termasuk yang sudah nonaktif.
         return SchoolResource::collection($query->orderBy('name')->get());
     }
 
@@ -56,6 +58,7 @@ class SchoolController extends Controller
             'address' => ['nullable', 'string', 'max:255'],
             'pic_name' => ['nullable', 'string', 'max:255'],
             'pic_phone' => ['nullable', 'string', 'max:50'],
+            'is_active' => ['sometimes', 'boolean'],
         ]);
 
         $school->update($data);
@@ -73,7 +76,7 @@ class SchoolController extends Controller
         // tetap aman dihapus langsung.
         if ($school->classrooms()->exists() || Student::where('school_id', $school->id)->exists()) {
             return response()->json([
-                'message' => 'Sekolah ini sudah punya mata pelajaran dan/atau murid, tidak bisa dihapus. Gunakan Edit untuk membetulkan datanya.',
+                'message' => 'Sekolah ini sudah punya mata pelajaran dan/atau murid, tidak bisa dihapus. Gunakan Edit untuk membetulkan datanya, atau nonaktifkan saja.',
             ], 422);
         }
 

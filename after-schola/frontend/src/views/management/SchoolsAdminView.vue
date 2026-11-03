@@ -1,7 +1,7 @@
 <script setup>
 // Sekolah & Murid (Management) — daftar sekolah beserta level & murid,
 // plus tambah sekolah. Agar management tahu ada sekolah apa saja.
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/lib/api'
 import { initials, unwrap } from '@/lib/format'
 
@@ -10,6 +10,24 @@ const schools = ref([])
 const selectedSchoolId = ref(null)
 const students = ref([])
 const loadingStudents = ref(false)
+
+// ---- Status sekolah (aktif / nonaktif) ----
+const statusFilter = ref('aktif') // 'aktif' | 'nonaktif' | 'semua'
+const togglingSchool = ref(false)
+const notice = ref({ show: false, message: '', type: 'success' })
+let noticeTimer = null
+
+function showNotice(message, type = 'success') {
+  notice.value = { show: true, message, type }
+  clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => (notice.value.show = false), 4000)
+}
+
+// Sekolah dianggap aktif kecuali is_active benar-benar false/0.
+function isSchoolActive(school) {
+  const v = school?.is_active
+  return !(v === false || v === 0 || v === '0')
+}
 
 const showCreate = ref(false)
 const saving = ref(false)
@@ -50,6 +68,34 @@ const studentRowBusyId = ref(null)
 
 const selectedSchool = computed(() => schools.value.find((s) => s.id === selectedSchoolId.value))
 
+const statusCounts = computed(() => {
+  const aktif = schools.value.filter(isSchoolActive).length
+  return { aktif, nonaktif: schools.value.length - aktif, semua: schools.value.length }
+})
+
+const statusTabs = computed(() => [
+  { key: 'aktif', label: 'Aktif', count: statusCounts.value.aktif },
+  { key: 'nonaktif', label: 'Nonaktif', count: statusCounts.value.nonaktif },
+  { key: 'semua', label: 'Semua', count: statusCounts.value.semua },
+])
+
+const filteredSchools = computed(() => {
+  if (statusFilter.value === 'aktif') return schools.value.filter(isSchoolActive)
+  if (statusFilter.value === 'nonaktif') return schools.value.filter((s) => !isSchoolActive(s))
+  return schools.value
+})
+
+// Mata pelajaran aktif saja yang boleh dipilih saat menambah murid.
+const activeClassrooms = computed(() =>
+  (selectedSchool.value?.classrooms ?? []).filter((c) => c.is_active !== false),
+)
+
+// Mata pelajaran katalog yang BELUM ada di sekolah yang lagi dipilih.
+const availableCatalog = computed(() => {
+  const existing = new Set((selectedSchool.value?.classrooms ?? []).map((c) => c.name.toLowerCase()))
+  return subjectCatalog.value.filter((name) => !existing.has(name.toLowerCase()))
+})
+
 // Murid dikelompokkan per level (classroom).
 const studentsByLevel = computed(() => {
   const groups = {}
@@ -60,18 +106,31 @@ const studentsByLevel = computed(() => {
   return Object.entries(groups).map(([level, list]) => ({ level, list }))
 })
 
-async function loadSchools() {
-  loading.value = true
+async function loadSchools(silent = false) {
+  if (!silent) loading.value = true
   try {
     const { data } = await api.get('/schools')
     schools.value = unwrap(data)
-    if (schools.value.length && !selectedSchoolId.value) {
-      await selectSchool(schools.value[0].id)
-    }
+    await ensureSelection()
   } finally {
     loading.value = false
   }
 }
+
+// Pastikan sekolah yang dipilih ada di daftar yang sedang ditampilkan
+// (mis. setelah sekolah dinonaktifkan dan tab "Aktif" sedang terbuka).
+async function ensureSelection() {
+  const list = filteredSchools.value
+  if (list.some((s) => s.id === selectedSchoolId.value)) return
+  if (list.length) {
+    await selectSchool(list[0].id)
+  } else {
+    selectedSchoolId.value = null
+    students.value = []
+  }
+}
+
+watch(statusFilter, ensureSelection)
 
 async function selectSchool(id) {
   selectedSchoolId.value = id
@@ -103,6 +162,7 @@ async function submitCreate() {
       pic_phone: form.pic_phone || null,
     })
     showCreate.value = false
+    statusFilter.value = 'aktif'
     await loadSchools()
     const created = data.data ?? data
     if (created?.id) selectSchool(created.id)
@@ -163,6 +223,45 @@ async function deleteSchool() {
     await loadSchools()
   } catch (err) {
     window.alert(err?.response?.data?.message || 'Gagal menghapus sekolah.')
+  }
+}
+
+// ---- Aktif / Nonaktif Sekolah ----
+async function toggleSchoolActive() {
+  const school = selectedSchool.value
+  if (!school || togglingSchool.value) return
+  const nextActive = !isSchoolActive(school)
+
+  // Menonaktifkan minta konfirmasi; mengaktifkan kembali langsung jalan.
+  if (
+    !nextActive &&
+    !window.confirm(
+      `Nonaktifkan sekolah "${school.name}"?\nData murid dan riwayat absensi tetap tersimpan, dan sekolah bisa diaktifkan kembali kapan saja.`,
+    )
+  )
+    return
+
+  togglingSchool.value = true
+  try {
+    // Kirim field lain apa adanya supaya validasi "name wajib" di backend tetap lolos.
+    await api.put(`/schools/${school.id}`, {
+      name: school.name,
+      address: school.address || null,
+      pic_name: school.pic_name || null,
+      pic_phone: school.pic_phone || null,
+      is_active: nextActive,
+    })
+    await loadSchools(true)
+    const after = schools.value.find((x) => x.id === school.id)
+    if (after && isSchoolActive(after) !== nextActive) {
+      showNotice('Status belum tersimpan di server. Cek kolom is_active di backend sekolah.', 'error')
+      return
+    }
+    showNotice(nextActive ? `${school.name} diaktifkan kembali.` : `${school.name} dinonaktifkan.`)
+  } catch (err) {
+    showNotice(err?.response?.data?.message || 'Gagal mengubah status sekolah.', 'error')
+  } finally {
+    togglingSchool.value = false
   }
 }
 
@@ -369,7 +468,7 @@ async function deleteStudent(student) {
   }
 }
 
-onMounted(loadSchools)
+onMounted(() => loadSchools())
 </script>
 
 <template>
@@ -409,11 +508,40 @@ onMounted(loadSchools)
     <div v-else class="grid grid-cols-1 gap-space-md lg:grid-cols-3">
       <!-- Daftar sekolah -->
       <div class="flex flex-col gap-space-xs lg:col-span-1">
+        <!-- Filter status sekolah -->
+        <div class="mb-space-2xs inline-flex w-full rounded-xl bg-surface-container-low p-1">
+          <button
+            v-for="t in statusTabs"
+            :key="t.key"
+            type="button"
+            class="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-space-sm py-2 font-label-md text-label-md font-semibold transition-all"
+            :class="statusFilter === t.key ? 'bg-primary-container text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container'"
+            @click="statusFilter = t.key"
+          >
+            {{ t.label }}
+            <span
+              class="rounded-full px-1.5 text-[11px] leading-5"
+              :class="statusFilter === t.key ? 'bg-white/20' : 'bg-surface-container'"
+              >{{ t.count }}</span
+            >
+          </button>
+        </div>
+
+        <div
+          v-if="!filteredSchools.length"
+          class="rounded-2xl bg-surface-container-lowest px-space-md py-space-lg text-center font-body-sm text-body-sm text-on-surface-variant"
+        >
+          Tidak ada sekolah {{ statusFilter === 'aktif' ? 'aktif' : 'nonaktif' }}.
+        </div>
+
         <button
-          v-for="s in schools"
+          v-for="s in filteredSchools"
           :key="s.id"
           class="flex flex-col gap-space-2xs rounded-2xl border-2 p-space-md text-left shadow-sm transition-all"
-          :class="s.id === selectedSchoolId ? 'border-primary-container bg-primary-fixed/30' : 'border-transparent bg-surface-container-lowest hover:bg-surface-container-low'"
+          :class="[
+            s.id === selectedSchoolId ? 'border-primary-container bg-primary-fixed/30' : 'border-transparent bg-surface-container-lowest hover:bg-surface-container-low',
+            !isSchoolActive(s) && 'opacity-70',
+          ]"
           @click="selectSchool(s.id)"
         >
           <div class="flex items-center justify-between">
@@ -423,8 +551,11 @@ onMounted(loadSchools)
               </span>
               <span class="font-headline-sm text-headline-sm font-bold text-on-surface">{{ s.name }}</span>
             </span>
-            <span class="rounded-full bg-surface-container px-2 py-0.5 font-label-sm text-label-sm text-on-surface-variant">
-              {{ s.students_count ?? 0 }} murid
+            <span class="flex shrink-0 items-center gap-1">
+              <span v-if="!isSchoolActive(s)" class="rounded-full bg-surface-container-high px-2 py-0.5 font-label-sm text-label-sm font-semibold text-outline">Nonaktif</span>
+              <span class="rounded-full bg-surface-container px-2 py-0.5 font-label-sm text-label-sm text-on-surface-variant">
+                {{ s.students_count ?? 0 }} murid
+              </span>
             </span>
           </div>
           <span class="font-body-sm text-body-sm text-on-surface-variant">{{ s.address || 'Alamat belum diisi' }}</span>
@@ -462,7 +593,27 @@ onMounted(loadSchools)
                 >{{ c.name }}</span>
               </div>
             </div>
-            <div class="flex shrink-0 items-center gap-space-xs self-start">
+            <div class="flex shrink-0 flex-wrap items-center gap-space-xs self-start">
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="isSchoolActive(selectedSchool)"
+                :disabled="togglingSchool"
+                :title="isSchoolActive(selectedSchool) ? 'Klik untuk menonaktifkan sekolah' : 'Klik untuk mengaktifkan kembali'"
+                class="inline-flex items-center gap-space-xs rounded-xl bg-surface-container px-space-md py-2 font-label-md text-label-md font-semibold shadow-sm transition-all hover:bg-surface-container-high disabled:opacity-60"
+                @click="toggleSchoolActive"
+              >
+                <span
+                  class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                  :class="isSchoolActive(selectedSchool) ? 'bg-primary-container' : 'bg-outline-variant'"
+                >
+                  <span
+                    class="absolute left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform"
+                    :class="isSchoolActive(selectedSchool) ? 'translate-x-4' : 'translate-x-0'"
+                  ></span>
+                </span>
+                <span :class="isSchoolActive(selectedSchool) ? 'text-primary' : 'text-outline'">{{ isSchoolActive(selectedSchool) ? 'Aktif' : 'Nonaktif' }}</span>
+              </button>
               <button
                 class="inline-flex items-center gap-space-xs rounded-xl bg-surface-container px-space-md py-2 font-label-md text-label-md text-primary shadow-sm transition-all hover:bg-surface-container-high"
                 @click="openManageSubjects"
@@ -480,15 +631,14 @@ onMounted(loadSchools)
                 <span>Tambah Murid</span>
               </button>
               </div>
-              </div>
-              
-          <div class="mb-space-md flex flex-col gap-space-2xs border-b border-surface-container pb-space-md">
-            <h2 class="font-headline-md text-headline-md font-bold text-on-surface">{{ selectedSchool.name }}</h2>
-            <div class="flex flex-wrap items-center gap-x-space-md gap-y-1 font-body-sm text-body-sm text-on-surface-variant">
-              <span v-if="selectedSchool.address" class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px] text-primary">location_on</span>{{ selectedSchool.address }}</span>
-              <span v-if="selectedSchool.pic_name" class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px] text-primary">person</span>PIC: {{ selectedSchool.pic_name }}</span>
-              <span v-if="selectedSchool.pic_phone" class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px] text-primary">call</span>{{ selectedSchool.pic_phone }}</span>
-            </div>
+          </div>
+
+          <div
+            v-if="!isSchoolActive(selectedSchool)"
+            class="mb-space-md flex items-center gap-space-xs rounded-lg bg-surface-container px-space-sm py-space-xs font-body-sm text-body-sm text-on-surface-variant"
+          >
+            <span class="material-symbols-outlined text-[18px]">info</span>
+            Sekolah ini nonaktif. Data murid dan riwayat absensinya tetap tersimpan.
           </div>
 
           <div v-if="loadingStudents" class="space-y-space-sm">
@@ -895,6 +1045,16 @@ onMounted(loadSchools)
           </div>
         </form>
       </div>
+    </div>
+
+    <!-- Toast status -->
+    <div
+      v-if="notice.show"
+      class="fixed bottom-6 right-6 z-[60] flex max-w-sm items-center gap-space-xs rounded-xl px-space-md py-space-sm font-body-sm text-body-sm shadow-xl animate-fade-in"
+      :class="notice.type === 'error' ? 'bg-error-container text-on-error-container' : 'bg-[#0B2A5B] text-white'"
+    >
+      <span class="material-symbols-outlined text-[18px]">{{ notice.type === 'error' ? 'error' : 'check_circle' }}</span>
+      {{ notice.message }}
     </div>
   </div>
 </template>

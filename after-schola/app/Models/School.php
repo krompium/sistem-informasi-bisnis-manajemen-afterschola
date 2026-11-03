@@ -8,7 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class School extends Model
 {
-    protected $fillable = ['name', 'address', 'pic_name', 'pic_phone'];
+    protected $fillable = ['name', 'address', 'pic_name', 'pic_phone', 'is_active'];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
 
     public function trainers(): BelongsToMany
     {

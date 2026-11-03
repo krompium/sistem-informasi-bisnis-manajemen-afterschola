@@ -15,6 +15,7 @@ class SchoolResource extends JsonResource
             'address' => $this->address,
             'pic_name' => $this->pic_name,
             'pic_phone' => $this->pic_phone,
+            'is_active' => (bool) $this->is_active,
             'students_count' => $this->whenNotNull($this->students_count),
             'classrooms' => ClassroomResource::collection($this->whenLoaded('classrooms')),
             'trainers' => UserResource::collection($this->whenLoaded('trainers')),

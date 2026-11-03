@@ -3,13 +3,15 @@ import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/layouts/AppLayout.vue'
 import LoginView from '@/views/LoginView.vue'
 import TrainerDashboardView from '@/views/TrainerDashboardView.vue'
+import BusinessDashboardView from '@/views/BusinessDashboardView.vue'
 import ManagementDashboardView from '@/views/ManagementDashboardView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 import ManagementScheduleView from '@/views/management/ScheduleView.vue'
-import ManagementTrainerAssignmentView from '@/views/management/TrainerAssignmentView.vue'
+import ManagementTrainersView from '@/views/management/TrainersView.vue'
 import ManagementSchoolsAdminView from '@/views/management/SchoolsAdminView.vue'
 import ManagementRecapListView from '@/views/management/AttendanceRecapListView.vue'
 import ManagementRecapDetailView from '@/views/management/AttendanceRecapDetailView.vue'
+import ManagementTrainerRecapDetailView from '@/views/management/TrainerRecapDetailView.vue'
 import ManagementUserManagementView from '@/views/management/UserManagementView.vue'
 import ManagementHotIssuesView from '@/views/management/HotIssuesView.vue'
 import ManagementEnrollmentView from '@/views/management/EnrollmentView.vue'
@@ -50,18 +52,33 @@ const routes = [
       { path: 'trainer/evaluasi-trial', name: 'trainer.trial', component: TrialEvaluationsView },
 
       // ---- Management ----
-      { path: 'management', name: 'management.dashboard', component: ManagementDashboardView },
+      // Halaman depan Management setelah login: Dashboard Manajemen Bisnis (5 kartu divisi).
+      { path: 'management', name: 'management.dashboard', component: BusinessDashboardView },
+      // Dashboard operasional lama dipindah ke menu "Manajemen Ekstrakurikuler".
+      {
+        path: 'management/ekstrakurikuler',
+        name: 'management.extracurricular',
+        component: ManagementDashboardView,
+      },
       { path: 'management/sekolah-murid', name: 'management.schools', component: ManagementSchoolsAdminView },
+      // Halaman Trainer: tab Daftar Trainer + tab Penugasan (?tab=penugasan).
+      { path: 'management/trainer', name: 'management.trainers', component: ManagementTrainersView },
+      // Alamat lama tetap hidup: diarahkan ke tab Penugasan.
       {
         path: 'management/penugasan-trainer',
         name: 'management.trainer-assignment',
-        component: ManagementTrainerAssignmentView,
+        redirect: { name: 'management.trainers', query: { tab: 'penugasan' } },
       },
       { path: 'management/absensi', name: 'management.recap', component: ManagementRecapListView },
       {
         path: 'management/absensi/sekolah/:id',
         name: 'management.recap.school',
         component: ManagementRecapDetailView,
+      },
+      {
+        path: 'management/absensi/trainer/:id',
+        name: 'management.recap.trainer',
+        component: ManagementTrainerRecapDetailView,
       },
       {
         path: 'management/absensi/:id',
@@ -72,6 +89,12 @@ const routes = [
       { path: 'management/laporan-ekspo', name: 'management.expo', component: ExpoReportsView },
       { path: 'management/evaluasi-trial', name: 'management.trial', component: TrialEvaluationsView },
       { path: 'management/keputusan-pendaftaran', name: 'management.enrollment', component: ManagementEnrollmentView },
+      {
+        path: 'management/keuangan',
+        name: 'management.finance',
+        component: PlaceholderView,
+        meta: { title: 'Data Keuangan & Invoice' },
+      },
       { path: 'management/hot-issue', name: 'management.hot-issues', component: ManagementHotIssuesView },
       {
         path: 'management/manajemen-user',

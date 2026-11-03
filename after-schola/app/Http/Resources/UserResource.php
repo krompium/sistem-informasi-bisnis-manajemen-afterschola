@@ -17,6 +17,8 @@ class UserResource extends JsonResource
             'roles' => $this->getRoleNames(),
             'permissions' => $this->getAllPermissions()->pluck('name'),
             'assigned_schools' => SchoolResource::collection($this->whenLoaded('assignedSchools')),
+            'subjects_taught' => $this->subjects_taught ?? [],
+            'levels_taught' => $this->levels_taught ?? [],
         ];
     }
 }
