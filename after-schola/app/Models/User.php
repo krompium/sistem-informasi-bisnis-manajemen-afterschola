@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -111,6 +112,24 @@ class User extends Authenticatable
         return $this->hasAllBranches()
             ? Branch::pluck('id')->all()
             : $this->branches()->pluck('branches.id')->all();
+    }
+
+    /**
+     * Trainer aktif untuk dropdown form: id, nama, dan cabang yang boleh dipakai (irisan dengan $branchIds,
+     * scope 'all' = semua). Trainer tanpa irisan cabang tidak ikut.
+     *
+     * @param  Collection<int, int>  $branchIds
+     */
+    public static function trainerOptions(Collection $branchIds): Collection
+    {
+        return static::role('trainer')->where('is_active', true)->with('branches:id')->orderBy('name')->get()
+            ->map(fn (self $trainer) => [
+                'id' => $trainer->id,
+                'name' => $trainer->name,
+                'branch_ids' => ($trainer->hasAllBranches() ? $branchIds : $trainer->branches->pluck('id')->intersect($branchIds))->values()->all(),
+            ])
+            ->filter(fn (array $trainer) => $trainer['branch_ids'] !== [])
+            ->values();
     }
 
     public function handlesBranch(int $branchId): bool

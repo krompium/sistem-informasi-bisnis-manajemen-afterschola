@@ -21,6 +21,8 @@ use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\TrainerAttendanceController;
 use App\Http\Controllers\Api\TrainerTrialController;
 use App\Http\Controllers\Api\TrialEvaluationController;
+use App\Http\Controllers\Api\ClassGroupController;
+use App\Http\Controllers\Api\TrainerAssignmentController;
 use App\Http\Controllers\Api\TrialSlotController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -223,6 +225,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('permission:manage trial slots')->group(function () {
         Route::apiResource('trial-slots', TrialSlotController::class);
     });
+
+    // Kelas dan penugasan trainer (Modul 6a, MGT-30/33). Baca: staf per cabang, trainer per penugasan (Policy + query).
+    // `options` harus sebelum {class_group}.
+    Route::get('/class-groups/options', [ClassGroupController::class, 'options'])->middleware('permission:manage classes|assign trainers');
+    Route::get('/class-groups', [ClassGroupController::class, 'index']);
+    Route::get('/class-groups/{class_group}', [ClassGroupController::class, 'show']);
+    Route::post('/class-groups', [ClassGroupController::class, 'store'])->middleware('permission:manage classes');
+    Route::put('/class-groups/{class_group}', [ClassGroupController::class, 'update'])->middleware('permission:manage classes');
+    Route::apiResource('trainer-assignments', TrainerAssignmentController::class)->only(['store', 'update', 'destroy'])
+        ->middleware('permission:assign trainers');
 
     // Calon dan leads (Modul 2, MGT-21/22) — scope cabang dijaga query + Policy.
     Route::middleware('permission:manage leads')->group(function () {

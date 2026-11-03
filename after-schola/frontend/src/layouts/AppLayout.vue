@@ -24,6 +24,7 @@ const managementNav = [
   { label: 'Jadwal', icon: 'calendar_month', to: '/management/jadwal' },
   { label: 'Laporan Ekspo', icon: 'query_stats', to: '/management/laporan-ekspo' },
   { label: 'Slot Trial', icon: 'event_available', to: '/management/slot-trial', perm: 'manage trial slots' },
+  { label: 'Kelas', icon: 'school', to: '/management/kelas', perm: 'manage classes|assign trainers' },
   { label: 'Calon & Leads', icon: 'group_add', to: '/management/calon', perm: 'manage leads' },
   { label: 'Evaluasi Trial', icon: 'rate_review', to: '/management/evaluasi-trial' },
   { label: 'Keputusan & Pendaftaran', icon: 'how_to_reg', to: '/management/keputusan-pendaftaran' },
@@ -60,7 +61,7 @@ const parentNav = [{ label: 'Beranda', icon: 'family_restroom', to: '/portal' }]
 
 // Item bertanda `perm` hanya tampil bila user punya permission itu (backend tetap otoritas).
 const navItems = computed(() => {
-  if (auth.isManagement) return managementNav.filter((i) => !i.perm || auth.can(i.perm))
+  if (auth.isManagement) return managementNav.filter((i) => !i.perm || i.perm.split('|').some((p) => auth.can(p)))
   if (auth.isDeveloper) return developerNav
   return auth.isParent ? parentNav : trainerNav
 })
