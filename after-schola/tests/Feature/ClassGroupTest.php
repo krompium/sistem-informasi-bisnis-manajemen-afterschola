@@ -137,6 +137,17 @@ class ClassGroupTest extends TestCase
         $this->assertEqualsCanonicalizing([$archived->id], $this->getJson('/api/class-groups?is_active=0')->json('data.*.id'));
     }
 
+    public function test_listing_honours_per_page_up_to_a_hundred(): void
+    {
+        foreach (range(1, 3) as $i) {
+            $this->classIn($this->bdg);
+        }
+        Sanctum::actingAs($this->classStaff('all'));
+
+        $this->getJson('/api/class-groups?per_page=2')->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('meta.per_page', 2);
+        $this->getJson('/api/class-groups?per_page=500')->assertOk()->assertJsonPath('meta.per_page', 100);
+    }
+
     public function test_show_and_update_of_other_branch_class_return_404(): void
     {
         $other = $this->classIn($this->jkt, ['name' => 'Kelas Jakarta']);

@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\ClassSession;
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 
 class ClassSessionPolicy
 {
@@ -15,6 +16,14 @@ class ClassSessionPolicy
     public function view(User $user, ClassSession $session): bool
     {
         return $user->handlesSchool($session->school_id);
+    }
+
+    // Sesi kelas reguler (Modul 6c): scope cabang/penugasan; di luar scope 404. Permission tulis (manage schedule) di route.
+    public function viewRegular(User $user, ClassSession $session): Response
+    {
+        return ClassSession::visibleToRegular($user)->whereKey($session->id)->exists()
+            ? Response::allow()
+            : Response::denyAsNotFound();
     }
 
     // Jadwal dibuat Management; trainer read-only.

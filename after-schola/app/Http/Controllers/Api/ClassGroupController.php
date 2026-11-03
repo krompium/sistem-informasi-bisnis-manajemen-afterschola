@@ -35,7 +35,7 @@ class ClassGroupController extends Controller
             $query->where('is_active', $request->boolean('is_active'));
         }
 
-        return ClassGroupResource::collection($query->paginate(25));
+        return ClassGroupResource::collection($query->paginate(min($request->integer('per_page', 25), 100)));
     }
 
     // Pilihan untuk form kelas dan penugasan. Sengaja di sini: staf kelas tidak punya akses ke /branches, /programs, /users.

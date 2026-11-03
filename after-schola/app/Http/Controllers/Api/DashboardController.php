@@ -101,7 +101,8 @@ class DashboardController extends Controller
     {
         $today = today();
 
-        $todaySessions = ClassSession::whereDate('date', $today)->get();
+        // TODO(nanti): sesi dan siswa reguler masuk dashboard setelah absensi reguler ada (Modul 7/10).
+        $todaySessions = ClassSession::whereNotNull('school_id')->whereDate('date', $today)->get();
 
         // Trainer yang punya sesi hari ini tapi belum check-in.
         $trainersWithSession = $todaySessions->pluck('trainer_id')->unique();
@@ -114,7 +115,7 @@ class DashboardController extends Controller
             'role' => 'management',
             'totals' => [
                 'schools' => School::count(),
-                'students' => Student::count(),
+                'students' => Student::whereNotNull('school_id')->count(),
                 'trainers' => User::role('trainer')->count(),
             ],
             'today' => [
