@@ -161,7 +161,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/payments/{payment}/confirm', [PaymentController::class, 'confirm']);
         Route::post('/payments/{payment}/reject', [PaymentController::class, 'reject']);
     });
-    Route::get('/finance/aging', [FinanceReportController::class, 'aging'])->middleware('permission:view finance reports');
+    Route::middleware('permission:view finance reports')->group(function () {
+        Route::get('/finance/aging', [FinanceReportController::class, 'aging']);
+        Route::get('/finance/income', [FinanceReportController::class, 'income']);
+        Route::get('/exports/income/excel', [FinanceReportController::class, 'incomeExcel']);
+        Route::get('/exports/income/pdf', [FinanceReportController::class, 'incomePdf']);
+    });
 
     // Kelola user & role — hanya Management
     // Daftar user juga dipakai dropdown di halaman Management lain (trainer, developer): terbuka
