@@ -44,6 +44,7 @@ import ManagementTrialSlotsView from '@/views/management/TrialSlotsView.vue'
 import ManagementClassGroupsView from '@/views/management/ClassGroupsView.vue'
 import ManagementPlacementView from '@/views/management/PlacementView.vue'
 import ManagementSchedulesView from '@/views/management/SchedulesView.vue'
+import ManagementAttendanceReportView from '@/views/management/AttendanceReportView.vue'
 import ManagementLeadsView from '@/views/management/LeadsView.vue'
 
 // 1) Import, di dekat import view publik lain
@@ -184,6 +185,12 @@ const routes = [
         name: 'management.schedules',
         component: ManagementSchedulesView,
         meta: { title: 'Jadwal Sesi', icon: 'event' },
+      },
+      {
+        path: 'management/rekap-absensi',
+        name: 'management.attendance-report',
+        component: ManagementAttendanceReportView,
+        meta: { title: 'Rekap Absensi', icon: 'fact_check' },
       },
       {
         path: 'management/program',

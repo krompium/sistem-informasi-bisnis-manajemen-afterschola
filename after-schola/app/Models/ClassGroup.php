@@ -57,6 +57,12 @@ class ClassGroup extends Model
         return $this->hasMany(TrainerAssignment::class);
     }
 
+    /** Kelas dalam cabang user (scope 'all' = semua). Untuk rekap/monitoring, bukan untuk trainer. */
+    public function scopeInBranchesOf(Builder $query, User $user): Builder
+    {
+        return $user->hasAllBranches() ? $query : $query->whereIn('class_groups.branch_id', $user->accessibleBranchIds());
+    }
+
     /**
      * Kelas yang boleh dilihat user: staf kelas per cabang (BR-19), trainer hanya kelas
      * yang ditugaskan kepadanya sebagai utama atau asisten (PRD §9).

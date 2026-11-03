@@ -27,6 +27,8 @@ use App\Http\Controllers\Api\ClassGroupSessionController;
 use App\Http\Controllers\Api\ClassSessionAttendanceController;
 use App\Http\Controllers\Api\ClassSessionTrainerAttendanceController;
 use App\Http\Controllers\Api\PlacementCandidateController;
+use App\Http\Controllers\Api\RegularAttendanceExportController;
+use App\Http\Controllers\Api\RegularAttendanceReportController;
 use App\Http\Controllers\Api\TrainerAssignmentController;
 use App\Http\Controllers\Api\TrialSlotController;
 use App\Http\Controllers\Api\UserController;
@@ -254,6 +256,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/class-sessions/{class_session}/trainer-attendance', [ClassSessionTrainerAttendanceController::class, 'store']);
     Route::post('/class-sessions/{class_session}/lock', [ClassGroupSessionController::class, 'lock']);
     Route::post('/class-sessions/{class_session}/unlock', [ClassGroupSessionController::class, 'unlock']);
+
+    // Rekap dan monitoring absensi reguler (Modul 7c). Scope cabang di RegularAttendanceReport.
+    Route::middleware('permission:view all attendance|manage schedule')->group(function () {
+        Route::get('/regular-attendance/recap', [RegularAttendanceReportController::class, 'recap']);
+        Route::get('/regular-attendance/students/{student}', [RegularAttendanceReportController::class, 'student']);
+        Route::get('/regular-attendance/trainers/missing-today', [RegularAttendanceReportController::class, 'missingToday']);
+        Route::get('/exports/regular-attendance/excel', [RegularAttendanceExportController::class, 'studentExcel']);
+        Route::get('/exports/regular-attendance/pdf', [RegularAttendanceExportController::class, 'studentPdf']);
+    });
+    // Rekap absensi trainer juga untuk Keuangan (KEU-08, bagian Excel; API integrasi di Fase 3).
+    Route::middleware('permission:view all attendance|manage schedule|export trainer attendance')->group(function () {
+        Route::get('/regular-attendance/trainers', [RegularAttendanceReportController::class, 'trainers']);
+        Route::get('/exports/regular-attendance/trainers/excel', [RegularAttendanceExportController::class, 'trainerExcel']);
+    });
 
     // Penempatan siswa ke kelas (Modul 6b, MGT-31/32).
     Route::middleware('permission:manage classes')->group(function () {

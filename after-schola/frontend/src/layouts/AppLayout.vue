@@ -27,6 +27,7 @@ const managementNav = [
   { label: 'Kelas', icon: 'school', to: '/management/kelas', perm: 'manage classes|assign trainers' },
   { label: 'Penempatan Siswa', icon: 'how_to_reg', to: '/management/penempatan', perm: 'manage classes' },
   { label: 'Jadwal Sesi', icon: 'event', to: '/management/jadwal', perm: 'manage schedule|manage classes' },
+  { label: 'Rekap Absensi', icon: 'fact_check', to: '/management/rekap-absensi', perm: 'view all attendance|manage schedule|export trainer attendance' },
   { label: 'Calon & Leads', icon: 'group_add', to: '/management/calon', perm: 'manage leads' },
   { label: 'Evaluasi Trial', icon: 'rate_review', to: '/management/evaluasi-trial' },
   { label: 'Keputusan & Pendaftaran', icon: 'how_to_reg', to: '/management/keputusan-pendaftaran' },

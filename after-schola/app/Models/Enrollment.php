@@ -39,6 +39,15 @@ class Enrollment extends Model
                 ->orWhere(fn (Builder $open) => $open->whereNull('end_date')->where('status', 'aktif')));
     }
 
+    /** Versi PHP dari scopeActiveOn (untuk rekap yang dihitung di memori). Keduanya harus sama; dijaga test roster dan rekap. */
+    public function coversDate(\DateTimeInterface|string $date): bool
+    {
+        $date = $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : $date;
+
+        return $this->start_date->toDateString() <= $date
+            && ($this->end_date ? $this->end_date->toDateString() >= $date : $this->status === 'aktif');
+    }
+
     /** Enrollment di kelas yang boleh dilihat user (cabang untuk staf, penugasan untuk trainer). */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
