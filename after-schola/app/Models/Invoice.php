@@ -11,7 +11,7 @@ class Invoice extends Model
 {
     protected $fillable = [
         'registration_id', 'number', 'amount', 'due_date', 'status',
-        'issued_at', 'paid_at', 'void_reason',
+        'issued_at', 'paid_at', 'last_reminded_at', 'void_reason',
     ];
 
     protected function casts(): array
@@ -21,6 +21,7 @@ class Invoice extends Model
             'due_date' => 'date',
             'issued_at' => 'datetime',
             'paid_at' => 'datetime',
+            'last_reminded_at' => 'datetime',
         ];
     }
 

@@ -33,6 +33,11 @@ class Registration extends Model
         return $this->belongsTo(Program::class);
     }
 
+    public function lead(): BelongsTo
+    {
+        return $this->belongsTo(Lead::class);
+    }
+
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
