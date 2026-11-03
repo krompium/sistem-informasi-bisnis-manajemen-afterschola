@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PaymentResource;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Support\ParentNotifier;
 use App\Support\PaymentRecorder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +33,7 @@ class PaymentController extends Controller
         return (new PaymentResource($payment))->response()->setStatusCode(201);
     }
 
-    public function confirm(Request $request, Payment $payment)
+    public function confirm(Request $request, Payment $payment, ParentNotifier $notifier)
     {
         $this->authorize('view', $payment->invoice);
         $this->ensurePending($payment);
@@ -50,10 +51,13 @@ class PaymentController extends Controller
             }
         });
 
+        $this->notifyParent($notifier, $payment, 'payment_confirmed', 'Pembayaran dikonfirmasi',
+            "Pembayaran invoice {$payment->invoice->number} sudah dikonfirmasi. Terima kasih.");
+
         return new PaymentResource($payment->fresh());
     }
 
-    public function reject(Request $request, Payment $payment)
+    public function reject(Request $request, Payment $payment, ParentNotifier $notifier)
     {
         $this->authorize('view', $payment->invoice);
         $data = $request->validate([
@@ -63,7 +67,16 @@ class PaymentController extends Controller
 
         $payment->update(['status' => 'rejected', 'reject_reason' => $data['reason']]);
 
+        $this->notifyParent($notifier, $payment, 'payment_rejected', 'Bukti pembayaran ditolak',
+            "Bukti pembayaran invoice {$payment->invoice->number} ditolak: {$data['reason']}. Mohon unggah ulang bukti yang benar.");
+
         return new PaymentResource($payment->fresh());
+    }
+
+    private function notifyParent(ParentNotifier $notifier, Payment $payment, string $kind, string $subject, string $message): void
+    {
+        $registration = $payment->invoice->registration;
+        $notifier->notify($registration->lead?->parent, $kind, $subject, $message, ['lead_id' => $registration->lead_id, 'invoice_id' => $payment->invoice_id]);
     }
 
     private function ensurePending(Payment $payment): void

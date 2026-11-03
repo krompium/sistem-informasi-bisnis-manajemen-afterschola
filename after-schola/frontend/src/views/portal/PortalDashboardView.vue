@@ -11,6 +11,7 @@ const auth = useAuthStore()
 const loading = ref(true)
 const children = ref([])
 const loadError = ref('')
+const unread = ref(0)
 
 const adding = ref(false)
 const saving = ref(false)
@@ -26,6 +27,8 @@ async function load() {
   try {
     const { data } = await api.get('/parent/children')
     children.value = data.data
+    // Banner notifikasi baru; gagal memuatnya tidak boleh mengganggu daftar anak.
+    api.get('/notifications').then((res) => (unread.value = res.data.unread_count)).catch(() => {})
   } catch (err) {
     loadError.value = errMsg(err, 'Gagal memuat data anak.')
   } finally {
@@ -88,6 +91,10 @@ onMounted(load)
     <div v-else-if="loading" class="h-24 animate-pulse rounded-2xl bg-surface-container"></div>
 
     <template v-else>
+      <RouterLink v-if="unread" to="/portal/notifikasi" class="mb-space-sm rounded-xl bg-secondary-container px-space-md py-space-sm font-body-md text-on-secondary-container hover:opacity-90">
+        Anda punya <b>{{ unread }}</b> notifikasi baru.
+      </RouterLink>
+
       <div v-if="!children.length" class="rounded-2xl bg-surface-container-lowest px-space-lg py-space-2xl text-center font-body-md text-on-surface-variant">
         Belum ada anak terdaftar. Tambahkan anak untuk mengikuti kelas trial.
       </div>
@@ -106,6 +113,11 @@ onMounted(load)
           <p v-if="child.stage === 'trial_terjadwal' && child.trial_starts_at" class="font-body-md text-body-md text-on-surface">
             Trial: <b>{{ formatStamp(child.trial_starts_at) }}</b>
           </p>
+          <div v-if="child.stage === 'aktif'">
+            <RouterLink to="/portal/jadwal" class="inline-block rounded-xl border border-outline-variant px-space-md py-2.5 font-label-lg text-label-lg text-on-surface transition-all hover:bg-surface-container-low">
+              Lihat jadwal
+            </RouterLink>
+          </div>
           <div v-if="child.next_action">
             <RouterLink :to="actionTo(child)" class="inline-block rounded-xl bg-primary-container px-space-md py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95">
               {{ ACTION_LABELS[child.next_action] }}

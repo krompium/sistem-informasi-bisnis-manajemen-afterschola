@@ -21,6 +21,8 @@ import PortalDashboardView from '@/views/portal/PortalDashboardView.vue'
 import PortalChildDetailView from '@/views/portal/ChildDetailView.vue'
 import PortalRegistrationFormView from '@/views/portal/RegistrationFormView.vue'
 import PortalInvoicesView from '@/views/portal/InvoicesView.vue'
+import PortalScheduleView from '@/views/portal/ScheduleView.vue'
+import PortalNotificationsView from '@/views/portal/NotificationsView.vue'
 import TrainerScheduleView from '@/views/trainer/ScheduleView.vue'
 import TrainerSchoolsView from '@/views/trainer/SchoolsView.vue'
 import AttendanceSessionsView from '@/views/AttendanceSessionsView.vue'
@@ -110,6 +112,8 @@ const routes = [
       { path: 'portal/anak/:id', name: 'portal.child', component: PortalChildDetailView },
       { path: 'portal/anak/:id/pendaftaran', name: 'portal.registration', component: PortalRegistrationFormView },
       { path: 'portal/tagihan', name: 'portal.invoices', component: PortalInvoicesView },
+      { path: 'portal/jadwal', name: 'portal.schedule', component: PortalScheduleView },
+      { path: 'portal/notifikasi', name: 'portal.notifications', component: PortalNotificationsView },
 
       // ---- Management ----
       { path: 'management', name: 'management.dashboard', component: ManagementDashboardView },

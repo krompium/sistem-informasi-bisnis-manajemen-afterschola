@@ -7,6 +7,7 @@ use App\Http\Resources\RegistrationResource;
 use App\Models\Invoice;
 use App\Models\PaymentSetting;
 use App\Models\Registration;
+use App\Support\ParentNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -42,7 +43,7 @@ class RegistrationController extends Controller
         );
     }
 
-    public function approve(Request $request, Registration $registration)
+    public function approve(Request $request, Registration $registration, ParentNotifier $notifier)
     {
         $this->authorize('verify', $registration);
         $this->ensureWaiting($registration);
@@ -54,7 +55,7 @@ class RegistrationController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($registration, $program, $request) {
+        $invoice = DB::transaction(function () use ($registration, $program, $request) {
             $registration->update([
                 'status' => 'terverifikasi',
                 'revision_note' => null,
@@ -62,7 +63,7 @@ class RegistrationController extends Controller
                 'verified_at' => now(),
             ]);
 
-            Invoice::create([
+            return Invoice::create([
                 'registration_id' => $registration->id,
                 'number' => Invoice::nextNumber(),
                 'amount' => $program->price, // snapshot harga saat terbit
@@ -72,10 +73,15 @@ class RegistrationController extends Controller
             ]);
         });
 
+        $amount = 'Rp '.number_format((float) $invoice->amount, 0, ',', '.');
+        $notifier->notify($registration->lead?->parent, 'registration_verified', 'Pendaftaran terverifikasi',
+            "Pendaftaran {$registration->student_name} terverifikasi. Invoice {$invoice->number} sebesar {$amount} jatuh tempo {$invoice->due_date->format('d/m/Y')}.",
+            ['lead_id' => $registration->lead_id, 'invoice_id' => $invoice->id]);
+
         return new RegistrationResource($registration->fresh(self::WITH));
     }
 
-    public function requestRevision(Request $request, Registration $registration)
+    public function requestRevision(Request $request, Registration $registration, ParentNotifier $notifier)
     {
         $this->authorize('verify', $registration); // sebelum validasi: di luar cabang harus 404, bukan 422
         $data = $request->validate([
@@ -89,6 +95,9 @@ class RegistrationController extends Controller
             'verified_by' => null,
             'verified_at' => null,
         ]);
+
+        $notifier->notify($registration->lead?->parent, 'registration_revision', 'Pendaftaran perlu diperbaiki',
+            "Pendaftaran {$registration->student_name} perlu diperbaiki: {$data['note']}", ['lead_id' => $registration->lead_id]);
 
         return new RegistrationResource($registration->fresh(self::WITH));
     }

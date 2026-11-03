@@ -7,6 +7,7 @@ use App\Http\Requests\SaveTrialEvaluationRequest;
 use App\Http\Resources\TrialEvaluationResource;
 use App\Models\Lead;
 use App\Models\TrialEvaluation;
+use App\Support\ParentNotifier;
 use Illuminate\Http\Request;
 
 /**
@@ -38,11 +39,11 @@ class TrialEvaluationController extends Controller
         );
     }
 
-    public function store(SaveTrialEvaluationRequest $request)
+    public function store(SaveTrialEvaluationRequest $request, ParentNotifier $notifier)
     {
         // Lead sudah lolos validasi (punya slot yang boleh dinilai), jadi identitas, cabang, dan trainer
         // diambil dari lead dan slot, bukan dari klien.
-        $lead = Lead::with('trialSlot')->findOrFail($request->integer('lead_id'));
+        $lead = Lead::with('trialSlot', 'parent')->findOrFail($request->integer('lead_id'));
         $slot = $lead->trialSlot;
 
         $evaluation = TrialEvaluation::create($this->normalize($request->validated()) + [
@@ -54,6 +55,11 @@ class TrialEvaluationController extends Controller
             'participant_name' => $lead->name,
             'origin_school' => $lead->origin_school,
         ]);
+
+        if ($evaluation->attendance === 'hadir') {
+            $notifier->notify($lead->parent, 'trial_result', 'Hasil trial tersedia',
+                "Hasil trial {$lead->name} sudah tersedia. Lihat hasilnya dan putuskan langkah berikutnya.", ['lead_id' => $lead->id]);
+        }
 
         return (new TrialEvaluationResource($evaluation->load(self::WITH)))->response()->setStatusCode(201);
     }
