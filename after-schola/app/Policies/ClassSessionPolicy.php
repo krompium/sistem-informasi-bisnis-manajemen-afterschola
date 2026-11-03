@@ -115,6 +115,13 @@ class ClassSessionPolicy
             ?? ($this->teaches($user, $session) ? Response::allow() : Response::deny());
     }
 
+    // Check-in trainer (Modul 7b, AC-09): hanya pelaksana sesi (termasuk pengganti). Sesi terlihat tapi bukan miliknya: 403.
+    public function checkInRegular(User $user, ClassSession $session): Response
+    {
+        return $this->regularDenial($user, $session)
+            ?? ($session->trainer_id === $user->id ? Response::allow() : Response::deny());
+    }
+
     // Kunci sesi: pelaksana, trainer yang ditugaskan, atau pemegang "manage schedule".
     public function lockRegular(User $user, ClassSession $session): Response
     {

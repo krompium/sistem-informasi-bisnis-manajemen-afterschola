@@ -1,12 +1,15 @@
 <script setup>
 // Absensi sesi kelas reguler (Modul 7a, TRN-06) — centang hadir, simpan, kunci sesi.
-// Check-in trainer (foto/GPS) ditambahkan di irisan 7b. Mobile-first: baris besar, tombol aksi menempel di bawah.
+// Check-in trainer (Modul 7b, TRN-07): status + foto (onsite) / screenshot (online) + GPS (onsite), satu kali per sesi.
+// Mobile-first: baris besar, tombol aksi menempel di bawah.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import api from '@/lib/api'
 import { apiErrorMessage } from '@/lib/apiError'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const auth = useAuthStore()
 const sessionId = route.params.id
 
 const loading = ref(true)
@@ -18,6 +21,24 @@ const locking = ref(false)
 const toast = reactive({ show: false, message: '', ok: true })
 
 const isLocked = computed(() => !!session.value?.is_locked)
+
+// ---- Check-in trainer (hanya untuk pelaksana sesi) ----
+const isPelaksana = computed(() => !!session.value && session.value.trainer?.id === auth.user?.id)
+const isOnsite = computed(() => session.value?.mode !== 'online')
+const myCheckIn = ref(null)
+const checkin = reactive({ status: 'hadir', note: '', latitude: null, longitude: null })
+const photo = ref(null)
+const checkinBusy = ref(false)
+const checkinError = ref('')
+const gpsBusy = ref(false)
+const gpsError = ref('')
+const needsProof = computed(() => checkin.status !== 'tidak_hadir')
+const statuses = [
+  { value: 'hadir', label: 'Hadir' },
+  { value: 'terlambat', label: 'Terlambat' },
+  { value: 'tidak_hadir', label: 'Tidak hadir' },
+]
+const checkInTime = computed(() => (myCheckIn.value ? new Date(myCheckIn.value.check_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) : ''))
 const presentCount = computed(() => roster.value.filter((r) => r.is_present).length)
 const dateLabel = computed(() => (session.value ? new Date(`${session.value.date}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''))
 
@@ -37,10 +58,66 @@ async function load() {
     const [s, r] = await Promise.all([api.get(`/class-sessions/${sessionId}`), api.get(`/class-sessions/${sessionId}/student-attendances`)])
     session.value = s.data.data
     applyRoster(r.data.data)
+    if (isPelaksana.value) myCheckIn.value = (await api.get(`/class-sessions/${sessionId}/trainer-attendance`)).data.data
   } catch (err) {
     error.value = apiErrorMessage(err, 'Gagal memuat sesi.')
   } finally {
     loading.value = false
+  }
+}
+
+function onPhoto(event) {
+  const file = event.target.files?.[0] ?? null
+  checkinError.value = ''
+  if (file && file.size > 5 * 1024 * 1024) {
+    checkinError.value = 'Ukuran berkas maksimal 5 MB.'
+    event.target.value = ''
+    photo.value = null
+    return
+  }
+  photo.value = file
+}
+
+function getLocation() {
+  gpsError.value = ''
+  if (!navigator.geolocation) {
+    gpsError.value = 'Peramban ini tidak mendukung lokasi GPS.'
+    return
+  }
+  gpsBusy.value = true
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      checkin.latitude = Number(pos.coords.latitude.toFixed(7))
+      checkin.longitude = Number(pos.coords.longitude.toFixed(7))
+      gpsBusy.value = false
+    },
+    () => {
+      gpsError.value = 'Lokasi tidak dapat diambil. Izinkan akses lokasi lalu coba lagi.'
+      gpsBusy.value = false
+    },
+    { enableHighAccuracy: true, timeout: 15000 },
+  )
+}
+
+async function submitCheckIn() {
+  checkinError.value = ''
+  const form = new FormData()
+  form.append('status', checkin.status)
+  if (checkin.note) form.append('note', checkin.note)
+  if (needsProof.value && photo.value) form.append('photo', photo.value)
+  if (isOnsite.value && checkin.latitude !== null) {
+    form.append('latitude', checkin.latitude)
+    form.append('longitude', checkin.longitude)
+  }
+  checkinBusy.value = true
+  try {
+    const { data } = await api.post(`/class-sessions/${sessionId}/trainer-attendance`, form)
+    myCheckIn.value = data.data
+    showToast('Check-in tercatat.')
+  } catch (err) {
+    checkinError.value = apiErrorMessage(err, 'Gagal check-in.')
+  } finally {
+    checkinBusy.value = false
   }
 }
 
@@ -97,6 +174,47 @@ onMounted(load)
         <p class="font-body-md text-body-md text-on-surface-variant">{{ dateLabel }} • {{ session.start_time }}–{{ session.end_time }}</p>
         <p class="font-body-sm text-body-sm text-on-surface-variant">Pertemuan ke-{{ session.meeting_no }} • {{ session.mode === 'online' ? 'Online' : 'Onsite' }}</p>
       </div>
+
+      <!-- Check-in trainer pelaksana -->
+      <section v-if="isPelaksana" class="mb-space-md rounded-2xl bg-surface-container-lowest p-space-md shadow-sm">
+        <h2 class="mb-space-xs font-label-lg text-label-lg font-semibold text-on-surface">Check-in Saya</h2>
+
+        <div v-if="myCheckIn" class="flex flex-col gap-1 font-body-md text-body-md text-on-surface">
+          <span>Tercatat pukul {{ checkInTime }} • {{ statuses.find((x) => x.value === myCheckIn.status)?.label }}</span>
+          <a v-if="myCheckIn.photo_url" :href="myCheckIn.photo_url" target="_blank" rel="noopener" class="font-label-md text-label-md text-primary">Lihat {{ isOnsite ? 'foto' : 'screenshot' }}</a>
+        </div>
+
+        <form v-else class="flex flex-col gap-space-sm" @submit.prevent="submitCheckIn">
+          <div v-if="checkinError" class="flex items-center gap-space-xs rounded-lg bg-error-container px-space-sm py-space-xs font-body-sm text-body-sm text-on-error-container">
+            <span class="material-symbols-outlined text-[18px]">error</span>{{ checkinError }}
+          </div>
+
+          <div class="grid grid-cols-3 gap-space-xs">
+            <label v-for="st in statuses" :key="st.value" :class="['flex min-h-[44px] cursor-pointer items-center justify-center rounded-xl border px-2 text-center font-label-md text-label-md', checkin.status === st.value ? 'border-primary-container bg-primary-container/10 text-primary' : 'border-outline-variant text-on-surface']">
+              <input v-model="checkin.status" type="radio" name="status" :value="st.value" class="sr-only" />{{ st.label }}
+            </label>
+          </div>
+
+          <label v-if="needsProof" class="flex flex-col gap-1">
+            <span class="font-label-md text-label-md font-semibold text-on-surface-variant">{{ isOnsite ? 'Foto kehadiran' : 'Screenshot kelas online' }} (JPG/PNG, maks. 5 MB)</span>
+            <input type="file" accept="image/jpeg,image/png" :capture="isOnsite ? 'environment' : undefined" required class="font-body-md text-body-md" @change="onPhoto" />
+          </label>
+
+          <div v-if="isOnsite" class="flex flex-col gap-1">
+            <button type="button" :disabled="gpsBusy" class="min-h-[44px] rounded-xl border border-outline-variant px-space-md font-label-lg text-label-lg text-on-surface disabled:opacity-60" @click="getLocation">
+              {{ gpsBusy ? 'Mengambil lokasi...' : checkin.latitude !== null ? 'Perbarui lokasi' : 'Ambil lokasi saya' }}
+            </button>
+            <span v-if="checkin.latitude !== null" class="font-body-sm text-body-sm text-on-surface-variant">Lokasi: {{ checkin.latitude }}, {{ checkin.longitude }}</span>
+            <span v-if="gpsError" class="font-body-sm text-body-sm text-error">{{ gpsError }}</span>
+          </div>
+
+          <input v-model="checkin.note" maxlength="255" placeholder="Catatan (opsional)" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface" />
+
+          <button type="submit" :disabled="checkinBusy || (isOnsite && needsProof && checkin.latitude === null)" class="min-h-[48px] rounded-xl bg-primary-container font-label-lg text-label-lg text-on-primary shadow-sm transition-all active:scale-95 disabled:opacity-60">
+            {{ checkinBusy ? 'Mengirim...' : 'Check-in' }}
+          </button>
+        </form>
+      </section>
 
       <div v-if="isLocked" class="mb-space-md flex items-center gap-space-xs rounded-xl bg-surface-container px-space-md py-space-sm font-body-sm text-body-sm text-on-surface-variant">
         <span class="material-symbols-outlined text-[18px]">lock</span>

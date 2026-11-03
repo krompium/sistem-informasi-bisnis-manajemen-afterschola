@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\TrialEvaluationController;
 use App\Http\Controllers\Api\ClassGroupController;
 use App\Http\Controllers\Api\ClassGroupSessionController;
 use App\Http\Controllers\Api\ClassSessionAttendanceController;
+use App\Http\Controllers\Api\ClassSessionTrainerAttendanceController;
 use App\Http\Controllers\Api\PlacementCandidateController;
 use App\Http\Controllers\Api\TrainerAssignmentController;
 use App\Http\Controllers\Api\TrialSlotController;
@@ -248,6 +249,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Absensi siswa dan kunci sesi reguler (Modul 7a). Otorisasi lewat ClassSessionPolicy.
     Route::get('/class-sessions/{class_session}/student-attendances', [ClassSessionAttendanceController::class, 'index']);
     Route::put('/class-sessions/{class_session}/student-attendances', [ClassSessionAttendanceController::class, 'sync']);
+    // Check-in trainer sesi reguler (Modul 7b). Otorisasi lewat ClassSessionPolicy.
+    Route::get('/class-sessions/{class_session}/trainer-attendance', [ClassSessionTrainerAttendanceController::class, 'show']);
+    Route::post('/class-sessions/{class_session}/trainer-attendance', [ClassSessionTrainerAttendanceController::class, 'store']);
     Route::post('/class-sessions/{class_session}/lock', [ClassGroupSessionController::class, 'lock']);
     Route::post('/class-sessions/{class_session}/unlock', [ClassGroupSessionController::class, 'unlock']);
 
