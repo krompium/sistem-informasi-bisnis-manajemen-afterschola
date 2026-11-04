@@ -41,6 +41,7 @@ const form = reactive({
   school_ids: [],
   subjects_taught: [],
   levels_taught: [],
+  external_ref: '',
 })
 
 // ---- Edit User ----
@@ -59,6 +60,7 @@ const editForm = reactive({
   school_ids: [],
   subjects_taught: [],
   levels_taught: [],
+  external_ref: '',
 })
 
 const roleLabel = (role) => ROLES.find((r) => r.value === role)?.label || role
@@ -110,6 +112,7 @@ function openCreate() {
     school_ids: [],
     subjects_taught: [],
     levels_taught: [],
+    external_ref: '',
   })
   formError.value = ''
   showCreate.value = true
@@ -130,6 +133,7 @@ async function submitCreate() {
       payload.school_ids = form.school_ids
       payload.subjects_taught = form.subjects_taught
       payload.levels_taught = form.levels_taught
+      payload.external_ref = form.external_ref || null
     }
     await api.post('/users', payload)
     showCreate.value = false
@@ -162,6 +166,7 @@ function openEdit(user) {
     school_ids: (user.assignedSchools ?? user.assigned_schools ?? user.schools ?? []).map((s) => s.id),
     subjects_taught: user.subjects_taught ?? [],
     levels_taught: user.levels_taught ?? [],
+    external_ref: user.external_ref ?? '',
   })
   editError.value = ''
   showEdit.value = true
@@ -185,6 +190,7 @@ async function submitEdit() {
       payload.school_ids = editForm.school_ids
       payload.subjects_taught = editForm.subjects_taught
       payload.levels_taught = editForm.levels_taught
+      payload.external_ref = editForm.external_ref || null
     }
     await api.put(`/users/${editTarget.value.id}`, payload)
     showEdit.value = false
@@ -314,6 +320,11 @@ onMounted(() => {
               <input v-model="form.email" type="email" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
             </label>
 
+            <label v-if="form.role === 'trainer'" class="flex flex-col gap-1">
+              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Kode di sistem Keuangan (opsional)</span>
+              <input v-model="form.external_ref" maxlength="100" placeholder="Untuk memetakan absensi trainer ke honor" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none" />
+            </label>
+
             <label class="flex flex-col gap-1">
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Password</span>
               <input v-model="form.password" type="password" required minlength="8" placeholder="Minimal 8 karakter" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
@@ -420,6 +431,11 @@ onMounted(() => {
             <label class="flex flex-col gap-1">
               <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Email</span>
               <input v-model="editForm.email" type="email" required class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none focus:ring-2 focus:ring-primary/15" />
+            </label>
+
+            <label v-if="editForm.role === 'trainer'" class="flex flex-col gap-1">
+              <span class="font-label-md text-label-md font-semibold text-on-surface-variant">Kode di sistem Keuangan (opsional)</span>
+              <input v-model="editForm.external_ref" maxlength="100" placeholder="Untuk memetakan absensi trainer ke honor" class="rounded-lg border border-outline-variant bg-white px-space-sm py-2.5 font-body-md text-body-md text-on-surface focus:border-primary-container focus:outline-none" />
             </label>
 
             <label class="flex flex-col gap-1">

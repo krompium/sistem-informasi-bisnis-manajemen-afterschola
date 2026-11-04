@@ -1,7 +1,7 @@
 <script setup>
 // Shell aplikasi (desktop-first) mengikuti design system Stitch "Remix":
 // sidebar navy #0B2A5B + topbar sticky. Menu menyesuaikan peran user.
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/lib/api'
@@ -16,70 +16,59 @@ const router = useRouter()
 
 const sidebarOpen = ref(false) // drawer untuk layar kecil
 
-const managementNav = [
-  { label: 'Dashboard', icon: 'dashboard', to: '/management' },
-  { label: 'Sekolah & Murid', icon: 'school', to: '/management/sekolah-murid' },
-  { label: 'Penugasan Trainer', icon: 'assignment_ind', to: '/management/penugasan-trainer' },
-  { label: 'Rekap Absensi', icon: 'summarize', to: '/management/absensi' },
-  { label: 'Jadwal', icon: 'calendar_month', to: '/management/jadwal' },
-  { label: 'Laporan Ekspo', icon: 'query_stats', to: '/management/laporan-ekspo' },
-  { label: 'Slot Trial', icon: 'event_available', to: '/management/slot-trial', perm: 'manage trial slots' },
-  { label: 'Kelas', icon: 'school', to: '/management/kelas', perm: 'manage classes|assign trainers' },
-  { label: 'Penempatan Siswa', icon: 'how_to_reg', to: '/management/penempatan', perm: 'manage classes' },
-  { label: 'Jadwal Sesi', icon: 'event', to: '/management/jadwal-kelas', perm: 'manage schedule|manage classes' },
-  { label: 'Catatan Progres', icon: 'edit_note', to: '/management/catatan-progres', perm: 'manage classes|assign trainers|manage schedule' },
-  { label: 'Tinjau Raport', icon: 'fact_check', to: '/management/raport', perm: 'review reports' },
-  { label: 'Rekap Absensi', icon: 'fact_check', to: '/management/rekap-absensi', perm: 'view all attendance|manage schedule|export trainer attendance' },
-  { label: 'Calon & Leads', icon: 'group_add', to: '/management/calon', perm: 'manage leads' },
-  { label: 'Evaluasi Trial', icon: 'rate_review', to: '/management/evaluasi-trial' },
-  { label: 'Keputusan & Pendaftaran', icon: 'how_to_reg', to: '/management/keputusan-pendaftaran' },
-  { label: 'Verifikasi Pendaftaran', icon: 'fact_check', to: '/management/verifikasi-pendaftaran', perm: 'verify registrations' },
-  { label: 'Invoice & Pembayaran', icon: 'receipt_long', to: '/management/invoice', perm: 'manage invoices' },
-  { label: 'Umur Piutang', icon: 'hourglass_bottom', to: '/management/umur-piutang', perm: 'view finance reports' },
-  { label: 'Laporan Pemasukan', icon: 'account_balance_wallet', to: '/management/laporan-pemasukan', perm: 'view finance reports' },
-  { label: 'Integrasi', icon: 'api', to: '/management/integrasi', perm: 'manage integrations' },
-  { label: 'Pengaturan Pembayaran', icon: 'payments', to: '/management/pengaturan-pembayaran', perm: 'manage invoices' },
-  { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue', perm: 'manage hot issues' },
-  { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user', perm: 'manage users' },
-  { label: 'Cabang', icon: 'store', to: '/management/cabang', perm: 'manage branches' },
-  { label: 'Program & Promosi', icon: 'inventory_2', to: '/management/program' },
-  { label: 'Team', icon: 'groups', to: '/management/team' },
-  { label: 'Proyek & Task', icon: 'view_kanban', to: '/management/proyek' },
-  { label: 'Kalender Proyek', icon: 'calendar_month', to: '/management/kalender' },
-]
-
-const trainerNav = [
-  { label: 'Dashboard', icon: 'dashboard', to: '/trainer' },
-  { label: 'Sekolah', icon: 'school', to: '/trainer/sekolah' },
-  { label: 'Jadwal Saya', icon: 'calendar_month', to: '/trainer/jadwal' },
-  { label: 'Absensi', icon: 'fact_check', to: '/trainer/absensi' },
-  { label: 'Sesi Kelas', icon: 'groups', to: '/trainer/sesi-kelas' },
-  { label: 'Rekap Saya', icon: 'summarize', to: '/trainer/rekap' },
-  { label: 'Laporan Ekspo', icon: 'query_stats', to: '/trainer/laporan-ekspo' },
-  { label: 'Evaluasi Trial', icon: 'rate_review', to: '/trainer/evaluasi-trial' },
-  { label: 'Catatan Progres', icon: 'edit_note', to: '/trainer/catatan-progres' },
-  { label: 'Evaluasi Siswa', icon: 'grading', to: '/trainer/evaluasi-siswa' },
-]
-
-const developerNav = [
-  { label: 'Dashboard', icon: 'dashboard', to: '/developer' },
-  { label: 'Proyek', icon: 'view_kanban', to: '/developer/proyek' },
-  { label: 'Kalender', icon: 'calendar_month', to: '/developer/kalender' },
-]
-
-const parentNav = [
-  { label: 'Beranda', icon: 'family_restroom', to: '/portal' },
-  { label: 'Jadwal', icon: 'calendar_month', to: '/portal/jadwal' },
-  { label: 'Tagihan', icon: 'receipt_long', to: '/portal/tagihan' },
-  { label: 'Notifikasi', icon: 'notifications', to: '/portal/notifikasi' },
-]
-
-// Item bertanda `perm` hanya tampil bila user punya permission itu (backend tetap otoritas).
+// Susunan menu Management (mengikuti pola grup dari branch fitur-dashboard-bisnis). Untuk memindah / mengganti nama / mengubah urutan menu: ubah daftar ini.
+// - Item biasa : { label, icon, to, perm? }
+// - Grup       : punya `children` (menjorok ke dalam, bisa dibuka-tutup). Bila grup punya `to`, klik labelnya membuka halaman itu.
+const canSee = (item) => !item.perm || item.perm.split('|').some((p) => auth.can(p))
 const navItems = computed(() => {
-  if (auth.isManagement) return managementNav.filter((i) => !i.perm || i.perm.split('|').some((p) => auth.can(p)))
+  if (auth.isManagement) {
+    return managementNav
+      .map((item) => (item.children ? { ...item, children: item.children.filter(canSee) } : item))
+      .filter((item) => (item.children ? item.children.length : canSee(item)))
+  }
   if (auth.isDeveloper) return developerNav
   return auth.isParent ? parentNav : trainerNav
 })
+
+// ---- Grup menu (buka-tutup), diporting dari branch fitur-dashboard-bisnis ----
+const expanded = reactive({}) // label grup -> true/false (pilihan manual user)
+
+// Grup "aktif" bila salah satu anaknya (atau halaman grup itu sendiri) sedang dibuka.
+function groupActive(item) {
+  return (item.to ? isActive(item.to) : false) || (item.children ?? []).some((c) => isActive(c.to))
+}
+function isOpen(item) {
+  return expanded[item.label] ?? groupActive(item)
+}
+function toggleGroup(item) {
+  expanded[item.label] = !isOpen(item)
+}
+function onGroupLink(item) {
+  expanded[item.label] = true
+  sidebarOpen.value = false
+}
+// Pindah halaman: grup yang berisi halaman itu otomatis terbuka.
+watch(
+  () => route.path,
+  () => {
+    navItems.value.forEach((item) => {
+      if (item.children && groupActive(item)) expanded[item.label] = true
+    })
+  },
+  { immediate: true },
+)
+
+const itemBase = 'flex items-center gap-space-sm rounded-xl px-space-md py-space-sm font-label-lg text-label-lg transition-all'
+const itemActive = 'bg-primary-container text-on-primary shadow-sm'
+const itemIdle = 'text-[#E2E8F0] hover:bg-white/10 hover:text-on-primary'
+const childBase = 'flex items-center gap-space-sm rounded-lg px-space-sm py-2 font-label-md text-label-md transition-all'
+
+// Baris grup: biru penuh bila halaman grup itu sendiri yang aktif; redup bila salah satu anak yang aktif.
+function groupRowClass(item) {
+  if (item.to && isActive(item.to)) return itemActive
+  if (groupActive(item)) return 'bg-white/10 text-on-primary'
+  return itemIdle
+}
 
 const roleBadge = computed(() => {
   if (auth.isManagement) {
@@ -104,7 +93,7 @@ const initials = computed(() => {
 
 function isActive(to) {
   // Dashboard cocok persis; menu lain menyorot juga pada sub-rute (mis. /trainer/absensi/5).
-  if (to === '/trainer' || to === '/management' || to === '/developer' || to === '/portal') return route.path === to
+  if (to === '/trainer' || to === '/management' || to === '/management/ekstrakurikuler' || to === '/developer' || to === '/portal') return route.path === to
   return route.path === to || route.path.startsWith(to + '/')
 }
 
@@ -212,23 +201,71 @@ async function handleLogout() {
           >
         </div>
 
-        <!-- Navigasi -->
+        <!-- Navigasi (item biasa + grup yang bisa dibuka-tutup) -->
         <nav class="flex flex-col gap-space-2xs px-space-sm">
-          <RouterLink
-            v-for="item in navItems"
-            :key="item.to"
-            :to="item.to"
-            class="flex items-center gap-space-sm rounded-xl px-space-md py-space-sm font-label-lg text-label-lg transition-all"
-            :class="
-              isActive(item.to)
-                ? 'bg-primary-container text-on-primary shadow-sm'
-                : 'text-[#E2E8F0] hover:bg-white/10 hover:text-on-primary'
-            "
-            @click="sidebarOpen = false"
-          >
-            <span class="material-symbols-outlined text-[20px]">{{ item.icon }}</span>
-            <span>{{ item.label }}</span>
-          </RouterLink>
+          <template v-for="item in navItems" :key="item.label">
+            <!-- Item biasa -->
+            <RouterLink
+              v-if="!item.children"
+              :to="item.to"
+              :class="[itemBase, isActive(item.to) ? itemActive : itemIdle]"
+              @click="sidebarOpen = false"
+            >
+              <span class="material-symbols-outlined text-[20px]">{{ item.icon }}</span>
+              <span>{{ item.label }}</span>
+            </RouterLink>
+
+            <!-- Grup menu -->
+            <div v-else class="flex flex-col">
+              <div class="flex items-center rounded-xl transition-all" :class="groupRowClass(item)">
+                <RouterLink
+                  v-if="item.to"
+                  :to="item.to"
+                  class="flex flex-1 items-center gap-space-sm px-space-md py-space-sm font-label-lg text-label-lg"
+                  @click="onGroupLink(item)"
+                >
+                  <span class="material-symbols-outlined text-[20px]">{{ item.icon }}</span>
+                  <span class="text-left">{{ item.label }}</span>
+                </RouterLink>
+                <button
+                  v-else
+                  type="button"
+                  class="flex flex-1 items-center gap-space-sm px-space-md py-space-sm text-left font-label-lg text-label-lg"
+                  @click="toggleGroup(item)"
+                >
+                  <span class="material-symbols-outlined text-[20px]">{{ item.icon }}</span>
+                  <span>{{ item.label }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="px-space-sm py-space-sm opacity-80 hover:opacity-100"
+                  :aria-label="isOpen(item) ? 'Tutup grup ' + item.label : 'Buka grup ' + item.label"
+                  :aria-expanded="isOpen(item)"
+                  @click="toggleGroup(item)"
+                >
+                  <span
+                    class="material-symbols-outlined text-[20px] transition-transform duration-200"
+                    :class="isOpen(item) ? 'rotate-180' : ''"
+                    >expand_more</span
+                  >
+                </button>
+              </div>
+
+              <!-- Menu anak: menjorok ke dalam + garis pemandu di kiri -->
+              <div v-show="isOpen(item)" class="ml-[30px] mt-0.5 flex flex-col gap-0.5 border-l border-white/15 pl-2">
+                <RouterLink
+                  v-for="child in item.children"
+                  :key="child.to"
+                  :to="child.to"
+                  :class="[childBase, isActive(child.to) ? itemActive : itemIdle]"
+                  @click="sidebarOpen = false"
+                >
+                  <span class="material-symbols-outlined text-[18px]">{{ child.icon }}</span>
+                  <span>{{ child.label }}</span>
+                </RouterLink>
+              </div>
+            </div>
+          </template>
         </nav>
       </div>
 

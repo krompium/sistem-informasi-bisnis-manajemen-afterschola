@@ -13,7 +13,7 @@ class Registration extends Model
     use ScopedToBranch;
 
     protected $fillable = [
-        'decision_id', 'lead_id', 'branch_id', 'program_id',
+        'decision_id', 'lead_id', 'branch_id', 'program_id', 'type',
         'student_name', 'birth_date', 'origin_school', 'origin_class', 'level',
         'parent_name', 'parent_phone', 'parent_email', 'parent_address',
         'status', 'student_id', 'registered_by',

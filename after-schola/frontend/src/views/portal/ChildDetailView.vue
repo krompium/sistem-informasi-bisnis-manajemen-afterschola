@@ -1,12 +1,13 @@
 <script setup>
 // Detail anak (ORT-04, ORT-05): hasil trial, rekomendasi level, penawaran program, dan keputusan Lanjut / Tidak lanjut.
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import api from '@/lib/api'
 import { formatRupiah, formatStamp } from '@/lib/format'
 import { errMsg, inputCls, labelCls, toneOf } from './portalCommon'
 
 const route = useRoute()
+const router = useRouter()
 const child = ref(null)
 const loading = ref(true)
 const loadError = ref('')
@@ -14,6 +15,8 @@ const saving = ref(false)
 const actionError = ref('')
 const declining = ref(false)
 const reason = ref('')
+const confirmingRenewal = ref(false)
+const renewError = ref('')
 
 const SCORE_LABELS = [
   ['enthusiasm', 'Antusiasme'],
@@ -38,6 +41,21 @@ async function load() {
     loadError.value = err.response?.status === 404 ? 'Data anak tidak ditemukan.' : errMsg(err, 'Gagal memuat data anak.')
   } finally {
     loading.value = false
+  }
+}
+
+// ORT-12: perpanjangan langsung menerbitkan invoice (tanpa verifikasi ulang), jadi ortu dibawa ke halaman tagihan.
+async function renew() {
+  saving.value = true
+  renewError.value = ''
+  try {
+    await api.post(`/parent/children/${child.value.id}/renewal`)
+    router.push('/portal/tagihan')
+  } catch (err) {
+    renewError.value = errMsg(err, 'Gagal mengajukan perpanjangan.')
+    confirmingRenewal.value = false
+  } finally {
+    saving.value = false
   }
 }
 
@@ -165,6 +183,36 @@ onMounted(load)
         </RouterLink>
 
         <p v-if="actionError" class="rounded-lg bg-error-container px-space-sm py-2 font-body-sm text-on-error-container">{{ actionError }}</p>
+      </section>
+
+      <section v-if="child.stage === 'aktif'" class="mt-space-md flex flex-col gap-space-sm rounded-2xl bg-surface-container-lowest p-space-lg shadow-sm">
+        <h2 class="font-headline-sm text-headline-sm font-bold text-on-surface">Raport</h2>
+        <RouterLink
+          :to="`/portal/anak/${child.id}/raport`"
+          class="inline-block self-start rounded-xl bg-primary-container px-space-md py-2.5 font-label-lg text-label-lg text-on-primary shadow-sm transition-all hover:opacity-95 active:scale-95"
+        >
+          Lihat raport
+        </RouterLink>
+      </section>
+
+      <section v-if="child.stage === 'aktif'" class="mt-space-md flex flex-col gap-space-sm rounded-2xl bg-surface-container-lowest p-space-lg shadow-sm">
+        <h2 class="font-headline-sm text-headline-sm font-bold text-on-surface">Perpanjangan</h2>
+        <p class="font-body-md text-body-md text-on-surface-variant">
+          Ingin melanjutkan program periode berikutnya? Invoice perpanjangan terbit langsung setelah Anda mengajukan, tanpa verifikasi ulang.
+        </p>
+        <button
+          v-if="!confirmingRenewal"
+          class="inline-block self-start rounded-xl border border-outline-variant px-space-md py-2.5 font-label-lg text-label-lg text-on-surface transition-all hover:bg-surface-container-low"
+          @click="confirmingRenewal = true"
+        >
+          Ajukan perpanjangan
+        </button>
+        <div v-else class="flex flex-wrap items-center gap-space-xs">
+          <span class="font-body-md text-body-md text-on-surface">Terbitkan invoice perpanjangan sekarang?</span>
+          <button :disabled="saving" class="rounded-xl bg-primary-container px-space-md py-2.5 font-label-lg text-label-lg text-on-primary disabled:opacity-60" @click="renew">Ya, ajukan</button>
+          <button class="rounded-xl border border-outline-variant px-space-md py-2.5 font-label-lg text-label-lg text-on-surface hover:bg-surface-container-low" @click="confirmingRenewal = false">Batal</button>
+        </div>
+        <p v-if="renewError" class="rounded-lg bg-error-container px-space-sm py-2 font-body-sm text-on-error-container">{{ renewError }}</p>
       </section>
     </template>
   </div>

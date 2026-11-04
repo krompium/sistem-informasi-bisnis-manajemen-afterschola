@@ -36,6 +36,7 @@ class SaveUserRequest extends FormRequest
             // Orangtua dibuat lewat form trial (Fase 2), bukan lewat manajemen user internal.
             'role' => [$required, Rule::in(Role::where('name', '!=', 'parent')->pluck('name')->all())],
             'is_active' => ['sometimes', 'boolean'],
+            'external_ref' => ['sometimes', 'nullable', 'string', 'max:100'],
             'branch_scope' => [$required, Rule::in($scopes)],
             // Scope 'assigned' wajib punya cabang; scope 'all' mengabaikan branch_ids.
             'branch_ids' => $assigned

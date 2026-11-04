@@ -5,6 +5,7 @@ import LandingPage from '@/views/public/LandingPage.vue'
 import LoginView from '@/views/LoginView.vue'
 import TrainerDashboardView from '@/views/TrainerDashboardView.vue'
 import ManagementDashboardView from '@/views/ManagementDashboardView.vue'
+import BusinessDashboardView from '@/views/BusinessDashboardView.vue'
 import ManagementScheduleView from '@/views/management/ScheduleView.vue'
 import ManagementTrainerAssignmentView from '@/views/management/TrainerAssignmentView.vue'
 import ManagementSchoolsAdminView from '@/views/management/SchoolsAdminView.vue'
@@ -21,6 +22,7 @@ import PortalDashboardView from '@/views/portal/PortalDashboardView.vue'
 import PortalChildDetailView from '@/views/portal/ChildDetailView.vue'
 import PortalRegistrationFormView from '@/views/portal/RegistrationFormView.vue'
 import PortalInvoicesView from '@/views/portal/InvoicesView.vue'
+import PortalReportsView from '@/views/portal/ReportsView.vue'
 import PortalScheduleView from '@/views/portal/ScheduleView.vue'
 import PortalNotificationsView from '@/views/portal/NotificationsView.vue'
 import ManagementIntegrationTokensView from '@/views/management/IntegrationTokensView.vue'
@@ -124,12 +126,14 @@ const routes = [
       { path: 'portal', name: 'portal.dashboard', component: PortalDashboardView },
       { path: 'portal/anak/:id', name: 'portal.child', component: PortalChildDetailView },
       { path: 'portal/anak/:id/pendaftaran', name: 'portal.registration', component: PortalRegistrationFormView },
+      { path: 'portal/anak/:id/raport', name: 'portal.reports', component: PortalReportsView },
       { path: 'portal/tagihan', name: 'portal.invoices', component: PortalInvoicesView },
       { path: 'portal/jadwal', name: 'portal.schedule', component: PortalScheduleView },
       { path: 'portal/notifikasi', name: 'portal.notifications', component: PortalNotificationsView },
 
       // ---- Management ----
-      { path: 'management', name: 'management.dashboard', component: ManagementDashboardView },
+      { path: 'management', name: 'management.dashboard', component: BusinessDashboardView },
+      { path: 'management/ekstrakurikuler', name: 'management.extracurricular', component: ManagementDashboardView },
       { path: 'management/sekolah-murid', name: 'management.schools', component: ManagementSchoolsAdminView },
       {
         path: 'management/penugasan-trainer',

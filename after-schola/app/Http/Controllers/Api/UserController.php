@@ -42,6 +42,7 @@ class UserController extends Controller
             'branch_scope' => $data['branch_scope'],
             'subjects_taught' => $data['subjects_taught'] ?? [],
             'levels_taught' => $data['levels_taught'] ?? [],
+            'external_ref' => $data['external_ref'] ?? null,
         ]);
         $user->assignRole($data['role']);
         $user->syncPermissions($data['permissions'] ?? []);
@@ -69,7 +70,7 @@ class UserController extends Controller
             throw ValidationException::withMessages(['is_active' => ['Tidak bisa menonaktifkan akun sendiri.']]);
         }
 
-        $user->fill(collect($data)->only(['name', 'email', 'is_active', 'branch_scope', 'subjects_taught', 'levels_taught'])->all());
+        $user->fill(collect($data)->only(['name', 'email', 'is_active', 'branch_scope', 'subjects_taught', 'levels_taught', 'external_ref'])->all());
         if (! empty($data['password'])) {
             $user->password = Hash::make($data['password']);
         }

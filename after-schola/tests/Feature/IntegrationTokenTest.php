@@ -42,6 +42,16 @@ class IntegrationTokenTest extends TestCase
         }
     }
 
+    public function test_token_can_carry_both_finance_and_attendance_read_abilities(): void
+    {
+        Sanctum::actingAs($this->makeUser('management'));
+
+        $this->postJson('/api/integration-tokens', $this->payload(['abilities' => ['finance:read', 'attendance:read']]))->assertCreated()
+            ->assertJsonPath('data.abilities', ['finance:read', 'attendance:read']);
+        $this->postJson('/api/integration-tokens', $this->payload(['abilities' => ['attendance:write']]))
+            ->assertUnprocessable()->assertJsonValidationErrors('abilities.0');
+    }
+
     public function test_creates_token_for_a_finance_service_account_and_shows_it_once(): void
     {
         Sanctum::actingAs($this->makeUser('management'));

@@ -13,6 +13,7 @@ class UserResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
+            'external_ref' => $this->external_ref,
             'is_active' => $this->is_active,
             'branch_scope' => $this->branch_scope,
             'branches' => BranchResource::collection($this->whenLoaded('branches')),

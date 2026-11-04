@@ -4,9 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RegistrationResource;
-use App\Models\Invoice;
-use App\Models\PaymentSetting;
 use App\Models\Registration;
+use App\Support\InvoiceIssuer;
 use App\Support\ParentNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,7 +42,7 @@ class RegistrationController extends Controller
         );
     }
 
-    public function approve(Request $request, Registration $registration, ParentNotifier $notifier)
+    public function approve(Request $request, Registration $registration, ParentNotifier $notifier, InvoiceIssuer $issuer)
     {
         $this->authorize('verify', $registration);
         $this->ensureWaiting($registration);
@@ -55,7 +54,7 @@ class RegistrationController extends Controller
             ]);
         }
 
-        $invoice = DB::transaction(function () use ($registration, $program, $request) {
+        $invoice = DB::transaction(function () use ($registration, $program, $request, $issuer) {
             $registration->update([
                 'status' => 'terverifikasi',
                 'revision_note' => null,
@@ -63,14 +62,7 @@ class RegistrationController extends Controller
                 'verified_at' => now(),
             ]);
 
-            return Invoice::create([
-                'registration_id' => $registration->id,
-                'number' => Invoice::nextNumber($registration->branch?->code),
-                'amount' => $program->price, // snapshot harga saat terbit
-                'due_date' => now()->addDays(PaymentSetting::current()->due_days)->toDateString(),
-                'status' => 'unpaid',
-                'issued_at' => now(),
-            ]);
+            return $issuer->issue($registration, $program);
         });
 
         $amount = 'Rp '.number_format((float) $invoice->amount, 0, ',', '.');

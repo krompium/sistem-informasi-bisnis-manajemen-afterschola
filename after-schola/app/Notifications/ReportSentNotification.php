@@ -8,7 +8,7 @@ use Illuminate\Notifications\Notification;
 
 /**
  * SYS-03: raport anak terbit (disetujui koordinator) -> orang tua. Teks dibekukan saat dibuat, seperti StudentPlacedNotification.
- * TODO(nanti): tautan ke halaman raport di portal ortu (ORT-11) setelah portal ada.
+ * TODO(nanti): tautan langsung ke /portal/anak/{id}/raport di email dan notifikasi in-app (butuh id anak/lead).
  */
 class ReportSentNotification extends Notification
 {

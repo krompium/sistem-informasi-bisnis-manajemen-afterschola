@@ -23,8 +23,7 @@ class StoreIntegrationTokenRequest extends FormRequest
             }],
             'name' => ['required', 'string', 'max:100'],
             'abilities' => ['required', 'array', 'min:1'],
-            // TODO(nanti): tambah attendance:read saat endpoint rekap absensi trainer ada (Modul 7).
-            'abilities.*' => ['in:finance:read'],
+            'abilities.*' => ['in:finance:read,attendance:read'],
         ];
     }
 }

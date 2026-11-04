@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\ClassroomController;
 use App\Http\Controllers\Api\ClassSessionController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DashboardExportController;
 use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\EnrollmentDecisionController;
 use App\Http\Controllers\Api\EvaluationController;
@@ -13,10 +14,13 @@ use App\Http\Controllers\Api\FinanceReportController;
 use App\Http\Controllers\Api\IncomeExportController;
 use App\Http\Controllers\Api\IntegrationFinanceController;
 use App\Http\Controllers\Api\IntegrationTokenController;
+use App\Http\Controllers\Api\IntegrationTrainerController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\ParentChildController;
 use App\Http\Controllers\Api\ParentInvoiceController;
 use App\Http\Controllers\Api\ParentRegistrationController;
+use App\Http\Controllers\Api\ParentRenewalController;
+use App\Http\Controllers\Api\ParentReportController;
 use App\Http\Controllers\Api\ParentScheduleController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentSettingController;
@@ -44,6 +48,7 @@ use App\Http\Controllers\Api\TrialSlotController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\LeadController;
+use App\Http\Controllers\Api\ManagementDashboardController;
 use App\Http\Controllers\Api\LeadExportController;
 use App\Http\Controllers\Api\ProgramController;
 use App\Http\Controllers\Api\ProgramLevelController;
@@ -86,12 +91,29 @@ Route::middleware(['auth:sanctum', 'abilities:finance:read', 'permission:view fi
     Route::get('/payments', [IntegrationFinanceController::class, 'payments']);
 });
 
+// Absensi trainer reguler untuk honor (KEU-08, PRD 10.4): token ber-ability attendance:read.
+Route::middleware(['auth:sanctum', 'abilities:attendance:read', 'permission:export trainer attendance'])->prefix('integration/v1')->group(function () {
+    Route::get('/trainers', [IntegrationTrainerController::class, 'trainers']);
+    Route::get('/trainer-attendances', [IntegrationTrainerController::class, 'attendances']);
+});
+
 // API staf dan portal: token ber-ability terbatas (integrasi) ditolak.
 Route::middleware(['auth:sanctum', 'full.token'])->group(function () {
     // Sesi & profil
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
+
+    // Dashboard KPI, funnel, dan panel operasional jalur reguler (MGT-60 sampai 62)
+    Route::middleware('permission:view dashboard')->prefix('dashboard')->group(function () {
+        Route::get('/kpi', [ManagementDashboardController::class, 'kpi']);
+        Route::get('/funnel', [ManagementDashboardController::class, 'funnel']);
+        Route::get('/panel', [ManagementDashboardController::class, 'panel']);
+    });
+    Route::middleware('permission:view dashboard')->prefix('exports/dashboard')->group(function () {
+        Route::get('/excel', [DashboardExportController::class, 'excel']);
+        Route::get('/pdf', [DashboardExportController::class, 'pdf']);
+    });
 
     // Sekolah + penugasan trainer
     Route::get('/schools', [SchoolController::class, 'index']);
@@ -181,6 +203,9 @@ Route::middleware(['auth:sanctum', 'full.token'])->group(function () {
         Route::put('/children/{child}/registration', [ParentRegistrationController::class, 'save'])->whereNumber('child');
         Route::post('/children/{child}/registration/submit', [ParentRegistrationController::class, 'submit'])->whereNumber('child');
         Route::get('/schedule', [ParentScheduleController::class, 'index']);
+        Route::get('/children/{child}/reports', [ParentReportController::class, 'index'])->whereNumber('child');
+        Route::post('/children/{child}/renewal', ParentRenewalController::class)->whereNumber('child');
+        Route::get('/reports/{evaluation}/pdf', [ParentReportController::class, 'pdf'])->whereNumber('evaluation');
         Route::get('/invoices', [ParentInvoiceController::class, 'index']);
         Route::post('/invoices/{invoice}/payments', [ParentInvoiceController::class, 'pay'])->whereNumber('invoice');
         Route::get('/invoices/{invoice}/receipt', [ParentInvoiceController::class, 'receipt'])->whereNumber('invoice');

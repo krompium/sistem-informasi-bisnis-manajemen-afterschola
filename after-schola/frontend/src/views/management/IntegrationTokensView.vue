@@ -38,7 +38,7 @@ async function create() {
   error.value = ''
   copied.value = false
   try {
-    const { data } = await api.post('/integration-tokens', { ...form, abilities: ['finance:read'] })
+    const { data } = await api.post('/integration-tokens', { ...form, abilities: ['finance:read', 'attendance:read'] })
     created.value = { name: data.data.name, token: data.token }
     form.name = ''
     await load()
@@ -73,7 +73,7 @@ onMounted(load)
       <span class="font-label-sm text-label-sm font-semibold uppercase tracking-widest text-secondary">Sistem</span>
       <h1 class="font-headline-xl text-headline-xl font-bold tracking-tight text-on-surface">Token Integrasi</h1>
       <p class="font-body-md text-body-md text-on-surface-variant">
-        Dipakai Tim Keuangan untuk membaca invoice dan pembayaran lewat API (hanya baca, dibatasi cabang akun layanan).
+        Dipakai Tim Keuangan untuk membaca invoice, pembayaran, dan absensi trainer lewat API (hanya baca, dibatasi cabang akun layanan).
       </p>
     </div>
 
