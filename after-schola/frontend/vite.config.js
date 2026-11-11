@@ -14,4 +14,9 @@ export default defineConfig({
     port: Number(process.env.PORT) || 5173,
     strictPort: false,
   },
+  // `npm test`: pemeriksaan render komponen (jsdom), bukan test end-to-end.
+  test: {
+    environment: 'jsdom',
+    include: ['tests/**/*.test.js'],
+  },
 })
