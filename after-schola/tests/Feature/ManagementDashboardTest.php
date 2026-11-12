@@ -256,6 +256,22 @@ class ManagementDashboardTest extends TestCase
         );
     }
 
+    public function test_funnel_counts_events_on_the_last_day_of_the_default_period(): void
+    {
+        // Periode default berakhir hari ini: keputusan, trial, dan penempatan hari ini harus ikut terhitung.
+        $group = $this->classGroup($this->bdg);
+        [$registration] = $this->pupil($this->bdg, 'Hari Ini', $group, ['start_date' => today()->toDateString()]);
+        $registration->update(['verified_at' => now()]);
+
+        $stages = collect($this->getJson('/api/dashboard/funnel')->assertOk()->json('data.stages'))->pluck('count', 'key');
+
+        $this->assertSame(1, $stages['calon']);
+        $this->assertSame(1, $stages['trial_hadir']); // trial_date = 2 hari lalu
+        $this->assertSame(1, $stages['lanjut']);      // decided_at = hari ini
+        $this->assertSame(1, $stages['terverifikasi']);
+        $this->assertSame(1, $stages['ditempatkan']); // start_date = hari ini
+    }
+
     // ---- panel operasional ----
 
     public function test_operational_panel_counts_todays_attendance_and_pending_work(): void

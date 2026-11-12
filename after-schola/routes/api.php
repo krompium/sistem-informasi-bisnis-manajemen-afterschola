@@ -74,9 +74,11 @@ use App\Http\Controllers\Api\TaskDependencyController;
 */
 
 // --- Publik (tanpa token) ---
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+Route::middleware('throttle:auth')->group(function () {
+    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+});
 Route::post('/public/trial-registrations', [LeadController::class, 'store'])->middleware('throttle:5,1');
 Route::middleware('throttle:60,1')->group(function () {
     Route::get('/public/programs', [ProgramController::class, 'publicIndex']);

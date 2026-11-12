@@ -19,6 +19,101 @@ const sidebarOpen = ref(false) // drawer untuk layar kecil
 // Susunan menu Management (mengikuti pola grup dari branch fitur-dashboard-bisnis). Untuk memindah / mengganti nama / mengubah urutan menu: ubah daftar ini.
 // - Item biasa : { label, icon, to, perm? }
 // - Grup       : punya `children` (menjorok ke dalam, bisa dibuka-tutup). Bila grup punya `to`, klik labelnya membuka halaman itu.
+const managementNav = [
+  { label: 'Dashboard', icon: 'dashboard', to: '/management' },
+  {
+    label: 'Pendaftaran',
+    icon: 'person_add',
+    children: [
+      { label: 'Slot Trial', icon: 'event_available', to: '/management/slot-trial', perm: 'manage trial slots' },
+      { label: 'Calon & Leads', icon: 'group_add', to: '/management/calon', perm: 'manage leads' },
+      { label: 'Evaluasi Trial', icon: 'rate_review', to: '/management/evaluasi-trial' },
+      { label: 'Keputusan & Pendaftaran', icon: 'how_to_reg', to: '/management/keputusan-pendaftaran' },
+      { label: 'Verifikasi Pendaftaran', icon: 'fact_check', to: '/management/verifikasi-pendaftaran', perm: 'verify registrations' },
+      { label: 'Program & Promosi', icon: 'inventory_2', to: '/management/program' },
+    ],
+  },
+  {
+    label: 'Kelas & Jadwal',
+    icon: 'school',
+    children: [
+      { label: 'Kelas', icon: 'school', to: '/management/kelas', perm: 'manage classes|assign trainers' },
+      { label: 'Penempatan Siswa', icon: 'how_to_reg', to: '/management/penempatan', perm: 'manage classes' },
+      { label: 'Jadwal Sesi', icon: 'event', to: '/management/jadwal-kelas', perm: 'manage schedule|manage classes' },
+      { label: 'Catatan Progres', icon: 'edit_note', to: '/management/catatan-progres', perm: 'manage classes|assign trainers|manage schedule' },
+      { label: 'Tinjau Raport', icon: 'fact_check', to: '/management/raport', perm: 'review reports' },
+      { label: 'Rekap Absensi', icon: 'fact_check', to: '/management/rekap-absensi', perm: 'view all attendance|manage schedule|export trainer attendance' },
+    ],
+  },
+  {
+    label: 'Keuangan',
+    icon: 'account_balance_wallet',
+    children: [
+      { label: 'Invoice & Pembayaran', icon: 'receipt_long', to: '/management/invoice', perm: 'manage invoices' },
+      { label: 'Umur Piutang', icon: 'hourglass_bottom', to: '/management/umur-piutang', perm: 'view finance reports' },
+      { label: 'Laporan Pemasukan', icon: 'account_balance_wallet', to: '/management/laporan-pemasukan', perm: 'view finance reports' },
+      { label: 'Pengaturan Pembayaran', icon: 'payments', to: '/management/pengaturan-pembayaran', perm: 'manage invoices' },
+    ],
+  },
+  {
+    label: 'Manajemen Ekstrakurikuler',
+    icon: 'school',
+    to: '/management/ekstrakurikuler',
+    children: [
+      { label: 'Sekolah & Murid', icon: 'school', to: '/management/sekolah-murid' },
+      { label: 'Penugasan Trainer', icon: 'assignment_ind', to: '/management/penugasan-trainer' },
+      { label: 'Jadwal', icon: 'calendar_month', to: '/management/jadwal' },
+      { label: 'Rekap Absensi', icon: 'summarize', to: '/management/absensi' },
+      { label: 'Laporan Ekspo', icon: 'query_stats', to: '/management/laporan-ekspo' },
+    ],
+  },
+  {
+    label: 'Proyek',
+    icon: 'view_kanban',
+    children: [
+      { label: 'Team', icon: 'groups', to: '/management/team' },
+      { label: 'Proyek & Task', icon: 'view_kanban', to: '/management/proyek' },
+      { label: 'Kalender Proyek', icon: 'calendar_month', to: '/management/kalender' },
+    ],
+  },
+  {
+    label: 'Sistem',
+    icon: 'settings',
+    children: [
+      { label: 'Manajemen User', icon: 'manage_accounts', to: '/management/manajemen-user', perm: 'manage users' },
+      { label: 'Cabang', icon: 'store', to: '/management/cabang', perm: 'manage branches' },
+      { label: 'Integrasi', icon: 'api', to: '/management/integrasi', perm: 'manage integrations' },
+      { label: 'Hot Issue', icon: 'campaign', to: '/management/hot-issue', perm: 'manage hot issues' },
+    ],
+  },
+]
+
+const trainerNav = [
+  { label: 'Dashboard', icon: 'dashboard', to: '/trainer' },
+  { label: 'Sekolah', icon: 'school', to: '/trainer/sekolah' },
+  { label: 'Jadwal Saya', icon: 'calendar_month', to: '/trainer/jadwal' },
+  { label: 'Absensi', icon: 'fact_check', to: '/trainer/absensi' },
+  { label: 'Sesi Kelas', icon: 'groups', to: '/trainer/sesi-kelas' },
+  { label: 'Rekap Saya', icon: 'summarize', to: '/trainer/rekap' },
+  { label: 'Laporan Ekspo', icon: 'query_stats', to: '/trainer/laporan-ekspo' },
+  { label: 'Evaluasi Trial', icon: 'rate_review', to: '/trainer/evaluasi-trial' },
+  { label: 'Catatan Progres', icon: 'edit_note', to: '/trainer/catatan-progres' },
+  { label: 'Evaluasi Siswa', icon: 'grading', to: '/trainer/evaluasi-siswa' },
+]
+
+const developerNav = [
+  { label: 'Dashboard', icon: 'dashboard', to: '/developer' },
+  { label: 'Proyek', icon: 'view_kanban', to: '/developer/proyek' },
+  { label: 'Kalender', icon: 'calendar_month', to: '/developer/kalender' },
+]
+
+const parentNav = [
+  { label: 'Beranda', icon: 'family_restroom', to: '/portal' },
+  { label: 'Jadwal', icon: 'calendar_month', to: '/portal/jadwal' },
+  { label: 'Tagihan', icon: 'receipt_long', to: '/portal/tagihan' },
+  { label: 'Notifikasi', icon: 'notifications', to: '/portal/notifikasi' },
+]
+
 const canSee = (item) => !item.perm || item.perm.split('|').some((p) => auth.can(p))
 const navItems = computed(() => {
   if (auth.isManagement) {

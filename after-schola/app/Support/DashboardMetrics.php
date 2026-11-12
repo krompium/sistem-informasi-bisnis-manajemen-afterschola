@@ -51,8 +51,7 @@ class DashboardMetrics
         $capacity = (int) $activeClasses()->sum('class_groups.capacity');
 
         // Retensi: siswa yang enrollment-nya berakhir di periode dan punya perpanjangan lunas, dibagi semua siswa yang berakhir di periode.
-        $endedStudents = $this->enrollments()
-            ->whereBetween('enrollments.end_date', [$this->income->from->toDateString(), $end])
+        $endedStudents = $this->onDates($this->enrollments(), 'enrollments.end_date', [$this->income->from->toDateString(), $end])
             ->pluck('enrollments.student_id')->unique();
         $renewed = Registration::query()->where('type', 'perpanjangan')
             ->whereIn('student_id', $endedStudents)
@@ -78,15 +77,15 @@ class DashboardMetrics
 
         $stages = [
             'calon' => ['Calon baru', $this->inBranch(Lead::query(), 'leads.branch_id')->whereBetween('leads.created_at', [$fromUtc, $toUtc])->count()],
-            'trial_hadir' => ['Trial hadir', $this->inBranch(TrialEvaluation::query(), 'trial_evaluations.branch_id')
-                ->where('attendance', 'hadir')->whereBetween('trial_date', $dates)->count()],
-            'lanjut' => ['Memutuskan lanjut', EnrollmentDecision::query()->where('decision', 'lanjut')->whereBetween('decided_at', $dates)
+            'trial_hadir' => ['Trial hadir', $this->onDates($this->inBranch(TrialEvaluation::query(), 'trial_evaluations.branch_id')
+                ->where('attendance', 'hadir'), 'trial_date', $dates)->count()],
+            'lanjut' => ['Memutuskan lanjut', $this->onDates(EnrollmentDecision::query()->where('decision', 'lanjut'), 'decided_at', $dates)
                 ->whereHas('evaluation', fn (Builder $evaluation) => $this->inBranch($evaluation, 'trial_evaluations.branch_id'))->count()],
             'terverifikasi' => ['Registrasi terverifikasi', $this->registrations()->where('type', 'baru')->where('status', 'terverifikasi')
                 ->whereBetween('verified_at', [$fromUtc, $toUtc])->count()],
             'lunas' => ['Lunas', Invoice::query()->where('status', 'paid')->whereBetween('paid_at', [$fromUtc, $toUtc])
                 ->whereHas('registration', fn (Builder $registration) => $this->inBranch($registration->where('type', 'baru'), 'registrations.branch_id'))->count()],
-            'ditempatkan' => ['Ditempatkan di kelas', $this->enrollments()->whereBetween('enrollments.start_date', $dates)->count()],
+            'ditempatkan' => ['Ditempatkan di kelas', $this->onDates($this->enrollments(), 'enrollments.start_date', $dates)->count()],
         ];
 
         return ['period' => ['from' => $dates[0], 'to' => $dates[1]], 'stages' => collect($stages)
@@ -130,6 +129,15 @@ class DashboardMetrics
         return $query
             ->when(! $this->user->hasAllBranches(), fn (Builder $q) => $q->whereIn($column, $this->user->accessibleBranchIds()))
             ->when($this->branchId, fn (Builder $q, int $id) => $q->where($column, $id));
+    }
+
+    /**
+     * Kolom tanggal dibandingkan per hari (whereDate), bukan BETWEEN pada string: nilai bertipe date yang tersimpan dengan jam
+     * (mis. 2026-11-15 00:00:00 di SQLite) tidak boleh terlempar dari hari terakhir periode.
+     */
+    private function onDates(Builder $query, string $column, array $range): Builder
+    {
+        return $query->whereDate($column, '>=', $range[0])->whereDate($column, '<=', $range[1]);
     }
 
     private function percent(int|float $numerator, int|float $denominator): ?float
