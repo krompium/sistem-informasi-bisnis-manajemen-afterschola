@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
@@ -13,6 +14,15 @@ use Tests\TestCase;
 class AuthThrottleTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Batas berlaku per jendela 60 detik. Waktu dibekukan supaya hasil test tidak bergantung pada kecepatan mesin,
+        // dan notifikasi reset password tidak benar-benar dikirim.
+        $this->freezeTime();
+        Notification::fake();
+    }
 
     private function wrongLogin(string $email)
     {
@@ -51,6 +61,19 @@ class AuthThrottleTest extends TestCase
         }
 
         $this->postJson('/api/login', ['email' => $user->email, 'password' => 'password'])->assertOk()->assertJsonStructure(['token', 'user']);
+    }
+
+    public function test_the_limit_resets_after_a_minute(): void
+    {
+        $user = User::factory()->create();
+        foreach (range(1, 5) as $attempt) {
+            $this->wrongLogin($user->email);
+        }
+        $this->wrongLogin($user->email)->assertStatus(429);
+
+        $this->travel(61)->seconds();
+
+        $this->postJson('/api/login', ['email' => $user->email, 'password' => 'password'])->assertOk();
     }
 
     public function test_forgot_and_reset_password_are_limited_independently(): void
